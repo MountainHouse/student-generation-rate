@@ -1,0 +1,199 @@
+<section class="band">
+    <div class="section-head">
+        <h2>@Title</h2>
+    </div>
+    <div class="table-viz">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cohort</th>
+                        @foreach (var year in AugustYears)
+                        {
+                            <th>@year</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var cohort in Cohorts)
+                    {
+                        <tr>
+                            <td>
+                                <label class="row-legend">
+                                    <input type="checkbox" checked="@SelectedCohorts.Contains(cohort.Label)" @onchange="eventArgs => ToggleLine(cohort.Label, eventArgs)" />
+                                    <span class="legend-swatch" style="background:@ColorForCohort(cohort)"></span>
+                                    <span>@cohort.Label</span>
+                                </label>
+                            </td>
+                            @foreach (var year in AugustYears)
+                            {
+                                var grade = GradeFor(cohort, year);
+                                var value = grade is null ? null : ValueForGrade(grade, year);
+                                <td>
+                                    @if (value.HasValue)
+                                    {
+                                        <div class="cell-metrics">
+                                            <div class="cell-value">@value.Value.ToString("N0")</div>
+                                            <div class="cell-detail">@grade</div>
+                                        </div>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <aside class="table-chart">
+            <svg viewBox="0 0 520 260" role="img">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="46" y1="@tick.Y" x2="500" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="40" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="46" y1="220" x2="500" y2="220" class="chart-axis" />
+                <line x1="46" y1="28" x2="46" y2="220" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="220" x2="@tick.X" y2="226" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="246" Anchor="middle" Label="@tick.Label" />
+                }
+                @foreach (var cohort in ActiveCohorts)
+                {
+                    <polyline points="@ChartPoints(cohort)" fill="none" stroke="@ColorForCohort(cohort)" stroke-width="3" />
+                }
+            </svg>
+        </aside>
+    </div>
+</section>
+
+@code {
+    private static readonly IReadOnlyList<string> CohortGrades =
+    [
+        "TK", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th",
+        "9th", "10th", "11th", "12th"
+    ];
+
+    [Parameter]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<SeriesRow> GradeRows { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<int> AugustYears { get; set; }
+
+    private HashSet<string> SelectedCohorts { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyList<CohortDefinition> Cohorts => BuildCohorts();
+    private IReadOnlyList<CohortDefinition> ActiveCohorts => Cohorts.Where(cohort => SelectedCohorts.Contains(cohort.Label)).ToList();
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ActiveCohorts.SelectMany(ValuesForCohort).DefaultIfEmpty(0).Max() * 1.08));
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedCohorts.Count == 0)
+        {
+            foreach (var cohort in Cohorts.Where(HasAnyValue).TakeLast(5))
+            {
+                SelectedCohorts.Add(cohort.Label);
+            }
+        }
+
+        SelectedCohorts.RemoveWhere(label => !Cohorts.Any(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private IReadOnlyList<CohortDefinition> BuildCohorts()
+    {
+        if (AugustYears.Count == 0) return [];
+        var firstStart = AugustYears.Min() - 13;
+        var lastStart = AugustYears.Max();
+        return Enumerable.Range(firstStart, lastStart - firstStart + 1)
+            .Select(start => new CohortDefinition(start, start + 13, $"{start % 100:00}-{(start + 13) % 100:00}"))
+            .ToList();
+    }
+
+    private void ToggleLine(string label, ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool isChecked && isChecked)
+        {
+            SelectedCohorts.Add(label);
+        }
+        else
+        {
+            SelectedCohorts.Remove(label);
+        }
+    }
+
+    private static string? GradeFor(CohortDefinition cohort, int year)
+    {
+        var index = year - cohort.StartYear;
+        return index >= 0 && index < CohortGrades.Count ? CohortGrades[index] : null;
+    }
+
+    private double? ValueForGrade(string grade, int year)
+    {
+        var term = $"Aug '{year % 100:00}";
+        return GradeRows.FirstOrDefault(row => row.Name.Equals(grade, StringComparison.OrdinalIgnoreCase))?.Values.GetValueOrDefault(term);
+    }
+
+    private double? ValueForCohort(CohortDefinition cohort, int year)
+    {
+        var grade = GradeFor(cohort, year);
+        return grade is null ? null : ValueForGrade(grade, year);
+    }
+
+    private bool HasAnyValue(CohortDefinition cohort)
+    {
+        return AugustYears.Any(year => ValueForCohort(cohort, year).HasValue);
+    }
+
+    private IReadOnlyList<double> ValuesForCohort(CohortDefinition cohort)
+    {
+        return AugustYears.Select(year => ValueForCohort(cohort, year) ?? 0).ToList();
+    }
+
+    private string ChartPoints(CohortDefinition cohort)
+    {
+        var points = new List<string>();
+        for (var index = 0; index < AugustYears.Count; index++)
+        {
+            var value = ValueForCohort(cohort, AugustYears[index]);
+            if (!value.HasValue) continue;
+            var x = AugustYears.Count == 1 ? 46 : 46 + (index * 454.0 / (AugustYears.Count - 1));
+            var y = 220 - (value.Value / ChartMax * 192);
+            points.Add($"{x:0.##},{y:0.##}");
+        }
+
+        return string.Join(" ", points);
+    }
+
+    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 28, 220);
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            if (AugustYears.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(AugustYears.Count / 5.0));
+            return AugustYears.Select((year, index) => new { year, index })
+                .Where(item => item.index % step == 0 || item.index == AugustYears.Count - 1)
+                .Select(item =>
+                {
+                    var x = AugustYears.Count == 1 ? 46 : 46 + (item.index * 454.0 / (AugustYears.Count - 1));
+                    return (x, item.year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private static string ColorFor(int index)
+    {
+        var colors = new[] { "#0f766e", "#b45309", "#2563eb", "#7c3aed", "#be123c", "#4d7c0f", "#0f4c81", "#a16207" };
+        return colors[index % colors.Length];
+    }
+
+    private string ColorForCohort(CohortDefinition cohort)
+    {
+        var index = Cohorts.ToList().FindIndex(item => item.Label.Equals(cohort.Label, StringComparison.OrdinalIgnoreCase));
+        return ColorFor(Math.Max(0, index));
+    }
+}

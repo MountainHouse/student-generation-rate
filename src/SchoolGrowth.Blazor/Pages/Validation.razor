@@ -1,0 +1,293 @@
+@page "/validation"
+@inject HttpClient Http
+
+<PageTitle>Model Validation</PageTitle>
+
+<header class="topbar">
+    <div>
+        <h1>Model Validation</h1>
+        <p>Compare modeled backtests to existing district reference data and tune model parameters.</p>
+    </div>
+    <div class="top-actions">
+        <a class="nav-button secondary" href="">Simulator</a>
+        <a class="nav-button secondary" href="monte-carlo">Monte Carlo</a>
+    </div>
+</header>
+
+@if (LoadError is not null)
+{
+    <section class="band">
+        <strong>@LoadError</strong>
+    </section>
+}
+else if (Data is null || Model is null || Backtest is null)
+{
+    <section class="band">Loading validation data...</section>
+}
+else
+{
+    <section class="band controls validation-controls">
+        <label>
+            <span>Start year</span>
+            <input type="number" min="@MinStartYear" max="@MaxEndYear" @bind="StartYear" @bind:after="RunBacktest" />
+        </label>
+        <label>
+            <span>End year</span>
+            <input type="number" min="@StartYear" max="@MaxEndYear" @bind="EndYear" @bind:after="RunBacktest" />
+        </label>
+        <label>
+            <span>Retention confidence</span>
+            <input type="range" min="0" max="1" step="0.05" @bind="RetentionBlend" @bind:after="RunBacktest" />
+            <output>@($"{RetentionBlend:P0}")</output>
+        </label>
+        <label>
+            <span>Home yield multiplier</span>
+            <input type="number" min="0.1" max="5" step="0.05" @bind="HomeYieldMultiplier" @bind:after="RunBacktest" />
+        </label>
+    </section>
+
+    <section class="band density-controls">
+        <h2>Density Multipliers</h2>
+        @foreach (var density in DensityMultipliers)
+        {
+            <label>
+                <span>@density.Density</span>
+                <input type="number" min="0.1" max="5" step="0.05" @bind="density.Multiplier" @bind:after="RunBacktest" />
+            </label>
+        }
+    </section>
+
+    <section class="band charts">
+        <div class="chart-box">
+            <h2>Actual vs Modeled Total</h2>
+            <svg viewBox="0 0 920 300" role="img">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
+                <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                }
+                <polyline points="@ActualChartPoints" fill="none" stroke="#0f766e" stroke-width="4" />
+                <polyline points="@ModeledChartPoints" fill="none" stroke="#b45309" stroke-width="4" />
+            </svg>
+            <div class="inline-legend">
+                <span><i style="background:#0f766e"></i>Actual</span>
+                <span><i style="background:#b45309"></i>Modeled</span>
+            </div>
+        </div>
+        <div class="chart-box">
+            <h2>Backtest Error</h2>
+            <dl>
+                <dt>Mean absolute error</dt>
+                <dd>@Backtest.MeanAbsoluteError.ToString("N0")</dd>
+                <dt>Mean absolute % error</dt>
+                <dd>@Backtest.MeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>Actual homes used</dt>
+                <dd>@Backtest.Simulation.ScenarioHomes.Sum(home => home.Homes).ToString("N0")</dd>
+                <dt>Years compared</dt>
+                <dd>@Backtest.Comparisons.Count</dd>
+            </dl>
+        </div>
+    </section>
+
+    <section class="band">
+        <h2>Modeled vs Reference Data</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Actual Grid Total</th>
+                        <th>Modeled Grid Total</th>
+                        <th>Error</th>
+                        <th>Error %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var comparison in Backtest.Comparisons)
+                    {
+                        <tr>
+                            <td>@comparison.Year</td>
+                            <td>@comparison.ActualTotal.ToString("N0")</td>
+                            <td>@comparison.ModeledTotal.ToString("N0")</td>
+                            <td>@comparison.Error.ToString("+#,##0;-#,##0;0")</td>
+                            <td>@comparison.AbsolutePercentageError.ToString("P1")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="band">
+        <h2>Grid Detail for @SelectedComparisonYear</h2>
+        <label class="compact-select">
+            <span>Comparison year</span>
+            <select @bind="SelectedComparisonYear">
+                @foreach (var comparison in Backtest.Comparisons)
+                {
+                    <option value="@comparison.Year">@comparison.Year</option>
+                }
+            </select>
+        </label>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Grid</th>
+                        <th>Actual</th>
+                        <th>Modeled</th>
+                        <th>Error</th>
+                        <th>Error %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in SelectedGridComparisons)
+                    {
+                        <tr>
+                            <td>@row.Grid</td>
+                            <td>@FormatNullable(row.Actual)</td>
+                            <td>@row.Modeled.ToString("N0")</td>
+                            <td>@(row.Actual.HasValue ? (row.Modeled - row.Actual.Value).ToString("+#,##0;-#,##0;0") : "n/a")</td>
+                            <td>@(row.Actual is > 0 ? (Math.Abs(row.Modeled - row.Actual.Value) / row.Actual.Value).ToString("P1") : "n/a")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="band formulas">
+        <h2>Model Formulas</h2>
+        <p><strong>Backtest baseline:</strong> modeled grid totals start from the actual August grid total in <code>start year - 1</code>.</p>
+        <p><strong>Grid trend:</strong> <code>effective_grid_trend = observed_grid_trend * retention_confidence + 1.0 * (1 - retention_confidence)</code>.</p>
+        <p><strong>Home students:</strong> <code>new_students = homes * density_yield[density] * density_multiplier[density] * age_factor(age) * home_yield_multiplier</code>.</p>
+        <p><strong>Age factor:</strong> <code>0: .30, 1: .60, 2: .85, 3-5: 1.00, 6-10: .90, 11-15: .75, 16+: .62</code>.</p>
+        <p><strong>Grid projection:</strong> <code>grid_total[y] = grid_total[y-1] * effective_grid_trend + sum(new_students_from_actual_homes_built_since_start)</code>.</p>
+        <p><strong>Density yield calibration:</strong> historical grid totals are fit with ridge regression against age-weighted homes by density.</p>
+        <p><strong>School proxy:</strong> matching TK-8 grids use recent <code>school_total / grid_total</code> to estimate elementary share; 9-12 rolls to MHHS; MHESD is high-school only.</p>
+        <p><strong>Error:</strong> <code>error = modeled_total - actual_total</code>; <code>absolute_percentage_error = abs(error) / actual_total</code>.</p>
+    </section>
+
+    <HistoryTable Title="Reference Grid History" Rows="Data.GridRows" Terms="Data.Terms" />
+    <HistoryTable Title="Reference Grade History" Rows="Data.GradeRows" Terms="Data.Terms" />
+    <ReferenceCohortTable Title="Reference Progressing Cohorts" GradeRows="Data.GradeRows" AugustYears="Data.AugustYears" />
+    <HistoryTable Title="Reference School History" Rows="Data.SchoolRows" Terms="Data.Terms" />
+}
+
+@code {
+    private EnrollmentData? Data { get; set; }
+    private EnrollmentModel? Model { get; set; }
+    private BacktestResult? Backtest { get; set; }
+    private string? LoadError { get; set; }
+    private int StartYear { get; set; } = 2020;
+    private int EndYear { get; set; } = 2024;
+    private int SelectedComparisonYear { get; set; } = 2024;
+    private double RetentionBlend { get; set; } = 0.75;
+    private double HomeYieldMultiplier { get; set; } = 1.0;
+    private List<DensityMultiplierInput> DensityMultipliers { get; } = [];
+    private bool CanRun => Data is not null && Model is not null;
+    private int MinStartYear => Data?.AugustYears.Skip(1).FirstOrDefault() ?? 2017;
+    private int MaxEndYear => Data?.AugustYears.Where(year => year <= 2024).DefaultIfEmpty(2024).Max() ?? 2024;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var homes = await Http.GetStringAsync("data/homes.csv");
+            var grid = await Http.GetStringAsync("data/grid.csv");
+            var grade = await Http.GetStringAsync("data/grade.csv");
+            var schools = await Http.GetStringAsync("data/schools.csv");
+            Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
+            Model = EnrollmentModel.Calibrate(Data);
+            StartYear = Math.Max(MinStartYear, MaxEndYear - 5);
+            EndYear = MaxEndYear;
+            SelectedComparisonYear = EndYear;
+            DensityMultipliers.AddRange(Data.Densities.Select(density => new DensityMultiplierInput(density, 1.0)));
+            RunBacktest();
+        }
+        catch (Exception ex)
+        {
+            LoadError = ex.Message;
+        }
+    }
+
+    private void RunBacktest()
+    {
+        if (Model is null) return;
+        StartYear = Math.Clamp(StartYear, MinStartYear, MaxEndYear);
+        EndYear = Math.Clamp(EndYear, StartYear, MaxEndYear);
+
+        var densityMultipliers = DensityMultipliers.ToDictionary(item => item.Density, item => item.Multiplier, StringComparer.OrdinalIgnoreCase);
+        Backtest = Model.Backtest(new BacktestRequest(
+            StartYear,
+            EndYear,
+            RetentionBlend,
+            HomeYieldMultiplier,
+            densityMultipliers));
+
+        if (!Backtest.Comparisons.Any(item => item.Year == SelectedComparisonYear))
+        {
+            SelectedComparisonYear = Backtest.Comparisons.LastOrDefault()?.Year ?? EndYear;
+        }
+    }
+
+    private BacktestYearComparison? SelectedComparison => Backtest?.Comparisons.FirstOrDefault(item => item.Year == SelectedComparisonYear);
+
+    private IReadOnlyList<(string Grid, double? Actual, double Modeled)> SelectedGridComparisons =>
+        SelectedComparison is null
+            ? []
+            : SelectedComparison.ModeledGridTotals.Keys.Order()
+                .Select(grid => (grid, SelectedComparison.ActualGridTotals.GetValueOrDefault(grid), SelectedComparison.ModeledGridTotals.GetValueOrDefault(grid)))
+                .ToList();
+
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, Backtest?.Comparisons.SelectMany(item => new[] { item.ActualTotal, item.ModeledTotal }).DefaultIfEmpty(0).Max() * 1.08 ?? 1));
+    private string ActualChartPoints => ChartPoints(item => item.ActualTotal);
+    private string ModeledChartPoints => ChartPoints(item => item.ModeledTotal);
+
+    private string ChartPoints(Func<BacktestYearComparison, double> selector)
+    {
+        var points = Backtest?.Comparisons ?? [];
+        if (points.Count == 0) return "";
+        return string.Join(" ", points.Select((point, index) =>
+        {
+            var x = points.Count == 1 ? 60 : 60 + (index * 800.0 / (points.Count - 1));
+            var y = 260 - (selector(point) / ChartMax * 220);
+            return $"{x:0.##},{y:0.##}";
+        }));
+    }
+
+    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 40, 260);
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            var points = Backtest?.Comparisons ?? [];
+            if (points.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 8.0));
+            return points.Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
+                .Select(item =>
+                {
+                    var x = points.Count == 1 ? 60 : 60 + (item.index * 800.0 / (points.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private static string FormatNullable(double? value) => value.HasValue ? value.Value.ToString("N0") : "n/a";
+
+    private sealed class DensityMultiplierInput(string density, double multiplier)
+    {
+        public string Density { get; set; } = density;
+        public double Multiplier { get; set; } = multiplier;
+    }
+}

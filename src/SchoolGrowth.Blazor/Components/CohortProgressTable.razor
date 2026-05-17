@@ -1,0 +1,437 @@
+<section class="band">
+    <div class="section-head">
+        <h2>@Title</h2>
+        @if (ReferenceProjection is not null)
+        {
+            <div class="chart-controls">
+                <label class="inline-check">
+                    <input type="checkbox" @bind="ShowModeledLines" />
+                    <span>Modeled</span>
+                </label>
+                <label class="inline-check">
+                    <input type="checkbox" @bind="ShowReferenceLines" />
+                    <span>Reference</span>
+                </label>
+            </div>
+        }
+    </div>
+    <div class="table-viz">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cohort</th>
+                        @foreach (var year in Projection)
+                        {
+                            <th>@year.Year</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var cohort in Cohorts)
+                    {
+                        <tr>
+                            <td>
+                                <label class="row-legend">
+                                    <input type="checkbox" checked="@SelectedCohorts.Contains(cohort.Label)" @onchange="eventArgs => ToggleLine(cohort.Label, eventArgs)" />
+                                    <span class="legend-swatch" style="background:@ColorForCohort(cohort)"></span>
+                                    <span>@cohort.Label</span>
+                                </label>
+                            </td>
+                            @foreach (var item in Projection.Select((year, index) => new { year, index }))
+                            {
+                                var grade = GradeFor(cohort, item.year.Year);
+                                double? value = grade is null ? null : item.year.Grades.GetValueOrDefault(grade);
+                                <td>
+                                    @if (value.HasValue)
+                                    {
+                                        @CellContent(
+                                            value.Value,
+                                            ReferenceValueFor(cohort, item.year.Year),
+                                            BaselineValue(cohort),
+                                            PreviousValue(cohort, item.index))
+                                        <div class="cell-detail">@grade</div>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <aside class="table-chart">
+            <svg viewBox="0 0 520 260" role="img" @onmouseleave="() => HoverIndex = null">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="46" y1="@tick.Y" x2="500" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="40" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="46" y1="220" x2="500" y2="220" class="chart-axis" />
+                <line x1="46" y1="28" x2="46" y2="220" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="220" x2="@tick.X" y2="226" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="246" Anchor="middle" Label="@tick.Label" />
+                }
+                @foreach (var cohort in ActiveCohorts)
+                {
+                    @if (ShowReferenceLines && ReferenceProjection is not null)
+                    {
+                        <polyline points="@ReferenceChartPoints(cohort)" fill="none" stroke="@ColorForCohort(cohort)" stroke-width="3" stroke-dasharray="7 5" opacity="0.85" />
+                    }
+                    @if (ShowModeledLines)
+                    {
+                        <polyline points="@ChartPoints(cohort)" fill="none" stroke="@ColorForCohort(cohort)" stroke-width="3" />
+                    }
+                }
+                @if (HoverIndex.HasValue)
+                {
+                    <line x1="@HoverX" y1="28" x2="@HoverX" y2="220" class="chart-hover-line" />
+                    <rect x="@HoverLabelX" y="32" width="54" height="20" rx="4" class="chart-hover-label-bg" />
+                    <SvgText X="@(HoverLabelX + 27)" Y="46" Anchor="middle" Label="@Projection[HoverIndex.Value].Year.ToString()" />
+                    @foreach (var item in HoverMarkers.Select((marker, index) => new { marker, index }))
+                    {
+                        <circle cx="@item.marker.X" cy="@item.marker.Y" r="4" fill="@item.marker.Color" class="chart-hover-dot" />
+                    }
+                    <rect x="@HoverPanelX" y="@HoverPanelY" width="@HoverPanelWidth" height="@HoverPanelHeight" rx="5" class="chart-hover-label-bg" />
+                    @foreach (var item in HoverMarkers.Take(MaxHoverLabels).Select((marker, index) => new { marker, index }))
+                    {
+                        <circle cx="@(HoverPanelX + 9)" cy="@(HoverPanelY + 16 + item.index * 15)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
+                        <SvgText X="@(HoverPanelX + 16)" Y="@(HoverPanelY + 20 + item.index * 15)" Anchor="start" Label="@item.marker.Label" />
+                    }
+                    @if (HoverMarkers.Count > MaxHoverLabels)
+                    {
+                        <SvgText X="@(HoverPanelX + 16)" Y="@(HoverPanelY + 20 + MaxHoverLabels * 15)" Anchor="start" Label="@MoreHoverLabel" />
+                    }
+                }
+                @foreach (var zone in HoverZones)
+                {
+                    <rect x="@zone.X" y="28" width="@zone.Width" height="192" fill="transparent" class="chart-hover-zone"
+                          @onmouseover="() => HoverIndex = zone.Index"
+                          @onfocus="() => HoverIndex = zone.Index" />
+                }
+            </svg>
+            @if (ReferenceProjection is not null)
+            {
+                <div class="inline-legend">
+                    <span><i style="background:#172026"></i>Modeled solid</span>
+                    <span><i style="background:#172026"></i>Reference dashed</span>
+                </div>
+            }
+        </aside>
+    </div>
+</section>
+
+@code {
+    private static readonly IReadOnlyList<string> DefaultCohortGrades =
+    [
+        "TK", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th",
+        "9th", "10th", "11th", "12th"
+    ];
+
+    [Parameter]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<CohortDefinition> Cohorts { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<ProjectionYear> Projection { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ProjectionYear>? ReferenceProjection { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<string>? ProgressionGrades { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromStart { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromStartPercent { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromPrevious { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromPreviousPercent { get; set; }
+
+    private HashSet<string> SelectedCohorts { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private bool ShowModeledLines { get; set; } = true;
+    private bool ShowReferenceLines { get; set; } = true;
+    private int? HoverIndex { get; set; }
+    private IReadOnlyList<string> ActiveProgressionGrades => ProgressionGrades is { Count: > 0 }
+        ? ProgressionGrades
+        : DefaultCohortGrades;
+    private IReadOnlyList<CohortDefinition> ActiveCohorts => Cohorts.Where(cohort => SelectedCohorts.Contains(cohort.Label)).ToList();
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ActiveCohorts
+        .SelectMany(cohort => ValuesForCohort(cohort).Concat(ReferenceValuesForCohort(cohort)))
+        .DefaultIfEmpty(0)
+        .Max() * 1.08));
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedCohorts.Count == 0)
+        {
+            foreach (var cohort in Cohorts.Where(cohort => HasAnyProjectedValue(cohort)).TakeLast(5))
+            {
+                SelectedCohorts.Add(cohort.Label);
+            }
+        }
+
+        SelectedCohorts.RemoveWhere(label => !Cohorts.Any(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase)));
+        if (HoverIndex >= Projection.Count)
+        {
+            HoverIndex = null;
+        }
+    }
+
+    private void ToggleLine(string label, ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool isChecked && isChecked)
+        {
+            SelectedCohorts.Add(label);
+        }
+        else
+        {
+            SelectedCohorts.Remove(label);
+        }
+    }
+
+    private string? GradeFor(CohortDefinition cohort, int year)
+    {
+        var index = year - cohort.StartYear;
+        return index >= 0 && index < ActiveProgressionGrades.Count ? ActiveProgressionGrades[index] : null;
+    }
+
+    private double? ValueFor(CohortDefinition cohort, int projectionIndex)
+    {
+        if (projectionIndex < 0 || projectionIndex >= Projection.Count) return null;
+        var year = Projection[projectionIndex];
+        var grade = GradeFor(cohort, year.Year);
+        return grade is null ? null : year.Grades.GetValueOrDefault(grade);
+    }
+
+    private double BaselineValue(CohortDefinition cohort)
+    {
+        return Enumerable.Range(0, Projection.Count)
+            .Select(index => ValueFor(cohort, index))
+            .FirstOrDefault(value => value.HasValue) ?? 0;
+    }
+
+    private double PreviousValue(CohortDefinition cohort, int index)
+    {
+        if (index <= 0) return BaselineValue(cohort);
+        return ValueFor(cohort, index - 1) ?? BaselineValue(cohort);
+    }
+
+    private bool HasAnyProjectedValue(CohortDefinition cohort)
+    {
+        return Enumerable.Range(0, Projection.Count).Any(index => ValueFor(cohort, index).HasValue);
+    }
+
+    private IReadOnlyList<double> ValuesForCohort(CohortDefinition cohort)
+    {
+        return Enumerable.Range(0, Projection.Count)
+            .Select(index => ValueFor(cohort, index) ?? 0)
+            .ToList();
+    }
+
+    private IReadOnlyList<double> ReferenceValuesForCohort(CohortDefinition cohort)
+    {
+        if (ReferenceProjection is null) return [];
+        return Projection
+            .Select(year => ReferenceValueFor(cohort, year.Year))
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToList();
+    }
+
+    private string ChartPoints(CohortDefinition cohort)
+    {
+        var points = new List<string>();
+        for (var index = 0; index < Projection.Count; index++)
+        {
+            var value = ValueFor(cohort, index);
+            if (!value.HasValue) continue;
+            var x = Projection.Count == 1 ? 46 : 46 + (index * 454.0 / (Projection.Count - 1));
+            var y = 220 - (value.Value / ChartMax * 192);
+            points.Add($"{x:0.##},{y:0.##}");
+        }
+
+        return string.Join(" ", points);
+    }
+
+    private double XForIndex(int index)
+    {
+        return Projection.Count == 1 ? 46 : 46 + (index * 454.0 / (Projection.Count - 1));
+    }
+
+    private double YForValue(double value)
+    {
+        return 220 - (value / ChartMax * 192);
+    }
+
+    private double HoverX => HoverIndex.HasValue ? XForIndex(HoverIndex.Value) : 46;
+
+    private double HoverLabelX => Math.Clamp(HoverX - 27, 48, 446);
+
+    private const int MaxHoverLabels = 6;
+    private double HoverPanelWidth => 150;
+    private double HoverPanelHeight => 14 + Math.Min(HoverMarkers.Count, MaxHoverLabels) * 15 + (HoverMarkers.Count > MaxHoverLabels ? 15 : 0);
+    private double HoverPanelX => HoverX > 330 ? 350 - HoverPanelWidth : 350;
+    private double HoverPanelY => 54;
+    private string MoreHoverLabel => $"+{HoverMarkers.Count - MaxHoverLabels} more";
+
+    private IReadOnlyList<(int Index, double X, double Width)> HoverZones
+    {
+        get
+        {
+            if (Projection.Count == 0) return [];
+            if (Projection.Count == 1) return [(0, 46, 454)];
+            var zones = new List<(int Index, double X, double Width)>();
+            for (var index = 0; index < Projection.Count; index++)
+            {
+                var previousMid = index == 0 ? 46 : (XForIndex(index - 1) + XForIndex(index)) / 2;
+                var nextMid = index == Projection.Count - 1 ? 500 : (XForIndex(index) + XForIndex(index + 1)) / 2;
+                zones.Add((index, previousMid, nextMid - previousMid));
+            }
+
+            return zones;
+        }
+    }
+
+    private IReadOnlyList<(double X, double Y, string Label, string Color)> HoverMarkers
+    {
+        get
+        {
+            if (!HoverIndex.HasValue || HoverIndex.Value < 0 || HoverIndex.Value >= Projection.Count) return [];
+            var index = HoverIndex.Value;
+            var year = Projection[index];
+            var markers = new List<(double X, double Y, string Label, string Color)>();
+
+            foreach (var cohort in ActiveCohorts)
+            {
+                var color = ColorForCohort(cohort);
+                if (ShowModeledLines)
+                {
+                    var value = ValueFor(cohort, index);
+                    if (value.HasValue)
+                    {
+                        markers.Add((XForIndex(index), YForValue(value.Value), $"{cohort.Label}: {value.Value:N0}", color));
+                    }
+                }
+
+                if (ShowReferenceLines && ReferenceProjection is not null)
+                {
+                    var value = ReferenceValueFor(cohort, year.Year);
+                    if (value.HasValue)
+                    {
+                        markers.Add((XForIndex(index), YForValue(value.Value), $"{cohort.Label} ref: {value.Value:N0}", color));
+                    }
+                }
+            }
+
+            return markers;
+        }
+    }
+
+    private string ReferenceChartPoints(CohortDefinition cohort)
+    {
+        if (ReferenceProjection is null || Projection.Count == 0) return "";
+        var points = new List<string>();
+        for (var index = 0; index < Projection.Count; index++)
+        {
+            var value = ReferenceValueFor(cohort, Projection[index].Year);
+            if (!value.HasValue) continue;
+            var x = Projection.Count == 1 ? 46 : 46 + (index * 454.0 / (Projection.Count - 1));
+            var y = 220 - (value.Value / ChartMax * 192);
+            points.Add($"{x:0.##},{y:0.##}");
+        }
+
+        return string.Join(" ", points);
+    }
+
+    private double? ReferenceValueFor(CohortDefinition cohort, int year)
+    {
+        var point = ReferenceProjection?.FirstOrDefault(item => item.Year == year);
+        var grade = GradeFor(cohort, year);
+        return point is null || grade is null ? null : point.Grades.GetValueOrDefault(grade);
+    }
+
+    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 28, 220);
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            if (Projection.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(Projection.Count / 5.0));
+            return Projection
+                .Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == Projection.Count - 1)
+                .Select(item =>
+                {
+                    var x = Projection.Count == 1 ? 46 : 46 + (item.index * 454.0 / (Projection.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private static string ColorFor(int index)
+    {
+        var colors = new[] { "#0f766e", "#b45309", "#2563eb", "#7c3aed", "#be123c", "#4d7c0f", "#0f4c81", "#a16207" };
+        return colors[index % colors.Length];
+    }
+
+    private string ColorForCohort(CohortDefinition cohort)
+    {
+        var index = Cohorts.ToList().FindIndex(item => item.Label.Equals(cohort.Label, StringComparison.OrdinalIgnoreCase));
+        return ColorFor(Math.Max(0, index));
+    }
+
+    private RenderFragment CellContent(double value, double? reference, double baseline, double previous) => builder =>
+    {
+        var sequence = 0;
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "cell-metrics");
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "cell-value");
+        builder.AddContent(sequence++, value.ToString("N0"));
+        builder.CloseElement();
+
+        if (reference.HasValue)
+        {
+            AddMetric(builder, ref sequence, true, "ref", reference.Value.ToString("N0"));
+            AddMetric(builder, ref sequence, true, "diff", FormatSigned(value - reference.Value));
+        }
+        AddMetric(builder, ref sequence, ShowIncreaseFromStart, "start", FormatSigned(value - baseline));
+        AddMetric(builder, ref sequence, ShowIncreaseFromStartPercent, "start %", FormatPercent(value, baseline));
+        AddMetric(builder, ref sequence, ShowIncreaseFromPrevious, "prev", FormatSigned(value - previous));
+        AddMetric(builder, ref sequence, ShowIncreaseFromPreviousPercent, "prev %", FormatPercent(value, previous));
+
+        builder.CloseElement();
+    };
+
+    private static void AddMetric(RenderTreeBuilder builder, ref int sequence, bool show, string label, string value)
+    {
+        if (!show) return;
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "cell-detail");
+        builder.AddContent(sequence++, $"{label}: {value}");
+        builder.CloseElement();
+    }
+
+    private static string FormatSigned(double value)
+    {
+        return value.ToString("+#,##0;-#,##0;0");
+    }
+
+    private static string FormatPercent(double value, double baseline)
+    {
+        if (baseline == 0) return "n/a";
+        return ((value - baseline) / baseline).ToString("+0.0%;-0.0%;0.0%");
+    }
+}

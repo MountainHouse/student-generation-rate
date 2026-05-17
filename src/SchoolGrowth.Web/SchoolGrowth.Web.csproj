@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.7" />
+    <ProjectReference Include="..\SchoolGrowth.Core\SchoolGrowth.Core.csproj" />
+    <ProjectReference Include="..\SchoolGrowth.Blazor\SchoolGrowth.Blazor.csproj" />
+  </ItemGroup>
+</Project>

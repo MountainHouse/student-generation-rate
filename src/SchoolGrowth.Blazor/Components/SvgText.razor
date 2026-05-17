@@ -1,0 +1,15 @@
+<text x="@X" y="@Y" class="chart-label" text-anchor="@Anchor">@Label</text>
+
+@code {
+    [Parameter]
+    public double X { get; set; }
+
+    [Parameter]
+    public double Y { get; set; }
+
+    [Parameter]
+    public string Anchor { get; set; } = "middle";
+
+    [Parameter]
+    public string Label { get; set; } = "";
+}

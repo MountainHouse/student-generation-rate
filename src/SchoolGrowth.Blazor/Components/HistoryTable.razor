@@ -1,0 +1,178 @@
+<section class="band">
+    <div class="section-head">
+        <h2>@Title</h2>
+    </div>
+    <div class="table-viz">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        @foreach (var term in Terms)
+                        {
+                            <th>@term</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Rows)
+                    {
+                        <tr>
+                            <td>
+                                <label class="row-legend">
+                                    <input type="checkbox" checked="@SelectedLines.Contains(row.Name)" @onchange="eventArgs => ToggleLine(row.Name, eventArgs)" />
+                                    <span class="legend-swatch" style="background:@ColorForLine(row.Name)"></span>
+                                    <span>@row.Name</span>
+                                </label>
+                            </td>
+                            @foreach (var term in Terms)
+                            {
+                                <td>@Format(row.Values.GetValueOrDefault(term))</td>
+                            }
+                        </tr>
+                    }
+                    <tr class="summary-row">
+                        <td>
+                            <label class="row-legend">
+                                <input type="checkbox" checked="@SelectedLines.Contains(TotalLineName)" @onchange="eventArgs => ToggleLine(TotalLineName, eventArgs)" />
+                                <span class="legend-swatch" style="background:@ColorForLine(TotalLineName)"></span>
+                                <span>Total</span>
+                            </label>
+                        </td>
+                        @foreach (var term in Terms)
+                        {
+                            <td>@ColumnTotal(term).ToString("N0")</td>
+                        }
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <aside class="table-chart">
+            <svg viewBox="0 0 520 260" role="img">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="46" y1="@tick.Y" x2="500" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="40" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="46" y1="220" x2="500" y2="220" class="chart-axis" />
+                <line x1="46" y1="28" x2="46" y2="220" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="220" x2="@tick.X" y2="226" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="246" Anchor="middle" Label="@tick.Label" />
+                }
+                @foreach (var line in ActiveChartLines)
+                {
+                    <polyline points="@ChartPoints(line)" fill="none" stroke="@ColorForLine(line)" stroke-width="3" />
+                }
+            </svg>
+        </aside>
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<SeriesRow> Rows { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<string> Terms { get; set; }
+
+    private const string TotalLineName = "Total";
+    private HashSet<string> SelectedLines { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyList<string> ChartLines => Rows.Select(row => row.Name).Concat([TotalLineName]).ToList();
+    private IReadOnlyList<string> ActiveChartLines => ChartLines.Where(SelectedLines.Contains).ToList();
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ActiveChartLines.SelectMany(ValuesForLine).DefaultIfEmpty(0).Max() * 1.08));
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedLines.Count == 0)
+        {
+            SelectedLines.Add(TotalLineName);
+            foreach (var name in Rows.Take(3).Select(row => row.Name))
+            {
+                SelectedLines.Add(name);
+            }
+        }
+
+        SelectedLines.RemoveWhere(line => !ChartLines.Contains(line, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private void ToggleLine(string line, ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool isChecked && isChecked)
+        {
+            SelectedLines.Add(line);
+        }
+        else
+        {
+            SelectedLines.Remove(line);
+        }
+    }
+
+    private IReadOnlyList<double> ValuesForLine(string line)
+    {
+        return Terms.Select(term =>
+        {
+            if (line.Equals(TotalLineName, StringComparison.OrdinalIgnoreCase))
+            {
+                return ColumnTotal(term);
+            }
+
+            var row = Rows.FirstOrDefault(item => item.Name.Equals(line, StringComparison.OrdinalIgnoreCase));
+            return row?.Values.GetValueOrDefault(term) ?? 0;
+        }).ToList();
+    }
+
+    private double ColumnTotal(string term)
+    {
+        return Rows.Sum(row => row.Values.GetValueOrDefault(term) ?? 0);
+    }
+
+    private string ChartPoints(string line)
+    {
+        var values = ValuesForLine(line);
+        if (values.Count == 0) return "";
+        return string.Join(" ", values.Select((value, index) =>
+        {
+            var x = values.Count == 1 ? 46 : 46 + (index * 454.0 / (values.Count - 1));
+            var y = 220 - (value / ChartMax * 192);
+            return $"{x:0.##},{y:0.##}";
+        }));
+    }
+
+    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 28, 220);
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            if (Terms.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(Terms.Count / 5.0));
+            return Terms.Select((term, index) => new { term, index })
+                .Where(item => item.index % step == 0 || item.index == Terms.Count - 1)
+                .Select(item =>
+                {
+                    var x = Terms.Count == 1 ? 46 : 46 + (item.index * 454.0 / (Terms.Count - 1));
+                    return (x, item.term.Replace("Aug '", "").Replace("May '", "").Replace("*", ""));
+                })
+                .ToList();
+        }
+    }
+
+    private static string ColorFor(int index)
+    {
+        var colors = new[] { "#0f766e", "#b45309", "#2563eb", "#7c3aed", "#be123c", "#4d7c0f", "#0f4c81", "#a16207" };
+        return colors[index % colors.Length];
+    }
+
+    private string ColorForLine(string line)
+    {
+        var index = ChartLines.ToList().FindIndex(item => item.Equals(line, StringComparison.OrdinalIgnoreCase));
+        return ColorFor(Math.Max(0, index));
+    }
+
+    private static string Format(double? value) => value.HasValue ? value.Value.ToString("N0") : "";
+}

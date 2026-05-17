@@ -1,0 +1,430 @@
+@page "/"
+@inject HttpClient Http
+
+<PageTitle>School Growth Simulator</PageTitle>
+
+<header class="topbar">
+    <div>
+        <h1>School Growth Simulator</h1>
+        <p>Browser-based Blazor projection using the shared C# model library.</p>
+    </div>
+    <div class="top-actions">
+        <a class="nav-button secondary" href="validation">Model Validation</a>
+        <a class="nav-button secondary" href="monte-carlo">Monte Carlo</a>
+    </div>
+</header>
+
+@if (LoadError is not null)
+{
+    <section class="band">
+        <strong>@LoadError</strong>
+    </section>
+}
+else if (Data is null || Result is null)
+{
+    <section class="band">
+        Loading enrollment data...
+    </section>
+}
+else
+{
+    <section class="band controls">
+        <label>
+            <span>Start year</span>
+            <input type="number" min="2026" @bind="StartYear" @bind:after="RunSimulation" />
+        </label>
+        <label>
+            <span>Projection years</span>
+            <input type="number" min="1" max="30" @bind="Years" @bind:after="RunSimulation" />
+        </label>
+        <label>
+            <span>Retention confidence</span>
+            <input type="range" min="0" max="1" step="0.05" @bind="RetentionBlend" @bind:after="RunSimulation" />
+            <output>@($"{RetentionBlend:P0}")</output>
+        </label>
+        <label>
+            <span>Home yield multiplier</span>
+            <input type="number" min="0.1" max="5" step="0.05" @bind="HomeYieldMultiplier" @bind:after="RunSimulation" />
+        </label>
+    </section>
+
+    <section class="band split">
+        <div>
+            <div class="section-head">
+                <h2>Scenario Homes</h2>
+                <button class="secondary" @onclick="AddScenarioRow">Add Row</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Neighborhood</th>
+                            <th>Density</th>
+                            <th>Built year</th>
+                            <th>Homes</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in ScenarioRows)
+                        {
+                            <tr @key="row">
+                                <td>
+                                    <select @bind="row.Neighborhood" @bind:after="RunSimulation">
+                                        @foreach (var neighborhood in Data.Neighborhoods)
+                                        {
+                                            <option value="@neighborhood">@neighborhood</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <select @bind="row.Density" @bind:after="RunSimulation">
+                                        @foreach (var density in Data.Densities)
+                                        {
+                                            <option value="@density">@density</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input type="number" min="2026" max="2055" @bind="row.Year" @bind:after="RunSimulation" /></td>
+                                <td><input type="number" min="0" step="1" @bind="row.Homes" @bind:after="RunSimulation" /></td>
+                                <td><button class="icon" title="Remove row" @onclick="() => RemoveScenarioRow(row)">x</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <aside class="panel">
+            <h2>Calibration</h2>
+            <dl>
+                <dt>Model error</dt>
+                <dd>@Format(Model?.Calibration.MeanAbsoluteError)</dd>
+                <dt>Baseline TK</dt>
+                <dd>@Format(Model?.Calibration.BaselineTkStudents)</dd>
+                @foreach (var density in Model?.Calibration.DensityYieldPerHome ?? [])
+                {
+                    <dt>@density.Key yield</dt>
+                    <dd>@density.Value.ToString("0.00")</dd>
+                }
+            </dl>
+        </aside>
+    </section>
+
+    <section class="band charts">
+        <div class="chart-box">
+            <div class="chart-head">
+                <h2>Enrollment Trend</h2>
+                <div class="chart-controls">
+                    <select @bind="ChartMode">
+                        <option value="district">District</option>
+                        <option value="grid">Grid</option>
+                        <option value="school">School</option>
+                    </select>
+                    <select @bind="ChartEntity">
+                        @foreach (var entity in ChartEntities)
+                        {
+                            <option value="@entity">@entity</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <svg viewBox="0 0 920 300" role="img">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
+                <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                }
+                <polyline points="@ChartPoints" fill="none" stroke="#0f766e" stroke-width="4" />
+                @foreach (var point in ChartDots)
+                {
+                    <circle cx="@point.X" cy="@point.Y" r="4" fill="#0f766e" />
+                }
+            </svg>
+        </div>
+        <div class="chart-box">
+            <h2>Final Year Mix</h2>
+            <dl>
+                <dt>TK-8</dt>
+                <dd>@Format(SumFinalGrades("TK", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"))</dd>
+                <dt>MHHS 9-12</dt>
+                <dd>@Format(FinalSchoolTotal("MHHS"))</dd>
+                <dt>Special Programs</dt>
+                <dd>@Format(FinalSchoolTotal("Special Programs"))</dd>
+                <dt>District</dt>
+                <dd>@Format(Result.Projection.Last().TotalStudents)</dd>
+            </dl>
+        </div>
+    </section>
+
+    <section class="band metric-options">
+        <h2>Table Details</h2>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromStart" />
+            <span>Increase from start</span>
+        </label>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromStartPercent" />
+            <span>Increase from start %</span>
+        </label>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromPrevious" />
+            <span>Increase from previous year</span>
+        </label>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromPreviousPercent" />
+            <span>Increase from previous year %</span>
+        </label>
+    </section>
+
+    <ProjectionTable Title="Projected Grade Bands" Names="GradeBandNames" Projection="Result.Projection" ValueSelector="GradeBandValue"
+                     ShowIncreaseFromStart="ShowIncreaseFromStart"
+                     ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                     ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                     ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    <CohortProgressTable Title="Projected Progressing Cohorts" Cohorts="ProgressingCohorts" Projection="Result.Projection"
+                         ShowIncreaseFromStart="ShowIncreaseFromStart"
+                         ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                         ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                         ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    <ProjectionTable Title="Projected Grades" Names="GradeOrder" Projection="Result.Projection" ValueSelector="GradeValue"
+                     Subtotals="GradeSubtotals"
+                     ShowIncreaseFromStart="ShowIncreaseFromStart"
+                     ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                     ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                     ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    <ProjectionTable Title="Projected Grid Totals" Names="GridNames" Projection="Result.Projection" ValueSelector="GridValue"
+                     ShowIncreaseFromStart="ShowIncreaseFromStart"
+                     ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                     ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                     ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    <ProjectionTable Title="Projected School Totals" Names="SchoolNames" Projection="Result.Projection" ValueSelector="SchoolValue"
+                     ShowIncreaseFromStart="ShowIncreaseFromStart"
+                     ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                     ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                     ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+}
+
+@code {
+    private static readonly IReadOnlyList<string> GradeOrder =
+    [
+        "TK", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th",
+        "9th", "10th", "11th", "12th", "Sp. Ed."
+    ];
+    private static readonly IReadOnlyList<ProjectionSubtotal> GradeSubtotals =
+    [
+        new("K-5", ["K", "1st", "2nd", "3rd", "4th", "5th"]),
+        new("5-8", ["5th", "6th", "7th", "8th"]),
+        new("K-8", ["K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"]),
+        new("HS", ["9th", "10th", "11th", "12th"])
+    ];
+
+    private EnrollmentData? Data { get; set; }
+    private EnrollmentModel? Model { get; set; }
+    private SimulationResult? Result { get; set; }
+    private string? LoadError { get; set; }
+    private int StartYear { get; set; } = 2026;
+    private int Years { get; set; } = 12;
+    private double RetentionBlend { get; set; } = 0.75;
+    private double HomeYieldMultiplier { get; set; } = 1.0;
+    private string ChartMode { get; set; } = "district";
+    private string ChartEntity { get; set; } = "All students";
+    private bool ShowIncreaseFromStart { get; set; }
+    private bool ShowIncreaseFromStartPercent { get; set; }
+    private bool ShowIncreaseFromPrevious { get; set; }
+    private bool ShowIncreaseFromPreviousPercent { get; set; }
+    private List<ScenarioHomeInput> ScenarioRows { get; } = [];
+    private bool CanRun => Data is not null && Model is not null;
+
+    private IReadOnlyList<string> GridNames => Result?.Projection.FirstOrDefault()?.GridTotals.Keys.Order().ToList() ?? [];
+    private IReadOnlyList<string> SchoolNames => Result?.Projection.FirstOrDefault()?.SchoolTotals.Keys.Order().ToList() ?? [];
+    private IReadOnlyList<string> GradeBandNames { get; } = ["TK-5", "6-8", "9-12 / MHHS", "Special Programs"];
+    private IReadOnlyList<CohortDefinition> ProgressingCohorts => BuildProgressingCohorts();
+    private IReadOnlyList<string> ChartEntities => ChartMode switch
+    {
+        "grid" => GridNames,
+        "school" => SchoolNames,
+        _ => ["All students"]
+    };
+
+    private string ChartPoints => string.Join(" ", ChartValues.Select((value, index) =>
+    {
+        var values = ChartValues;
+        var max = ChartMax;
+        var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
+        var y = 260 - (value / max * 220);
+        return $"{x:0.##},{y:0.##}";
+    }));
+
+    private IReadOnlyList<(double X, double Y)> ChartDots
+    {
+        get
+        {
+            var values = ChartValues;
+            var max = ChartMax;
+            return values.Select((value, index) =>
+            {
+                var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
+                var y = 260 - (value / max * 220);
+                return (x, y);
+            }).ToList();
+        }
+    }
+
+    private IReadOnlyList<double> ChartValues => Result?.Projection.Select(point => ChartMode switch
+    {
+        "grid" => point.GridTotals.GetValueOrDefault(ChartEntity),
+        "school" => point.SchoolTotals.GetValueOrDefault(ChartEntity),
+        _ => point.TotalStudents
+    }).ToList() ?? [];
+
+    private IReadOnlyList<(double Y, string Label)> YTicks
+    {
+        get
+        {
+            return ChartAxis.YTicks(ChartMax, 40, 260);
+        }
+    }
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            var points = Result?.Projection ?? [];
+            if (points.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 8.0));
+            return points
+                .Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
+                .Select(item =>
+                {
+                    var x = points.Count == 1 ? 60 : 60 + (item.index * 800.0 / (points.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ChartValues.DefaultIfEmpty(0).Max() * 1.08));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var homes = await Http.GetStringAsync("data/homes.csv");
+            var grid = await Http.GetStringAsync("data/grid.csv");
+            var grade = await Http.GetStringAsync("data/grade.csv");
+            var schools = await Http.GetStringAsync("data/schools.csv");
+            Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
+            Model = EnrollmentModel.Calibrate(Data);
+            StartYear = Data.AugustYears.LastOrDefault(2025) + 1;
+            ScenarioRows.AddRange(
+            [
+                new ScenarioHomeInput("Pombo", "RL", StartYear, 120),
+                new ScenarioHomeInput("Pombo", "RM", StartYear + 1, 160),
+                new ScenarioHomeInput("Wicklund", "RH", StartYear, 100)
+            ]);
+            RunSimulation();
+        }
+        catch (Exception ex)
+        {
+            LoadError = ex.Message;
+        }
+    }
+
+    private void RunSimulation()
+    {
+        if (Model is null) return;
+        Result = Model.Project(new SimulationRequest(
+            StartYear,
+            Years,
+            ScenarioRows
+                .Where(row => row.Homes > 0)
+                .Select(row => new ScenarioHome(row.Neighborhood, row.Density, row.Year, row.Homes))
+                .ToList(),
+            RetentionBlend,
+            HomeYieldMultiplier));
+
+        if (!ChartEntities.Contains(ChartEntity))
+        {
+            ChartEntity = ChartEntities.FirstOrDefault() ?? "All students";
+        }
+    }
+
+    private void AddScenarioRow()
+    {
+        if (Data is null) return;
+        ScenarioRows.Add(new ScenarioHomeInput(Data.Neighborhoods.First(), Data.Densities.First(), StartYear, 0));
+        RunSimulation();
+    }
+
+    private void RemoveScenarioRow(ScenarioHomeInput row)
+    {
+        ScenarioRows.Remove(row);
+        RunSimulation();
+    }
+
+    private double GradeValue(ProjectionYear year, string grade) => year.Grades.GetValueOrDefault(grade);
+    private double GridValue(ProjectionYear year, string grid) => year.GridTotals.GetValueOrDefault(grid);
+    private double SchoolValue(ProjectionYear year, string school) => year.SchoolTotals.GetValueOrDefault(school);
+    private double GradeBandValue(ProjectionYear year, string cohort)
+    {
+        return cohort switch
+        {
+            "TK-5" => SumGrades(year, "TK", "K", "1st", "2nd", "3rd", "4th", "5th"),
+            "6-8" => SumGrades(year, "6th", "7th", "8th"),
+            "9-12 / MHHS" => SumGrades(year, "9th", "10th", "11th", "12th"),
+            "Special Programs" => year.SchoolTotals.GetValueOrDefault("Special Programs"),
+            _ => 0
+        };
+    }
+
+    private static string Format(double? value) => (value ?? 0).ToString("N0");
+
+    private static double SumGrades(ProjectionYear year, params string[] grades)
+    {
+        return grades.Sum(grade => year.Grades.GetValueOrDefault(grade));
+    }
+
+    private double SumFinalGrades(params string[] grades)
+    {
+        var final = Result?.Projection.LastOrDefault();
+        return final is null ? 0 : grades.Sum(grade => final.Grades.GetValueOrDefault(grade));
+    }
+
+    private double FinalSchoolTotal(string school)
+    {
+        return Result?.Projection.LastOrDefault()?.SchoolTotals.GetValueOrDefault(school) ?? 0;
+    }
+
+    private IReadOnlyList<CohortDefinition> BuildProgressingCohorts()
+    {
+        var projection = Result?.Projection ?? [];
+        if (projection.Count == 0) return [];
+        var firstProjectionYear = projection.Min(point => point.Year);
+        var lastProjectionYear = projection.Max(point => point.Year);
+        var firstCohortStart = firstProjectionYear - 13;
+        var lastCohortStart = lastProjectionYear;
+
+        return Enumerable.Range(firstCohortStart, lastCohortStart - firstCohortStart + 1)
+            .Select(startYear => new CohortDefinition(
+                StartYear: startYear,
+                EndYear: startYear + 13,
+                Label: $"{startYear % 100:00}-{(startYear + 13) % 100:00}"))
+            .ToList();
+    }
+
+    private sealed class ScenarioHomeInput(string neighborhood, string density, int year, double homes)
+    {
+        public string Neighborhood { get; set; } = neighborhood;
+        public string Density { get; set; } = density;
+        public int Year { get; set; } = year;
+        public double Homes { get; set; } = homes;
+    }
+}

@@ -1,0 +1,514 @@
+<section class="band">
+    <div class="section-head">
+        <h2>@Title</h2>
+        @if (ReferenceProjection is not null)
+        {
+            <div class="chart-controls">
+                <label class="inline-check">
+                    <input type="checkbox" @bind="ShowModeledLines" />
+                    <span>Modeled</span>
+                </label>
+                <label class="inline-check">
+                    <input type="checkbox" @bind="ShowReferenceLines" />
+                    <span>Reference</span>
+                </label>
+            </div>
+        }
+    </div>
+    <div class="table-viz">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        @foreach (var year in Projection)
+                        {
+                            <th>@year.Year</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var name in Names)
+                    {
+                        <tr>
+                            <td>
+                                <label class="row-legend">
+                                    <input type="checkbox" checked="@SelectedLines.Contains(name)" @onchange="eventArgs => ToggleLine(name, eventArgs)" />
+                                    <span class="legend-swatch" style="background:@ColorForLine(name)"></span>
+                                    <span>@name</span>
+                                </label>
+                            </td>
+                            @foreach (var item in Projection.Select((year, index) => new { year, index }))
+                            {
+                                <td>
+                                    @CellContent(
+                                        ValueSelector(item.year, name),
+                                        ReferenceValue(name, item.year.Year),
+                                        BaselineValue(name),
+                                        PreviousValue(name, item.index))
+                                </td>
+                            }
+                        </tr>
+                    }
+                    @foreach (var subtotal in Subtotals)
+                    {
+                        <tr class="summary-row">
+                            <td>
+                                <label class="row-legend">
+                                    <input type="checkbox" checked="@SelectedLines.Contains(subtotal.Label)" @onchange="eventArgs => ToggleLine(subtotal.Label, eventArgs)" />
+                                    <span class="legend-swatch" style="background:@ColorForLine(subtotal.Label)"></span>
+                                    <span>@subtotal.Label</span>
+                                </label>
+                            </td>
+                            @foreach (var item in Projection.Select((year, index) => new { year, index }))
+                            {
+                                <td>
+                                    @CellContent(
+                                        SubtotalValue(item.year, subtotal),
+                                        ReferenceSubtotal(item.year.Year, subtotal),
+                                        BaselineSubtotal(subtotal),
+                                        PreviousSubtotal(subtotal, item.index))
+                                </td>
+                            }
+                        </tr>
+                    }
+                    <tr class="summary-row">
+                        <td>
+                            <label class="row-legend">
+                                <input type="checkbox" checked="@SelectedLines.Contains(TotalLineName)" @onchange="eventArgs => ToggleLine(TotalLineName, eventArgs)" />
+                                <span class="legend-swatch" style="background:@ColorForLine(TotalLineName)"></span>
+                                <span>Total</span>
+                            </label>
+                        </td>
+                        @foreach (var item in Projection.Select((year, index) => new { year, index }))
+                        {
+                            <td>
+                                @CellContent(
+                                    ColumnTotal(item.year),
+                                    ReferenceTotal(item.year.Year),
+                                    BaselineTotal,
+                                    PreviousTotal(item.index))
+                            </td>
+                        }
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <aside class="table-chart">
+            <svg viewBox="0 0 520 260" role="img" @onmouseleave="() => HoverIndex = null">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="46" y1="@tick.Y" x2="500" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="40" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="46" y1="220" x2="500" y2="220" class="chart-axis" />
+                <line x1="46" y1="28" x2="46" y2="220" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="220" x2="@tick.X" y2="226" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="246" Anchor="middle" Label="@tick.Label" />
+                }
+                @foreach (var line in ActiveChartLines)
+                {
+                    @if (ShowReferenceLines && ReferenceProjection is not null)
+                    {
+                        <polyline points="@ReferenceChartPoints(line)" fill="none" stroke="@ColorForLine(line)" stroke-width="3" stroke-dasharray="7 5" opacity="0.85" />
+                    }
+                    @if (ShowModeledLines)
+                    {
+                        <polyline points="@ChartPoints(line)" fill="none" stroke="@ColorForLine(line)" stroke-width="3" />
+                    }
+                }
+                @if (HoverIndex.HasValue)
+                {
+                    <line x1="@HoverX" y1="28" x2="@HoverX" y2="220" class="chart-hover-line" />
+                    <rect x="@HoverLabelX" y="32" width="54" height="20" rx="4" class="chart-hover-label-bg" />
+                    <SvgText X="@(HoverLabelX + 27)" Y="46" Anchor="middle" Label="@Projection[HoverIndex.Value].Year.ToString()" />
+                    @foreach (var item in HoverMarkers.Select((marker, index) => new { marker, index }))
+                    {
+                        <circle cx="@item.marker.X" cy="@item.marker.Y" r="4" fill="@item.marker.Color" class="chart-hover-dot" />
+                    }
+                    <rect x="@HoverPanelX" y="@HoverPanelY" width="@HoverPanelWidth" height="@HoverPanelHeight" rx="5" class="chart-hover-label-bg" />
+                    @foreach (var item in HoverMarkers.Take(MaxHoverLabels).Select((marker, index) => new { marker, index }))
+                    {
+                        <circle cx="@(HoverPanelX + 9)" cy="@(HoverPanelY + 16 + item.index * 15)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
+                        <SvgText X="@(HoverPanelX + 16)" Y="@(HoverPanelY + 20 + item.index * 15)" Anchor="start" Label="@item.marker.Label" />
+                    }
+                    @if (HoverMarkers.Count > MaxHoverLabels)
+                    {
+                        <SvgText X="@(HoverPanelX + 16)" Y="@(HoverPanelY + 20 + MaxHoverLabels * 15)" Anchor="start" Label="@MoreHoverLabel" />
+                    }
+                }
+                @foreach (var zone in HoverZones)
+                {
+                    <rect x="@zone.X" y="28" width="@zone.Width" height="192" fill="transparent" class="chart-hover-zone"
+                          @onmouseover="() => HoverIndex = zone.Index"
+                          @onfocus="() => HoverIndex = zone.Index" />
+                }
+            </svg>
+            @if (ReferenceProjection is not null)
+            {
+                <div class="inline-legend">
+                    <span><i style="background:#172026"></i>Modeled solid</span>
+                    <span><i style="background:#172026"></i>Reference dashed</span>
+                </div>
+            }
+        </aside>
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<string> Names { get; set; }
+
+    [Parameter]
+    public required IReadOnlyList<ProjectionYear> Projection { get; set; }
+
+    [Parameter]
+    public required Func<ProjectionYear, string, double> ValueSelector { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ProjectionYear>? ReferenceProjection { get; set; }
+
+    [Parameter]
+    public Func<ProjectionYear, string, double>? ReferenceValueSelector { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ProjectionSubtotal> Subtotals { get; set; } = [];
+
+    [Parameter]
+    public bool ShowIncreaseFromStart { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromStartPercent { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromPrevious { get; set; }
+
+    [Parameter]
+    public bool ShowIncreaseFromPreviousPercent { get; set; }
+
+    private HashSet<string> SelectedLines { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private bool ShowModeledLines { get; set; } = true;
+    private bool ShowReferenceLines { get; set; } = true;
+    private int? HoverIndex { get; set; }
+    private const string TotalLineName = "Total";
+    private IReadOnlyList<string> ChartLines => Names.Concat(Subtotals.Select(subtotal => subtotal.Label)).Concat([TotalLineName]).ToList();
+    private IReadOnlyList<string> ActiveChartLines => ChartLines.Where(SelectedLines.Contains).ToList();
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ActiveChartLines
+        .SelectMany(line => ValuesForLine(line).Concat(ReferenceValuesForLine(line)))
+        .DefaultIfEmpty(0)
+        .Max() * 1.08));
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedLines.Count == 0)
+        {
+            SelectedLines.Add("Total");
+            foreach (var name in Names.Take(3))
+            {
+                SelectedLines.Add(name);
+            }
+        }
+
+        SelectedLines.RemoveWhere(line => !ChartLines.Contains(line, StringComparer.OrdinalIgnoreCase));
+        if (HoverIndex >= Projection.Count)
+        {
+            HoverIndex = null;
+        }
+    }
+
+    private void ToggleLine(string line, ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool isChecked && isChecked)
+        {
+            SelectedLines.Add(line);
+        }
+        else
+        {
+            SelectedLines.Remove(line);
+        }
+    }
+
+    private IReadOnlyList<double> ValuesForLine(string line)
+    {
+        return Projection.Select(year => line.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            ? ColumnTotal(year)
+            : TryFindSubtotal(line) is { } subtotal
+                ? SubtotalValue(year, subtotal)
+            : ValueSelector(year, line)).ToList();
+    }
+
+    private IReadOnlyList<double> ReferenceValuesForLine(string line)
+    {
+        if (ReferenceProjection is null) return [];
+        return ReferenceProjection.Select(year => line.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            ? ReferenceColumnTotal(year)
+            : TryFindSubtotal(line) is { } subtotal
+                ? ReferenceSubtotalValue(year, subtotal)
+            : ReferenceValueSelector?.Invoke(year, line) ?? 0).ToList();
+    }
+
+    private string ChartPoints(string line)
+    {
+        var values = ValuesForLine(line);
+        if (values.Count == 0) return "";
+        return string.Join(" ", values.Select((value, index) =>
+        {
+            var x = values.Count == 1 ? 46 : 46 + (index * 454.0 / (values.Count - 1));
+            var y = 220 - (value / ChartMax * 192);
+            return $"{x:0.##},{y:0.##}";
+        }));
+    }
+
+    private double XForIndex(int index)
+    {
+        return Projection.Count == 1 ? 46 : 46 + (index * 454.0 / (Projection.Count - 1));
+    }
+
+    private double YForValue(double value)
+    {
+        return 220 - (value / ChartMax * 192);
+    }
+
+    private double HoverX => HoverIndex.HasValue ? XForIndex(HoverIndex.Value) : 46;
+
+    private double HoverLabelX => Math.Clamp(HoverX - 27, 48, 446);
+
+    private const int MaxHoverLabels = 6;
+    private double HoverPanelWidth => 150;
+    private double HoverPanelHeight => 14 + Math.Min(HoverMarkers.Count, MaxHoverLabels) * 15 + (HoverMarkers.Count > MaxHoverLabels ? 15 : 0);
+    private double HoverPanelX => HoverX > 330 ? 350 - HoverPanelWidth : 350;
+    private double HoverPanelY => 54;
+    private string MoreHoverLabel => $"+{HoverMarkers.Count - MaxHoverLabels} more";
+
+    private IReadOnlyList<(int Index, double X, double Width)> HoverZones
+    {
+        get
+        {
+            if (Projection.Count == 0) return [];
+            if (Projection.Count == 1) return [(0, 46, 454)];
+            var zones = new List<(int Index, double X, double Width)>();
+            for (var index = 0; index < Projection.Count; index++)
+            {
+                var previousMid = index == 0 ? 46 : (XForIndex(index - 1) + XForIndex(index)) / 2;
+                var nextMid = index == Projection.Count - 1 ? 500 : (XForIndex(index) + XForIndex(index + 1)) / 2;
+                zones.Add((index, previousMid, nextMid - previousMid));
+            }
+
+            return zones;
+        }
+    }
+
+    private IReadOnlyList<(double X, double Y, string Label, string Color)> HoverMarkers
+    {
+        get
+        {
+            if (!HoverIndex.HasValue || HoverIndex.Value < 0 || HoverIndex.Value >= Projection.Count) return [];
+            var index = HoverIndex.Value;
+            var year = Projection[index];
+            var markers = new List<(double X, double Y, string Label, string Color)>();
+
+            foreach (var line in ActiveChartLines)
+            {
+                var color = ColorForLine(line);
+                if (ShowModeledLines)
+                {
+                    var value = line.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                        ? ColumnTotal(year)
+                        : TryFindSubtotal(line) is { } subtotal
+                            ? SubtotalValue(year, subtotal)
+                            : ValueSelector(year, line);
+                    markers.Add((XForIndex(index), YForValue(value), $"{line}: {value:N0}", color));
+                }
+
+                if (ShowReferenceLines && ReferenceProjection is not null)
+                {
+                    var reference = ReferenceProjection.FirstOrDefault(item => item.Year == year.Year);
+                    if (reference is null) continue;
+                    var value = line.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                        ? ReferenceColumnTotal(reference)
+                        : TryFindSubtotal(line) is { } subtotal
+                            ? ReferenceSubtotalValue(reference, subtotal)
+                            : ReferenceValueSelector?.Invoke(reference, line) ?? 0;
+                    markers.Add((XForIndex(index), YForValue(value), $"{line} ref: {value:N0}", color));
+                }
+            }
+
+            return markers;
+        }
+    }
+
+    private string ReferenceChartPoints(string line)
+    {
+        if (ReferenceProjection is null || Projection.Count == 0) return "";
+        var points = new List<string>();
+        for (var index = 0; index < Projection.Count; index++)
+        {
+            var reference = ReferenceProjection.FirstOrDefault(item => item.Year == Projection[index].Year);
+            if (reference is null) continue;
+            var value = line.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                ? ReferenceColumnTotal(reference)
+                : TryFindSubtotal(line) is { } subtotal
+                    ? ReferenceSubtotalValue(reference, subtotal)
+                    : ReferenceValueSelector?.Invoke(reference, line) ?? 0;
+            var x = Projection.Count == 1 ? 46 : 46 + (index * 454.0 / (Projection.Count - 1));
+            var y = 220 - (value / ChartMax * 192);
+            points.Add($"{x:0.##},{y:0.##}");
+        }
+
+        return string.Join(" ", points);
+    }
+
+    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 28, 220);
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            if (Projection.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(Projection.Count / 5.0));
+            return Projection
+                .Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == Projection.Count - 1)
+                .Select(item =>
+                {
+                    var x = Projection.Count == 1 ? 46 : 46 + (item.index * 454.0 / (Projection.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private static string ColorFor(int index)
+    {
+        var colors = new[] { "#0f766e", "#b45309", "#2563eb", "#7c3aed", "#be123c", "#4d7c0f", "#0f4c81", "#a16207" };
+        return colors[index % colors.Length];
+    }
+
+    private string ColorForLine(string line)
+    {
+        var index = ChartLines.ToList().FindIndex(item => item.Equals(line, StringComparison.OrdinalIgnoreCase));
+        return ColorFor(Math.Max(0, index));
+    }
+
+    private double BaselineTotal => Projection.Count == 0 ? 0 : ColumnTotal(Projection[0]);
+
+    private double ColumnTotal(ProjectionYear year)
+    {
+        return Names.Sum(name => ValueSelector(year, name));
+    }
+
+    private double SubtotalValue(ProjectionYear year, ProjectionSubtotal subtotal)
+    {
+        return subtotal.Names.Sum(name => ValueSelector(year, name));
+    }
+
+    private double ReferenceColumnTotal(ProjectionYear year)
+    {
+        return Names.Sum(name => ReferenceValueSelector?.Invoke(year, name) ?? 0);
+    }
+
+    private double ReferenceSubtotalValue(ProjectionYear year, ProjectionSubtotal subtotal)
+    {
+        return subtotal.Names.Sum(name => ReferenceValueSelector?.Invoke(year, name) ?? 0);
+    }
+
+    private double? ReferenceValue(string name, int year)
+    {
+        var point = ReferenceProjection?.FirstOrDefault(item => item.Year == year);
+        return point is null ? null : ReferenceValueSelector?.Invoke(point, name);
+    }
+
+    private double? ReferenceSubtotal(int year, ProjectionSubtotal subtotal)
+    {
+        var point = ReferenceProjection?.FirstOrDefault(item => item.Year == year);
+        return point is null ? null : ReferenceSubtotalValue(point, subtotal);
+    }
+
+    private double? ReferenceTotal(int year)
+    {
+        var point = ReferenceProjection?.FirstOrDefault(item => item.Year == year);
+        return point is null ? null : ReferenceColumnTotal(point);
+    }
+
+    private double BaselineValue(string name)
+    {
+        return Projection.Count == 0 ? 0 : ValueSelector(Projection[0], name);
+    }
+
+    private double BaselineSubtotal(ProjectionSubtotal subtotal)
+    {
+        return Projection.Count == 0 ? 0 : SubtotalValue(Projection[0], subtotal);
+    }
+
+    private double PreviousValue(string name, int index)
+    {
+        if (index <= 0 || index >= Projection.Count) return BaselineValue(name);
+        return ValueSelector(Projection[index - 1], name);
+    }
+
+    private double PreviousSubtotal(ProjectionSubtotal subtotal, int index)
+    {
+        if (index <= 0 || index >= Projection.Count) return BaselineSubtotal(subtotal);
+        return SubtotalValue(Projection[index - 1], subtotal);
+    }
+
+    private double PreviousTotal(int index)
+    {
+        if (index <= 0 || index >= Projection.Count) return BaselineTotal;
+        return ColumnTotal(Projection[index - 1]);
+    }
+
+    private ProjectionSubtotal? TryFindSubtotal(string line)
+    {
+        return Subtotals.FirstOrDefault(subtotal => subtotal.Label.Equals(line, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private RenderFragment CellContent(double value, double? reference, double baseline, double previous) => builder =>
+    {
+        var sequence = 0;
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "cell-metrics");
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "cell-value");
+        builder.AddContent(sequence++, value.ToString("N0"));
+        builder.CloseElement();
+
+        if (reference.HasValue)
+        {
+            AddMetric(builder, ref sequence, true, "ref", reference.Value.ToString("N0"));
+            AddMetric(builder, ref sequence, true, "diff", FormatSigned(value - reference.Value));
+        }
+        AddMetric(builder, ref sequence, ShowIncreaseFromStart, "start", FormatSigned(value - baseline));
+        AddMetric(builder, ref sequence, ShowIncreaseFromStartPercent, "start %", FormatPercent(value, baseline));
+        AddMetric(builder, ref sequence, ShowIncreaseFromPrevious, "prev", FormatSigned(value - previous));
+        AddMetric(builder, ref sequence, ShowIncreaseFromPreviousPercent, "prev %", FormatPercent(value, previous));
+
+        builder.CloseElement();
+    };
+
+    private static void AddMetric(RenderTreeBuilder builder, ref int sequence, bool show, string label, string value)
+    {
+        if (!show) return;
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "cell-detail");
+        builder.AddContent(sequence++, $"{label}: {value}");
+        builder.CloseElement();
+    }
+
+    private static string FormatSigned(double value)
+    {
+        return value.ToString("+#,##0;-#,##0;0");
+    }
+
+    private static string FormatPercent(double value, double baseline)
+    {
+        if (baseline == 0) return "n/a";
+        return ((value - baseline) / baseline).ToString("+0.0%;-0.0%;0.0%");
+    }
+}

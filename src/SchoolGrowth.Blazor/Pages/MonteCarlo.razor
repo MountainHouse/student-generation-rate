@@ -1,0 +1,1360 @@
+@page "/monte-carlo"
+@inject HttpClient Http
+
+<PageTitle>Monte Carlo Model</PageTitle>
+
+<header class="topbar">
+    <div>
+        <h1>Monte Carlo Model</h1>
+        <p>Validate a household-style simulation against grid and grade reference data.</p>
+    </div>
+    <div class="top-actions">
+        <a class="nav-button secondary" href="">Simulator</a>
+        <a class="nav-button secondary" href="validation">Model Validation</a>
+    </div>
+</header>
+
+@if (LoadError is not null)
+{
+    <section class="band">
+        <strong>@LoadError</strong>
+    </section>
+}
+else if (Data is null)
+{
+    <section class="band">Loading Monte Carlo model...</section>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+    {
+        <section class="band status-band">
+            <strong>@StatusMessage</strong>
+        </section>
+    }
+
+    <section class="band parameter-group">
+        <h2>Validation Run</h2>
+        <div class="controls monte-controls">
+        <label>
+            <span>Start year</span>
+            <input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="StartYear" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>End year</span>
+            <input type="number" min="@StartYear" max="@MaxSimulationEndYear" @bind="EndYear" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Runs</span>
+            <input type="number" min="10" max="10000" step="10" @bind="Runs" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Seed</span>
+            <input type="number" @bind="Seed" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Execution</span>
+            <select @bind="ExecutionMode" @bind:after="RunValidationAsync">
+                <option value="Auto">Auto server preferred</option>
+                <option value="Server">Server API</option>
+                <option value="Browser">Browser only</option>
+            </select>
+        </label>
+        <label>
+            <span>Server API</span>
+            <input @bind="ServerApiBaseAddress" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Grade smoothing window</span>
+            <input type="number" min="0" max="4" step="1" @bind="GradeSmoothingWindow" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Total score weight</span>
+            <input type="number" min="0" step="0.1" @bind="ScoreTotalWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Grid score weight</span>
+            <input type="number" min="0" step="0.1" @bind="ScoreGridWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Grade score weight</span>
+            <input type="number" min="0" step="0.1" @bind="ScoreGradeWeight" @bind:after="RunValidationAsync" />
+        </label>
+        </div>
+    </section>
+
+    <section class="band parameter-group">
+        <h2>Household Turnover and Exit</h2>
+        <div class="controls monte-controls">
+        <label>
+            <span>Ownership change</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="OwnershipChangeProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>0 child share</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="MoveInZeroChildShare" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>1 child share</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="MoveInOneChildShare" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>2 child share</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="MoveInTwoChildShare" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>3 child share</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="MoveInThreeChildShare" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>4+ child share</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="MoveInFourPlusChildShare" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Student exit</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="StudentExitProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>TK-8 exit</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="Tk8ExitProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>High school exit</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="HighSchoolExitProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Special ed exit</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="SpecialExitProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Special ed probability</span>
+            <input type="number" min="0" max="1" step="0.001" @bind="SpecialEducationProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Same school year</span>
+            <input type="number" min="0" max="1" step="0.005" @bind="SameSchoolYearProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Max parallelism</span>
+            <input type="number" min="0" step="1" @bind="MaxDegreeOfParallelism" @bind:after="RunValidationAsync" />
+        </label>
+        </div>
+    </section>
+
+    <section class="band parameter-group">
+        <h2>Move-In Age Weights</h2>
+        <div class="controls monte-controls">
+        <label>
+            <span>Preschool weight</span>
+            <input type="number" min="0" step="0.01" @bind="MoveInPreschoolWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>TK/K weight</span>
+            <input type="number" min="0" step="0.01" @bind="MoveInTkKWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Elementary weight</span>
+            <input type="number" min="0" step="0.01" @bind="MoveInElementaryWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Middle weight</span>
+            <input type="number" min="0" step="0.01" @bind="MoveInMiddleWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>High weight</span>
+            <input type="number" min="0" step="0.01" @bind="MoveInHighWeight" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Post-school weight</span>
+            <input type="number" min="0" step="0.01" @bind="MoveInPostSchoolWeight" @bind:after="RunValidationAsync" />
+        </label>
+        </div>
+    </section>
+
+    <section class="band parameter-group">
+        <h2>Birth/New Child Rates</h2>
+        <div class="controls monte-controls">
+        <label>
+            <span>1st birth / year</span>
+            <input type="number" min="0" max="1" step="0.001" @bind="AnnualFirstNewChildProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>2nd birth / year</span>
+            <input type="number" min="0" max="1" step="0.001" @bind="AnnualSecondNewChildProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>3rd birth / year</span>
+            <input type="number" min="0" max="1" step="0.001" @bind="AnnualThirdNewChildProbability" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>4th+ birth / year</span>
+            <input type="number" min="0" max="1" step="0.001" @bind="AnnualFourthPlusNewChildProbability" @bind:after="RunValidationAsync" />
+        </label>
+        </div>
+    </section>
+
+    <section class="band parameter-group">
+        <h2>Density Factors</h2>
+        <div class="controls monte-controls">
+        <label>
+            <span>Low/medium factor</span>
+            <input type="number" min="0" step="0.01" @bind="DensityLowMediumFactor" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Medium-high factor</span>
+            <input type="number" min="0" step="0.01" @bind="DensityMediumHighFactor" @bind:after="RunValidationAsync" />
+        </label>
+        <label>
+            <span>High factor</span>
+            <input type="number" min="0" step="0.01" @bind="DensityHighFactor" @bind:after="RunValidationAsync" />
+        </label>
+        </div>
+        <div class="density-factor-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Density</th>
+                        <th>1st child</th>
+                        <th>2nd child</th>
+                        <th>3rd child</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Low/Medium</td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityLowMediumFirstChildFactor" @bind:after="RunValidationAsync" /></td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityLowMediumSecondChildFactor" @bind:after="RunValidationAsync" /></td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityLowMediumThirdChildFactor" @bind:after="RunValidationAsync" /></td>
+                    </tr>
+                    <tr>
+                        <td>Medium-High</td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityMediumHighFirstChildFactor" @bind:after="RunValidationAsync" /></td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityMediumHighSecondChildFactor" @bind:after="RunValidationAsync" /></td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityMediumHighThirdChildFactor" @bind:after="RunValidationAsync" /></td>
+                    </tr>
+                    <tr>
+                        <td>High</td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityHighFirstChildFactor" @bind:after="RunValidationAsync" /></td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityHighSecondChildFactor" @bind:after="RunValidationAsync" /></td>
+                        <td><input type="number" min="0" step="0.01" @bind="DensityHighThirdChildFactor" @bind:after="RunValidationAsync" /></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (Result is null)
+    {
+        <section class="band">Choose parameters or wait for the first validation run.</section>
+    }
+    else
+    {
+    <section class="band charts">
+        <div class="chart-box">
+            <h2>Actual vs Monte Carlo Grid Total</h2>
+            <svg viewBox="0 0 920 300" role="img" @onmouseleave="() => TotalChartHoverIndex = null">
+                @foreach (var tick in YTicks)
+                {
+                    <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
+                <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                }
+                <polyline points="@ActualChartPoints" fill="none" stroke="#0f766e" stroke-width="4" />
+                <polyline points="@ModeledChartPoints" fill="none" stroke="#b45309" stroke-width="4" />
+                @if (TotalChartHoverIndex.HasValue)
+                {
+                    <line x1="@TotalHoverX" y1="40" x2="@TotalHoverX" y2="260" class="chart-hover-line" />
+                    <rect x="@TotalHoverYearLabelX" y="44" width="58" height="20" rx="4" class="chart-hover-label-bg" />
+                    <SvgText X="@(TotalHoverYearLabelX + 29)" Y="58" Anchor="middle" Label="@Result.Comparisons[TotalChartHoverIndex.Value].Year.ToString()" />
+                    @foreach (var marker in TotalHoverMarkers)
+                    {
+                        <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
+                    }
+                    <rect x="@TotalHoverPanelX" y="@TotalHoverPanelY" width="180" height="48" rx="5" class="chart-hover-label-bg" />
+                    @foreach (var item in TotalHoverMarkers.Select((marker, index) => new { marker, index }))
+                    {
+                        <circle cx="@(TotalHoverPanelX + 10)" cy="@(TotalHoverPanelY + 17 + item.index * 17)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
+                        <SvgText X="@(TotalHoverPanelX + 18)" Y="@(TotalHoverPanelY + 21 + item.index * 17)" Anchor="start" Label="@item.marker.Label" />
+                    }
+                }
+                @foreach (var zone in TotalHoverZones)
+                {
+                    <rect x="@zone.X" y="40" width="@zone.Width" height="220" fill="transparent" class="chart-hover-zone"
+                          @onmouseover="() => TotalChartHoverIndex = zone.Index"
+                          @onfocus="() => TotalChartHoverIndex = zone.Index" />
+                }
+            </svg>
+            <div class="inline-legend">
+                <span><i style="background:#0f766e"></i>Actual</span>
+                <span><i style="background:#b45309"></i>Monte Carlo mean</span>
+            </div>
+        </div>
+        <div class="chart-box">
+            <h2>Validation Error</h2>
+            <dl>
+                <dt>Total MAE</dt>
+                <dd>@Result.GridMeanAbsoluteError.ToString("N0")</dd>
+                <dt>Total MAPE</dt>
+                <dd>@Result.GridMeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>Grid/year MAE</dt>
+                <dd>@Result.GridLevelMeanAbsoluteError.ToString("N1")</dd>
+                <dt>Grid/year MAPE</dt>
+                <dd>@Result.GridLevelMeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>Grade total MAE</dt>
+                <dd>@Result.GradeMeanAbsoluteError.ToString("N0")</dd>
+                <dt>Grade total MAPE</dt>
+                <dd>@Result.GradeMeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>Grade/year MAE</dt>
+                <dd>@Result.GradeLevelMeanAbsoluteError.ToString("N1")</dd>
+                <dt>Grade/year MAPE</dt>
+                <dd>@Result.GradeLevelMeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>Combined score</dt>
+                <dd>@Result.CombinedScore.ToString("P2")</dd>
+            </dl>
+        </div>
+    </section>
+
+    <section class="band metric-options">
+        <h2>Table Details</h2>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromStart" />
+            <span>Increase from start</span>
+        </label>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromStartPercent" />
+            <span>Increase from start %</span>
+        </label>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromPrevious" />
+            <span>Increase from previous year</span>
+        </label>
+        <label>
+            <input type="checkbox" @bind="ShowIncreaseFromPreviousPercent" />
+            <span>Increase from previous year %</span>
+        </label>
+    </section>
+
+    <CohortProgressTable Title="Monte Carlo Progressing Cohorts" Cohorts="MonteCarloProgressingCohorts" Projection="MonteCarloModeledProjection"
+                         ReferenceProjection="MonteCarloReferenceProjection"
+                         ProgressionGrades="VisibleCohortGrades"
+                         ShowIncreaseFromStart="ShowIncreaseFromStart"
+                         ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                         ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                         ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    <ProjectionTable Title="Monte Carlo Grades" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
+                     ReferenceProjection="MonteCarloReferenceProjection"
+                     ReferenceValueSelector="GradeValue"
+                     Subtotals="GradeSubtotals"
+                     ShowIncreaseFromStart="ShowIncreaseFromStart"
+                     ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                     ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                     ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    <ProjectionTable Title="Monte Carlo Grid Totals" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
+                     ReferenceProjection="MonteCarloReferenceProjection"
+                     ReferenceValueSelector="GridValue"
+                     ShowIncreaseFromStart="ShowIncreaseFromStart"
+                     ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
+                     ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
+                     ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+
+    <section class="band split">
+        <div>
+            <div class="section-head">
+                <h2>Parameter Search</h2>
+                <button @onclick="FindBest" disabled="@SearchRunning">@(SearchRunning ? "Searching..." : "Find Best")</button>
+            </div>
+            <div class="controls search-controls">
+                <label>
+                    <span>Runs per candidate</span>
+                    <input type="number" min="10" max="2000" step="10" @bind="SearchRuns" />
+                </label>
+                <label>
+                    <span>Turnover candidates</span>
+                    <input @bind="OwnershipCandidatesText" />
+                </label>
+                <label>
+                    <span>0 child candidates</span>
+                    <input @bind="ZeroChildCandidatesText" />
+                </label>
+                <label>
+                    <span>1 child candidates</span>
+                    <input @bind="OneChildCandidatesText" />
+                </label>
+                <label>
+                    <span>2 child candidates</span>
+                    <input @bind="TwoChildCandidatesText" />
+                </label>
+                <label>
+                    <span>3 child candidates</span>
+                    <input @bind="ThreeChildCandidatesText" />
+                </label>
+                <label>
+                    <span>4+ child candidates</span>
+                    <input @bind="FourPlusChildCandidatesText" />
+                </label>
+                <label>
+                    <span>Exit candidates</span>
+                    <input @bind="ExitCandidatesText" />
+                </label>
+            </div>
+        </div>
+        <aside class="panel">
+            <h2>Best Candidate</h2>
+            @if (SearchResult is null)
+            {
+                <p>Run parameter search to compare candidate probabilities.</p>
+            }
+            else
+            {
+                <dl>
+                    <dt>Score</dt>
+                    <dd>@SearchResult.Best.CombinedScore.ToString("P2")</dd>
+                    <dt>Turnover</dt>
+                    <dd>@SearchResult.Best.Parameters.OwnershipChangeProbability.ToString("P1")</dd>
+                    <dt>Move-in children</dt>
+                    <dd>@SearchResult.Best.Parameters.MoveInZeroChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInOneChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInTwoChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInThreeChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInFourPlusChildShare.ToString("P1")</dd>
+                    <dt>Exit</dt>
+                    <dd>@SearchResult.Best.Parameters.StudentExitProbability.ToString("P1")</dd>
+                    <dt>Special ed probability</dt>
+                    <dd>@SearchResult.Best.Parameters.SpecialEducationProbability.ToString("P1")</dd>
+                    <dt>Births/year</dt>
+                    <dd>@SearchResult.Best.Parameters.AnnualFirstNewChildProbability.ToString("P1") / @SearchResult.Best.Parameters.AnnualSecondNewChildProbability.ToString("P1") / @SearchResult.Best.Parameters.AnnualThirdNewChildProbability.ToString("P1") / @SearchResult.Best.Parameters.AnnualFourthPlusNewChildProbability.ToString("P1")</dd>
+                    <dt>Non-student weights</dt>
+                    <dd>@SearchResult.Best.Parameters.MoveInPreschoolWeight.ToString("0.##") pre-school / @SearchResult.Best.Parameters.MoveInPostSchoolWeight.ToString("0.##") post-school</dd>
+                </dl>
+                <button class="secondary" @onclick="UseBest">Use Best</button>
+            }
+        </aside>
+    </section>
+
+    <section class="band">
+        <h2>Modeled vs Reference Totals</h2>
+        <div class="table-viz">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Actual Grid</th>
+                            <th>Modeled Grid</th>
+                            <th>Grid Error</th>
+                            <th>Grid Error %</th>
+                            <th>Grid/Year Error %</th>
+                            <th>Adjusted Grade</th>
+                            <th>Modeled Grade</th>
+                            <th>Grade Error</th>
+                            <th>Grade Error %</th>
+                            <th>Grade/Year Error %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var comparison in Result.Comparisons)
+                        {
+                            <tr>
+                                <td>@comparison.Year</td>
+                                <td>@comparison.ActualGridTotal.ToString("N0")</td>
+                                <td>@comparison.ModeledGridTotal.ToString("N0")</td>
+                                <td>@comparison.GridError.ToString("+#,##0;-#,##0;0")</td>
+                                <td>@comparison.GridAbsolutePercentageError.ToString("P1")</td>
+                                <td>@comparison.GridLevelMeanAbsolutePercentageError.ToString("P1")</td>
+                                <td>@comparison.ActualGradeTotal.ToString("N0")</td>
+                                <td>@comparison.ModeledGradeTotal.ToString("N0")</td>
+                                <td>@comparison.GradeError.ToString("+#,##0;-#,##0;0")</td>
+                                <td>@comparison.GradeAbsolutePercentageError.ToString("P1")</td>
+                                <td>@comparison.GradeLevelMeanAbsolutePercentageError.ToString("P1")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <aside class="table-chart">
+                <div class="chart-head">
+                    <h2>Comparison Trend</h2>
+                    <div class="chart-controls">
+                        <select @bind="ComparisonChartMode">
+                            <option value="total">Total</option>
+                            <option value="grid">Grid</option>
+                            <option value="grade">Grade</option>
+                        </select>
+                        <select @bind="ComparisonChartEntity">
+                            @foreach (var entity in ComparisonChartEntities)
+                            {
+                                <option value="@entity">@entity</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <svg viewBox="0 0 920 300" role="img">
+                    @foreach (var tick in ComparisonYTicks)
+                    {
+                        <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
+                        <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                    }
+                    <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
+                    <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                    @foreach (var tick in ComparisonXTicks)
+                    {
+                        <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
+                        <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                    }
+                    <polyline points="@ComparisonActualChartPoints" fill="none" stroke="#0f766e" stroke-width="4" />
+                    <polyline points="@ComparisonModeledChartPoints" fill="none" stroke="#b45309" stroke-width="4" />
+                </svg>
+                <div class="inline-legend">
+                    <span><i style="background:#0f766e"></i>Reference</span>
+                    <span><i style="background:#b45309"></i>Modeled</span>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="band">
+        <h2>Grid Detail for @SelectedComparisonYear</h2>
+        <label class="compact-select">
+            <span>Comparison year</span>
+            <select @bind="SelectedComparisonYear">
+                @foreach (var comparison in Result.Comparisons)
+                {
+                    <option value="@comparison.Year">@comparison.Year</option>
+                }
+            </select>
+        </label>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Grid</th>
+                        <th>Actual</th>
+                        <th>Modeled</th>
+                        <th>Error</th>
+                        <th>Error %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in SelectedGridComparisons)
+                    {
+                        <tr>
+                            <td>@row.Grid</td>
+                            <td>@FormatNullable(row.Actual)</td>
+                            <td>@row.Modeled.ToString("N0")</td>
+                            <td>@(row.Actual.HasValue ? (row.Modeled - row.Actual.Value).ToString("+#,##0;-#,##0;0") : "n/a")</td>
+                            <td>@(row.Actual is > 0 ? (Math.Abs(row.Modeled - row.Actual.Value) / row.Actual.Value).ToString("P1") : "n/a")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="band">
+        <h2>Grade Detail for @SelectedComparisonYear</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Grade</th>
+                        <th>Actual Raw</th>
+                        <th>Adjusted Actual</th>
+                        <th>Modeled</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in SelectedGradeComparisons)
+                    {
+                        <tr>
+                            <td>@row.Grade</td>
+                            <td>@FormatNullable(row.Actual)</td>
+                            <td>@row.AdjustedActual.ToString("N0")</td>
+                            <td>@row.Modeled.ToString("N0")</td>
+                            <td>@((row.Modeled - row.AdjustedActual).ToString("+#,##0;-#,##0;0"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="band formulas">
+        <h2>Monte Carlo Rules</h2>
+        <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the validation window starts.</p>
+        <p><strong>Special grids:</strong> Lammersville and Inter-Districts use fair grade shares; MHESD uses grades 9-12 only.</p>
+        <p><strong>Ownership change:</strong> each home has a yearly chance to replace its household, with lower early-year turnover and forced turnover by year 50.</p>
+        <p><strong>Children at move-in:</strong> the model draws a household child count from explicit 0, 1, 2, 3, and 4+ child shares. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
+        <p><strong>Density:</strong> low/medium, medium-high, and high density homes apply common density factors plus child-number factors for 1st, 2nd, and 3rd children.</p>
+        <p><strong>Special education:</strong> every child has a probability of receiving a special education attribute. Special education children keep their underlying age/grade for aging, but are counted in the Sp. Ed. reporting bucket while enrolled.</p>
+        <p><strong>Build timing:</strong> each newly built home joins either the same school year or the next school year, controlled by the same-school-year probability.</p>
+        <p><strong>New children after move-in:</strong> annual 1st, 2nd, 3rd, and 4th+ child probabilities control births/new preschool children after the household arrives.</p>
+        <p><strong>Student exit:</strong> each student has a yearly probability to leave district enrollment without a home ownership change; TK-8, high school, and special education exits can be adjusted separately.</p>
+        <p><strong>Validation:</strong> results are averaged over all runs and compared year-over-year against total enrollment, grid spread, and smoothed grade-by-grade error. TK is excluded from grade validation.</p>
+    </section>
+    }
+}
+
+@code {
+    private static readonly IReadOnlyList<string> GradeOrder =
+    [
+        "TK", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th",
+        "9th", "10th", "11th", "12th", "Sp. Ed."
+    ];
+    private static readonly IReadOnlyList<string> VisibleGradeOrder =
+        GradeOrder.Where(grade => !grade.Equals("TK", StringComparison.OrdinalIgnoreCase)).ToList();
+    private static readonly IReadOnlyList<string> VisibleCohortGrades =
+        VisibleGradeOrder.Where(grade => !grade.Equals("Sp. Ed.", StringComparison.OrdinalIgnoreCase)).ToList();
+    private static readonly IReadOnlyList<ProjectionSubtotal> GradeSubtotals =
+    [
+        new("K-5", ["K", "1st", "2nd", "3rd", "4th", "5th"]),
+        new("5-8", ["5th", "6th", "7th", "8th"]),
+        new("K-8", ["K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"]),
+        new("HS", ["9th", "10th", "11th", "12th"])
+    ];
+    private static readonly HashSet<string> ExcludedValidationGrids = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Inter-Districts",
+        "Lammersville",
+        "MHESD"
+    };
+    private static readonly MonteCarloParameters DefaultParameters = new();
+    private const int BrowserRunLimit = 100;
+
+    private EnrollmentData? Data { get; set; }
+    private MonteCarloEnrollmentModel? Model { get; set; }
+    private MonteCarloValidationResult? Result { get; set; }
+    private MonteCarloSearchResult? SearchResult { get; set; }
+    private string? LoadError { get; set; }
+    private int StartYear { get; set; } = 2020;
+    private int EndYear { get; set; } = 2024;
+    private int Runs { get; set; } = 50;
+    private int SearchRuns { get; set; } = 50;
+    private int Seed { get; set; } = DefaultParameters.Seed;
+    private int SelectedComparisonYear { get; set; } = 2024;
+    private string ComparisonChartMode { get; set; } = "total";
+    private string ComparisonChartEntity { get; set; } = "Validation total";
+    private int MaxDegreeOfParallelism { get; set; } = DefaultParameters.MaxDegreeOfParallelism;
+    private int GradeSmoothingWindow { get; set; } = DefaultParameters.GradeSmoothingWindow;
+    private double OwnershipChangeProbability { get; set; } = DefaultParameters.OwnershipChangeProbability;
+    private double MoveInZeroChildShare { get; set; } = DefaultParameters.MoveInZeroChildShare;
+    private double MoveInOneChildShare { get; set; } = DefaultParameters.MoveInOneChildShare;
+    private double MoveInTwoChildShare { get; set; } = DefaultParameters.MoveInTwoChildShare;
+    private double MoveInThreeChildShare { get; set; } = DefaultParameters.MoveInThreeChildShare;
+    private double MoveInFourPlusChildShare { get; set; } = DefaultParameters.MoveInFourPlusChildShare;
+    private double StudentExitProbability { get; set; } = DefaultParameters.StudentExitProbability;
+    private double Tk8ExitProbability { get; set; } = DefaultParameters.Tk8ExitProbability;
+    private double HighSchoolExitProbability { get; set; } = DefaultParameters.HighSchoolExitProbability;
+    private double SpecialExitProbability { get; set; } = DefaultParameters.SpecialExitProbability;
+    private double MoveInTkKWeight { get; set; } = DefaultParameters.MoveInTkKWeight;
+    private double MoveInElementaryWeight { get; set; } = DefaultParameters.MoveInElementaryWeight;
+    private double MoveInMiddleWeight { get; set; } = DefaultParameters.MoveInMiddleWeight;
+    private double MoveInHighWeight { get; set; } = DefaultParameters.MoveInHighWeight;
+    private double SpecialEducationProbability { get; set; } = DefaultParameters.SpecialEducationProbability;
+    private double SameSchoolYearProbability { get; set; } = DefaultParameters.SameSchoolYearProbability;
+    private double MoveInPreschoolWeight { get; set; } = DefaultParameters.MoveInPreschoolWeight;
+    private double MoveInPostSchoolWeight { get; set; } = DefaultParameters.MoveInPostSchoolWeight;
+    private double AnnualFirstNewChildProbability { get; set; } = DefaultParameters.AnnualFirstNewChildProbability;
+    private double AnnualSecondNewChildProbability { get; set; } = DefaultParameters.AnnualSecondNewChildProbability;
+    private double AnnualThirdNewChildProbability { get; set; } = DefaultParameters.AnnualThirdNewChildProbability;
+    private double AnnualFourthPlusNewChildProbability { get; set; } = DefaultParameters.AnnualFourthPlusNewChildProbability;
+    private double ScoreTotalWeight { get; set; } = DefaultParameters.ScoreTotalWeight;
+    private double ScoreGridWeight { get; set; } = DefaultParameters.ScoreGridWeight;
+    private double ScoreGradeWeight { get; set; } = DefaultParameters.ScoreGradeWeight;
+    private double DensityLowMediumFactor { get; set; } = DefaultParameters.DensityLowMediumFactor;
+    private double DensityMediumHighFactor { get; set; } = DefaultParameters.DensityMediumHighFactor;
+    private double DensityHighFactor { get; set; } = DefaultParameters.DensityHighFactor;
+    private double DensityLowMediumFirstChildFactor { get; set; } = DefaultParameters.DensityLowMediumFirstChildFactor;
+    private double DensityLowMediumSecondChildFactor { get; set; } = DefaultParameters.DensityLowMediumSecondChildFactor;
+    private double DensityLowMediumThirdChildFactor { get; set; } = DefaultParameters.DensityLowMediumThirdChildFactor;
+    private double DensityMediumHighFirstChildFactor { get; set; } = DefaultParameters.DensityMediumHighFirstChildFactor;
+    private double DensityMediumHighSecondChildFactor { get; set; } = DefaultParameters.DensityMediumHighSecondChildFactor;
+    private double DensityMediumHighThirdChildFactor { get; set; } = DefaultParameters.DensityMediumHighThirdChildFactor;
+    private double DensityHighFirstChildFactor { get; set; } = DefaultParameters.DensityHighFirstChildFactor;
+    private double DensityHighSecondChildFactor { get; set; } = DefaultParameters.DensityHighSecondChildFactor;
+    private double DensityHighThirdChildFactor { get; set; } = DefaultParameters.DensityHighThirdChildFactor;
+    private string OwnershipCandidatesText { get; set; } = "0.02,0.04,0.06";
+    private string ZeroChildCandidatesText { get; set; } = "0.03,0.05,0.08";
+    private string OneChildCandidatesText { get; set; } = "0.25,0.30,0.35";
+    private string TwoChildCandidatesText { get; set; } = "0.55,0.60,0.65";
+    private string ThreeChildCandidatesText { get; set; } = "0.03,0.05,0.08";
+    private string FourPlusChildCandidatesText { get; set; } = "0,0.01";
+    private string ExitCandidatesText { get; set; } = "0.005,0.015,0.03";
+    private bool SearchRunning { get; set; }
+    private bool ValidationRunning { get; set; }
+    private bool PendingValidation { get; set; }
+    private bool ShowIncreaseFromStart { get; set; }
+    private bool ShowIncreaseFromStartPercent { get; set; }
+    private bool ShowIncreaseFromPrevious { get; set; }
+    private bool ShowIncreaseFromPreviousPercent { get; set; }
+    private int? TotalChartHoverIndex { get; set; }
+    private CancellationTokenSource? ValidationDebounce { get; set; }
+    private string ExecutionMode { get; set; } = "Auto";
+    private string ServerApiBaseAddress { get; set; } = "";
+    private bool ServerApiAvailable { get; set; }
+    private string? ServerApiStatus { get; set; }
+    private string LastExecutionLabel { get; set; } = "browser";
+    private string? StatusMessage { get; set; }
+    private int MinStartYear => Data?.AugustYears.Skip(1).FirstOrDefault() ?? 2017;
+    private int LatestReferenceYear => Data?.AugustYears.Where(year => year <= 2024).DefaultIfEmpty(2024).Max() ?? 2024;
+    private int MaxSimulationEndYear => LatestReferenceYear + 50;
+    private IReadOnlyList<string> MonteCarloGridNames => Result?.Comparisons
+        .SelectMany(comparison => comparison.ModeledGridTotals.Keys.Concat(comparison.ActualGridTotals.Keys))
+        .Where(grid => !ExcludedValidationGrids.Contains(grid))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Order(StringComparer.OrdinalIgnoreCase)
+        .ToList() ?? [];
+    private IReadOnlyList<ProjectionYear> MonteCarloModeledProjection => Result?.Comparisons
+        .Select(comparison => ToProjectionYear(
+            comparison.Year,
+            comparison.ModeledGrades,
+            comparison.ModeledGridTotals
+                .Where(kvp => !ExcludedValidationGrids.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase),
+            comparison.ModeledGradeTotal))
+        .ToList() ?? [];
+    private IReadOnlyList<ProjectionYear> MonteCarloReferenceProjection => Result?.Comparisons
+        .Where(comparison => comparison.ActualGridTotal > 0 || comparison.ActualGradeTotal > 0)
+        .Select(comparison => ToProjectionYear(
+            comparison.Year,
+            comparison.AdjustedActualGrades,
+            comparison.ActualGridTotals
+                .Where(kvp => !ExcludedValidationGrids.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value ?? 0, StringComparer.OrdinalIgnoreCase),
+            comparison.ActualGradeTotal))
+        .ToList() ?? [];
+    private IReadOnlyList<CohortDefinition> MonteCarloProgressingCohorts => BuildProgressingCohorts(MonteCarloModeledProjection);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var homes = await Http.GetStringAsync("data/homes.csv");
+            var grid = await Http.GetStringAsync("data/grid.csv");
+            var grade = await Http.GetStringAsync("data/grade.csv");
+            var schools = await Http.GetStringAsync("data/schools.csv");
+            Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
+            Model = new MonteCarloEnrollmentModel(Data);
+            StartYear = Math.Max(MinStartYear, LatestReferenceYear - 5);
+            EndYear = LatestReferenceYear;
+            SelectedComparisonYear = EndYear;
+            await DetectServerApiAsync();
+            _ = RunValidationAsync();
+        }
+        catch (Exception ex)
+        {
+            LoadError = ex.Message;
+        }
+    }
+
+    private async Task RunValidationAsync()
+    {
+        if (Model is null) return;
+        ValidationDebounce?.Cancel();
+        ValidationDebounce?.Dispose();
+        var debounce = new CancellationTokenSource();
+        ValidationDebounce = debounce;
+
+        try
+        {
+            await Task.Delay(600, debounce.Token);
+            if (!debounce.IsCancellationRequested)
+            {
+                await ExecuteValidationAsync();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // A newer edit superseded this validation request.
+        }
+    }
+
+    private async Task ExecuteValidationAsync()
+    {
+        if (Model is null) return;
+        if (ValidationRunning)
+        {
+            PendingValidation = true;
+            return;
+        }
+
+        ValidationRunning = true;
+        do
+        {
+            PendingValidation = false;
+            var executionLabel = ShouldUseServer() ? "server" : "browser";
+            StatusMessage = $"Running Monte Carlo validation on {executionLabel}: {Runs:N0} runs...";
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
+
+            try
+            {
+                var ran = await RunValidationCoreAsync();
+                StatusMessage = ran
+                    ? $"Validation complete on {LastExecutionLabel}: {Runs:N0} runs, score {Result?.CombinedScore:P2}. {ServerApiStatus}"
+                    : ServerApiStatus;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Validation failed: {ex.Message}";
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        while (PendingValidation);
+
+        ValidationRunning = false;
+    }
+
+    private async Task<bool> RunValidationCoreAsync()
+    {
+        if (Model is null) return false;
+        StartYear = Math.Clamp(StartYear, MinStartYear, MaxSimulationEndYear);
+        EndYear = Math.Clamp(EndYear, StartYear, MaxSimulationEndYear);
+        Runs = Math.Clamp(Runs, 1, 10000);
+
+        var request = new MonteCarloValidationRequest(
+            StartYear,
+            EndYear,
+            CurrentParameters());
+
+        if (ShouldUseServer())
+        {
+            try
+            {
+                Result = await PostServerAsync<MonteCarloValidationRequest, MonteCarloValidationResult>("api/monte-carlo/validate", request);
+                ServerApiAvailable = true;
+                ServerApiStatus = $"Server API: {ServerApiBaseAddress}";
+                LastExecutionLabel = "server";
+            }
+            catch (Exception ex) when (ExecutionMode != "Server")
+            {
+                ServerApiAvailable = false;
+                LastExecutionLabel = "none";
+                ServerApiStatus = $"Server unavailable; validation was not run in the browser automatically ({ex.Message}). Select Browser only with {BrowserRunLimit:N0} runs or fewer, or restart the server API.";
+                return false;
+            }
+        }
+        else
+        {
+            if (Runs > BrowserRunLimit)
+            {
+                LastExecutionLabel = "none";
+                ServerApiStatus = $"Browser validation skipped: reduce runs to {BrowserRunLimit:N0} or fewer, or use the Server API.";
+                return false;
+            }
+
+            Result = Model.Validate(request);
+            LastExecutionLabel = "browser";
+            ServerApiStatus = BrowserOnlyStatus();
+        }
+
+        if (Result is null)
+        {
+            return false;
+        }
+
+        if (!Result.Comparisons.Any(item => item.Year == SelectedComparisonYear))
+        {
+            SelectedComparisonYear = Result.Comparisons.LastOrDefault()?.Year ?? EndYear;
+        }
+
+        if (!ComparisonChartEntities.Contains(ComparisonChartEntity))
+        {
+            ComparisonChartEntity = ComparisonChartEntities.FirstOrDefault() ?? "Validation total";
+        }
+
+        return true;
+    }
+
+    private async Task FindBest()
+    {
+        if (Model is null) return;
+        SearchRunning = true;
+        StatusMessage = "Searching Monte Carlo parameter candidates...";
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+
+        try
+        {
+            var request = new MonteCarloSearchRequest(
+                StartYear,
+                EndYear,
+                Math.Clamp(SearchRuns, 1, 2000),
+                Seed,
+                ParseCandidates(OwnershipCandidatesText),
+                ParseCandidates(ZeroChildCandidatesText),
+                ParseCandidates(OneChildCandidatesText),
+                ParseCandidates(TwoChildCandidatesText),
+                ParseCandidates(ThreeChildCandidatesText),
+                ParseCandidates(FourPlusChildCandidatesText),
+                ParseCandidates(ExitCandidatesText));
+
+            if (ShouldUseServer())
+            {
+                try
+                {
+                    SearchResult = await PostServerAsync<MonteCarloSearchRequest, MonteCarloSearchResult>("api/monte-carlo/search", request);
+                    LastExecutionLabel = "server";
+                }
+                catch (Exception ex) when (ExecutionMode != "Server")
+                {
+                    ServerApiAvailable = false;
+                    ServerApiStatus = $"Server unavailable; parameter search was not run in the browser automatically ({ex.Message}). Select Browser only with {BrowserRunLimit:N0} runs per candidate or fewer, or restart the server API.";
+                    LastExecutionLabel = "none";
+                    return;
+                }
+            }
+            else
+            {
+                if (request.RunsPerCandidate > BrowserRunLimit)
+                {
+                    LastExecutionLabel = "none";
+                    StatusMessage = $"Browser search skipped: reduce runs per candidate to {BrowserRunLimit:N0} or fewer, or use the Server API.";
+                    return;
+                }
+
+                SearchResult = Model.FindBest(request);
+                LastExecutionLabel = "browser";
+            }
+
+            if (SearchResult is not null)
+            {
+                StatusMessage = $"Search complete on {LastExecutionLabel}: {SearchResult.Candidates.Count:N0} candidates, best score {SearchResult.Best.CombinedScore:P2}.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            SearchRunning = false;
+        }
+    }
+
+    private void UseBest()
+    {
+        if (SearchResult is null) return;
+        ApplyParameters(SearchResult.Best.Parameters);
+        _ = RunValidationAsync();
+    }
+
+    private async Task DetectServerApiAsync()
+    {
+        var candidates = new[]
+        {
+            Http.BaseAddress?.ToString().TrimEnd('/'),
+            "http://localhost:5003",
+            "https://localhost:7275"
+        }
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                using var client = new HttpClient { BaseAddress = new Uri(candidate! + "/") };
+                using var response = await client.GetAsync("api/monte-carlo/status");
+                if (!response.IsSuccessStatusCode)
+                {
+                    continue;
+                }
+
+                ServerApiBaseAddress = candidate!;
+                ServerApiAvailable = true;
+                ServerApiStatus = $"Server API detected: {ServerApiBaseAddress}";
+                return;
+            }
+            catch
+            {
+                // Browser-only mode remains available when the server host is absent.
+            }
+        }
+
+        ServerApiAvailable = false;
+        ServerApiBaseAddress = candidates.FirstOrDefault() ?? "";
+        ServerApiStatus = "Server API not detected; browser-only mode is active.";
+    }
+
+    private bool ShouldUseServer()
+    {
+        return ExecutionMode switch
+        {
+            "Server" => true,
+            "Browser" => false,
+            _ => ServerApiAvailable && !string.IsNullOrWhiteSpace(ServerApiBaseAddress)
+        };
+    }
+
+    private string BrowserOnlyStatus()
+    {
+        return ExecutionMode == "Browser"
+            ? "Browser-only mode selected."
+            : ServerApiStatus ?? "Browser-only mode is active.";
+    }
+
+    private async Task<TResponse> PostServerAsync<TRequest, TResponse>(string relativeUrl, TRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(ServerApiBaseAddress))
+        {
+            throw new InvalidOperationException("Server API address is empty.");
+        }
+
+        using var client = new HttpClient { BaseAddress = new Uri(ServerApiBaseAddress.TrimEnd('/') + "/") };
+        using var response = await client.PostAsJsonAsync(relativeUrl, request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TResponse>()
+            ?? throw new InvalidOperationException("Server API returned an empty response.");
+    }
+
+    private void ApplyParameters(MonteCarloParameters parameters)
+    {
+        Runs = parameters.Runs;
+        Seed = parameters.Seed;
+        MaxDegreeOfParallelism = parameters.MaxDegreeOfParallelism;
+        GradeSmoothingWindow = parameters.GradeSmoothingWindow;
+        OwnershipChangeProbability = parameters.OwnershipChangeProbability;
+        MoveInZeroChildShare = parameters.MoveInZeroChildShare;
+        MoveInOneChildShare = parameters.MoveInOneChildShare;
+        MoveInTwoChildShare = parameters.MoveInTwoChildShare;
+        MoveInThreeChildShare = parameters.MoveInThreeChildShare;
+        MoveInFourPlusChildShare = parameters.MoveInFourPlusChildShare;
+        StudentExitProbability = parameters.StudentExitProbability;
+        Tk8ExitProbability = parameters.Tk8ExitProbability;
+        HighSchoolExitProbability = parameters.HighSchoolExitProbability;
+        SpecialExitProbability = parameters.SpecialExitProbability;
+        MoveInTkKWeight = parameters.MoveInTkKWeight;
+        MoveInElementaryWeight = parameters.MoveInElementaryWeight;
+        MoveInMiddleWeight = parameters.MoveInMiddleWeight;
+        MoveInHighWeight = parameters.MoveInHighWeight;
+        SpecialEducationProbability = parameters.SpecialEducationProbability;
+        SameSchoolYearProbability = parameters.SameSchoolYearProbability;
+        MoveInPreschoolWeight = parameters.MoveInPreschoolWeight;
+        MoveInPostSchoolWeight = parameters.MoveInPostSchoolWeight;
+        AnnualFirstNewChildProbability = parameters.AnnualFirstNewChildProbability;
+        AnnualSecondNewChildProbability = parameters.AnnualSecondNewChildProbability;
+        AnnualThirdNewChildProbability = parameters.AnnualThirdNewChildProbability;
+        AnnualFourthPlusNewChildProbability = parameters.AnnualFourthPlusNewChildProbability;
+        ScoreTotalWeight = parameters.ScoreTotalWeight;
+        ScoreGridWeight = parameters.ScoreGridWeight;
+        ScoreGradeWeight = parameters.ScoreGradeWeight;
+        DensityLowMediumFactor = parameters.DensityLowMediumFactor;
+        DensityMediumHighFactor = parameters.DensityMediumHighFactor;
+        DensityHighFactor = parameters.DensityHighFactor;
+        DensityLowMediumFirstChildFactor = parameters.DensityLowMediumFirstChildFactor;
+        DensityLowMediumSecondChildFactor = parameters.DensityLowMediumSecondChildFactor;
+        DensityLowMediumThirdChildFactor = parameters.DensityLowMediumThirdChildFactor;
+        DensityMediumHighFirstChildFactor = parameters.DensityMediumHighFirstChildFactor;
+        DensityMediumHighSecondChildFactor = parameters.DensityMediumHighSecondChildFactor;
+        DensityMediumHighThirdChildFactor = parameters.DensityMediumHighThirdChildFactor;
+        DensityHighFirstChildFactor = parameters.DensityHighFirstChildFactor;
+        DensityHighSecondChildFactor = parameters.DensityHighSecondChildFactor;
+        DensityHighThirdChildFactor = parameters.DensityHighThirdChildFactor;
+    }
+
+    private MonteCarloParameters CurrentParameters()
+    {
+        return new MonteCarloParameters(
+            Runs: Runs,
+            Seed: Seed,
+            OwnershipChangeProbability: OwnershipChangeProbability,
+            MoveInZeroChildShare: MoveInZeroChildShare,
+            MoveInOneChildShare: MoveInOneChildShare,
+            MoveInTwoChildShare: MoveInTwoChildShare,
+            MoveInThreeChildShare: MoveInThreeChildShare,
+            MoveInFourPlusChildShare: MoveInFourPlusChildShare,
+            StudentExitProbability: StudentExitProbability,
+            MoveInTkKWeight: MoveInTkKWeight,
+            MoveInElementaryWeight: MoveInElementaryWeight,
+            MoveInMiddleWeight: MoveInMiddleWeight,
+            MoveInHighWeight: MoveInHighWeight,
+            Tk8ExitProbability: Tk8ExitProbability,
+            HighSchoolExitProbability: HighSchoolExitProbability,
+            SpecialExitProbability: SpecialExitProbability,
+            SameSchoolYearProbability: SameSchoolYearProbability,
+            AnnualFirstNewChildProbability: AnnualFirstNewChildProbability,
+            AnnualSecondNewChildProbability: AnnualSecondNewChildProbability,
+            AnnualThirdNewChildProbability: AnnualThirdNewChildProbability,
+            AnnualFourthPlusNewChildProbability: AnnualFourthPlusNewChildProbability,
+            MoveInPreschoolWeight: MoveInPreschoolWeight,
+            MoveInPostSchoolWeight: MoveInPostSchoolWeight,
+            SpecialEducationProbability: SpecialEducationProbability,
+            MaxDegreeOfParallelism: MaxDegreeOfParallelism,
+            GradeSmoothingWindow: GradeSmoothingWindow,
+            ScoreTotalWeight: ScoreTotalWeight,
+            ScoreGridWeight: ScoreGridWeight,
+            ScoreGradeWeight: ScoreGradeWeight,
+            DensityLowMediumFactor: DensityLowMediumFactor,
+            DensityMediumHighFactor: DensityMediumHighFactor,
+            DensityHighFactor: DensityHighFactor,
+            DensityLowMediumFirstChildFactor: DensityLowMediumFirstChildFactor,
+            DensityLowMediumSecondChildFactor: DensityLowMediumSecondChildFactor,
+            DensityLowMediumThirdChildFactor: DensityLowMediumThirdChildFactor,
+            DensityMediumHighFirstChildFactor: DensityMediumHighFirstChildFactor,
+            DensityMediumHighSecondChildFactor: DensityMediumHighSecondChildFactor,
+            DensityMediumHighThirdChildFactor: DensityMediumHighThirdChildFactor,
+            DensityHighFirstChildFactor: DensityHighFirstChildFactor,
+            DensityHighSecondChildFactor: DensityHighSecondChildFactor,
+            DensityHighThirdChildFactor: DensityHighThirdChildFactor);
+    }
+
+    private static ProjectionYear ToProjectionYear(
+        int year,
+        Dictionary<string, double> grades,
+        Dictionary<string, double> gridTotals,
+        double total)
+    {
+        return new ProjectionYear(
+            Year: year,
+            Grades: GradeOrder.ToDictionary(
+                grade => grade,
+                grade => grades.GetValueOrDefault(grade),
+                StringComparer.OrdinalIgnoreCase),
+            NewStudentsByGrade: [],
+            NeighborhoodStudents: new Dictionary<string, double>(gridTotals, StringComparer.OrdinalIgnoreCase),
+            GridTotals: new Dictionary<string, double>(gridTotals, StringComparer.OrdinalIgnoreCase),
+            GridGrades: [],
+            SchoolTotals: [],
+            SchoolGrades: [],
+            TotalStudents: total,
+            NewStudentsTotal: 0);
+    }
+
+    private static double GradeValue(ProjectionYear year, string grade)
+    {
+        return year.Grades.GetValueOrDefault(grade);
+    }
+
+    private static double GridValue(ProjectionYear year, string grid)
+    {
+        return year.GridTotals.GetValueOrDefault(grid);
+    }
+
+    private static IReadOnlyList<CohortDefinition> BuildProgressingCohorts(IReadOnlyList<ProjectionYear> projection)
+    {
+        if (projection.Count == 0) return [];
+        var firstProjectionYear = projection.Min(point => point.Year);
+        var lastProjectionYear = projection.Max(point => point.Year);
+        var firstCohortStart = firstProjectionYear - 13;
+        var lastCohortStart = lastProjectionYear;
+
+        return Enumerable.Range(firstCohortStart, lastCohortStart - firstCohortStart + 1)
+            .Select(startYear => new CohortDefinition(
+                StartYear: startYear,
+                EndYear: startYear + 13,
+                Label: $"{startYear % 100:00}-{(startYear + 13) % 100:00}"))
+            .ToList();
+    }
+
+    private static IReadOnlyList<double> ParseCandidates(string text)
+    {
+        return text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(item => double.TryParse(item, out var value) ? Math.Clamp(value, 0, 1) : double.NaN)
+            .Where(value => !double.IsNaN(value))
+            .Distinct()
+            .ToList();
+    }
+
+    private MonteCarloYearComparison? SelectedComparison => Result?.Comparisons.FirstOrDefault(item => item.Year == SelectedComparisonYear);
+
+    private IReadOnlyList<(string Grid, double? Actual, double Modeled)> SelectedGridComparisons =>
+        SelectedComparison is null
+            ? []
+            : SelectedComparison.ModeledGridTotals.Keys.Order()
+                .Where(grid => !ExcludedValidationGrids.Contains(grid))
+                .Select(grid => (grid, SelectedComparison.ActualGridTotals.GetValueOrDefault(grid), SelectedComparison.ModeledGridTotals.GetValueOrDefault(grid)))
+                .ToList();
+
+    private IReadOnlyList<(string Grade, double? Actual, double AdjustedActual, double Modeled)> SelectedGradeComparisons =>
+        SelectedComparison is null
+            ? []
+            : VisibleGradeOrder
+                .Select(grade => (
+                    grade,
+                    SelectedComparison.ActualGrades.GetValueOrDefault(grade),
+                    SelectedComparison.AdjustedActualGrades.GetValueOrDefault(grade),
+                    SelectedComparison.ModeledGrades.GetValueOrDefault(grade)))
+                .ToList();
+
+    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, Result?.Comparisons.SelectMany(item => new[] { item.ActualGridTotal, item.ModeledGridTotal }).DefaultIfEmpty(0).Max() * 1.08 ?? 1));
+    private string ActualChartPoints => ChartPoints(item => HasReferenceData(item) ? item.ActualGridTotal : null);
+    private string ModeledChartPoints => ChartPoints(item => item.ModeledGridTotal);
+
+    private IReadOnlyList<string> ComparisonChartEntities => ComparisonChartMode switch
+    {
+        "grid" => Result?.Comparisons.FirstOrDefault()?.ModeledGridTotals.Keys
+            .Where(grid => !ExcludedValidationGrids.Contains(grid))
+            .Order()
+            .ToList() ?? [],
+        "grade" => VisibleGradeOrder,
+        _ => ["Validation total"]
+    };
+
+    private string EffectiveComparisonChartEntity =>
+        ComparisonChartEntities.Contains(ComparisonChartEntity)
+            ? ComparisonChartEntity
+            : ComparisonChartEntities.FirstOrDefault() ?? "Validation total";
+
+    private IReadOnlyList<double?> ComparisonActualValues => Result?.Comparisons
+        .Select(comparison => ComparisonChartMode switch
+        {
+            "grid" => comparison.ActualGridTotals.GetValueOrDefault(EffectiveComparisonChartEntity),
+            "grade" => HasReferenceData(comparison) ? comparison.AdjustedActualGrades.GetValueOrDefault(EffectiveComparisonChartEntity) : null,
+            _ => HasReferenceData(comparison) ? comparison.ActualGridTotal : null
+        })
+        .ToList() ?? [];
+
+    private IReadOnlyList<double?> ComparisonModeledValues => Result?.Comparisons
+        .Select(comparison => ComparisonChartMode switch
+        {
+            "grid" => (double?)comparison.ModeledGridTotals.GetValueOrDefault(EffectiveComparisonChartEntity),
+            "grade" => (double?)comparison.ModeledGrades.GetValueOrDefault(EffectiveComparisonChartEntity),
+            _ => (double?)comparison.ModeledGridTotal
+        })
+        .ToList() ?? [];
+
+    private double ComparisonChartMax => ChartAxis.NiceMaximum(Math.Max(1, ComparisonActualValues.Concat(ComparisonModeledValues).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty(0).Max() * 1.08));
+    private string ComparisonActualChartPoints => ComparisonChartPoints(ComparisonActualValues);
+    private string ComparisonModeledChartPoints => ComparisonChartPoints(ComparisonModeledValues);
+
+    private static bool HasReferenceData(MonteCarloYearComparison comparison)
+    {
+        return comparison.ActualGridTotal > 0 || comparison.ActualGradeTotal > 0;
+    }
+
+    private string ChartPoints(Func<MonteCarloYearComparison, double?> selector)
+    {
+        var points = Result?.Comparisons ?? [];
+        if (points.Count == 0) return "";
+        return string.Join(" ", points.Select((point, index) =>
+        {
+            var value = selector(point);
+            if (!value.HasValue) return null;
+            var x = points.Count == 1 ? 60 : 60 + (index * 800.0 / (points.Count - 1));
+            var y = 260 - (value.Value / ChartMax * 220);
+            return $"{x:0.##},{y:0.##}";
+        }).Where(point => point is not null));
+    }
+
+    private double TotalXForIndex(int index)
+    {
+        var points = Result?.Comparisons ?? [];
+        return points.Count == 1 ? 60 : 60 + (index * 800.0 / (points.Count - 1));
+    }
+
+    private double TotalYForValue(double value)
+    {
+        return 260 - (value / ChartMax * 220);
+    }
+
+    private double TotalHoverX => TotalChartHoverIndex.HasValue ? TotalXForIndex(TotalChartHoverIndex.Value) : 60;
+
+    private double TotalHoverYearLabelX => Math.Clamp(TotalHoverX - 29, 62, 802);
+
+    private double TotalHoverPanelX => TotalHoverX > 650 ? 650 - 180 : 650;
+
+    private double TotalHoverPanelY => 72;
+
+    private IReadOnlyList<(int Index, double X, double Width)> TotalHoverZones
+    {
+        get
+        {
+            var points = Result?.Comparisons ?? [];
+            if (points.Count == 0) return [];
+            if (points.Count == 1) return [(0, 60, 800)];
+
+            var zones = new List<(int Index, double X, double Width)>();
+            for (var index = 0; index < points.Count; index++)
+            {
+                var previousMid = index == 0 ? 60 : (TotalXForIndex(index - 1) + TotalXForIndex(index)) / 2;
+                var nextMid = index == points.Count - 1 ? 860 : (TotalXForIndex(index) + TotalXForIndex(index + 1)) / 2;
+                zones.Add((index, previousMid, nextMid - previousMid));
+            }
+
+            return zones;
+        }
+    }
+
+    private IReadOnlyList<(double X, double Y, string Label, string Color)> TotalHoverMarkers
+    {
+        get
+        {
+            var points = Result?.Comparisons ?? [];
+            if (!TotalChartHoverIndex.HasValue || TotalChartHoverIndex.Value < 0 || TotalChartHoverIndex.Value >= points.Count) return [];
+
+            var index = TotalChartHoverIndex.Value;
+            var point = points[index];
+            var x = TotalXForIndex(index);
+            var markers = new List<(double X, double Y, string Label, string Color)>
+            {
+                (x, TotalYForValue(point.ModeledGridTotal), $"Modeled: {point.ModeledGridTotal:N0}", "#b45309")
+            };
+
+            if (HasReferenceData(point))
+            {
+                markers.Insert(0, (x, TotalYForValue(point.ActualGridTotal), $"Actual: {point.ActualGridTotal:N0}", "#0f766e"));
+            }
+
+            return markers;
+        }
+    }
+
+    private string ComparisonChartPoints(IReadOnlyList<double?> values)
+    {
+        if (values.Count == 0) return "";
+        var max = ComparisonChartMax;
+        return string.Join(" ", values.Select((value, index) =>
+        {
+            if (!value.HasValue) return null;
+            var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
+            var y = 260 - (value.Value / max * 220);
+            return $"{x:0.##},{y:0.##}";
+        }).Where(point => point is not null));
+    }
+
+    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 40, 260);
+
+    private IReadOnlyList<(double X, string Label)> XTicks
+    {
+        get
+        {
+            var points = Result?.Comparisons ?? [];
+            if (points.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 8.0));
+            return points.Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
+                .Select(item =>
+                {
+                    var x = points.Count == 1 ? 60 : 60 + (item.index * 800.0 / (points.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private IReadOnlyList<(double Y, string Label)> ComparisonYTicks => ChartAxis.YTicks(ComparisonChartMax, 40, 260);
+
+    private IReadOnlyList<(double X, string Label)> ComparisonXTicks
+    {
+        get
+        {
+            var points = Result?.Comparisons ?? [];
+            if (points.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 8.0));
+            return points.Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
+                .Select(item =>
+                {
+                    var x = points.Count == 1 ? 60 : 60 + (item.index * 800.0 / (points.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private static string FormatNullable(double? value) => value.HasValue ? value.Value.ToString("N0") : "n/a";
+}
