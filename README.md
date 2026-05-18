@@ -118,6 +118,9 @@ For static browser deployment:
 
 Use `-NoRestore` for faster local reruns after packages/workloads are already restored.
 
+- GitHub Actions publishes the threaded AOT static app to GitHub Pages on every `master` commit.
+- The expected project-site URL is `https://mountainhouse.github.io/student-generation-rate/`.
+
 - Publish Blazor WASM with AOT for browser performance.
 - Use WebAssembly threads when the host can provide cross-origin isolation.
 - Hosts with real headers, such as Cloudflare Pages or Netlify, are preferred.

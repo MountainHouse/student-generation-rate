@@ -134,3 +134,24 @@ Important behavior:
 - Real host headers are still preferred when available.
 
 If GitHub Pages uses a project subpath, make sure `base href` is correct for the published path.
+
+## GitHub Actions Deployment
+
+The repository publishes the static threaded AOT app to GitHub Pages from `.github/workflows/deploy-pages.yml`.
+
+Current behavior:
+
+- runs on every `master` commit
+- can also be run manually with `workflow_dispatch`
+- restores the .NET SDK from `global.json`
+- restores WebAssembly workloads and NuGet packages
+- runs `scripts/publish-static-aot-threads.ps1 -BaseHref /student-generation-rate/ -NoRestore`
+- uploads `artifacts/static-aot-threads/` as the GitHub Pages artifact
+
+The expected project-site URL is:
+
+```text
+https://mountainhouse.github.io/student-generation-rate/
+```
+
+GitHub Pages must be configured to use **GitHub Actions** as its build and deployment source.
