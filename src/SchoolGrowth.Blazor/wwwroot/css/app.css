@@ -590,13 +590,13 @@ dd {
 
     .table-wrap th:first-child,
     .table-wrap td:first-child {
-        min-width: 118px;
-        max-width: 118px;
-        width: 118px;
+        min-width: max-content;
+        max-width: min(80vw, 260px);
+        width: max-content;
     }
 
     .floating-table-head th:first-child {
-        max-width: 118px;
+        max-width: min(80vw, 260px);
     }
 
     .row-legend {
@@ -606,9 +606,9 @@ dd {
 
     .simulation-info-table th:first-child,
     .simulation-info-table td:first-child {
-        min-width: 96px;
-        max-width: 96px;
-        width: 96px;
+        min-width: max-content;
+        max-width: min(55vw, 190px);
+        width: max-content;
     }
 
     .simulation-info-table th:nth-child(2),
