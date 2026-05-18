@@ -588,34 +588,79 @@ dd {
         grid-template-columns: minmax(0, 1fr);
     }
 
+    table {
+        min-width: 620px;
+        font-size: 12px;
+    }
+
+    th,
+    td {
+        padding: 6px 6px;
+    }
+
+    .table-wrap {
+        --sticky-col-mobile-width: 150px;
+        --sticky-col-mobile-cap: 78vw;
+    }
+
+    .grades-table .table-wrap {
+        --sticky-col-mobile-width: 112px;
+        --sticky-col-mobile-cap: 48vw;
+    }
+
+    .grid-table .table-wrap {
+        --sticky-col-mobile-width: 128px;
+        --sticky-col-mobile-cap: 58vw;
+    }
+
+    .school-table .table-wrap,
+    .history-table .table-wrap {
+        --sticky-col-mobile-width: 150px;
+        --sticky-col-mobile-cap: 68vw;
+    }
+
+    .cohort-table .table-wrap {
+        --sticky-col-mobile-width: 136px;
+        --sticky-col-mobile-cap: 62vw;
+    }
+
     .table-wrap th:first-child,
     .table-wrap td:first-child {
-        min-width: max-content;
-        max-width: min(80vw, 260px);
-        width: max-content;
+        min-width: min(var(--sticky-col-mobile-width), var(--sticky-col-mobile-cap));
+        max-width: min(var(--sticky-col-mobile-width), var(--sticky-col-mobile-cap));
+        width: min(var(--sticky-col-mobile-width), var(--sticky-col-mobile-cap));
     }
 
     .floating-table-head th:first-child {
-        max-width: min(80vw, 260px);
+        max-width: min(var(--sticky-col-mobile-width, 150px), var(--sticky-col-mobile-cap, 78vw));
     }
 
     .row-legend {
-        gap: 5px;
+        grid-template-columns: 14px 10px minmax(0, 1fr);
+        gap: 4px;
         font-size: 12px;
+    }
+
+    .table-wrap th:first-child .row-legend span:last-child,
+    .table-wrap td:first-child .row-legend span:last-child {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        line-height: 1.15;
     }
 
     .simulation-info-table th:first-child,
     .simulation-info-table td:first-child {
-        min-width: max-content;
-        max-width: min(55vw, 190px);
-        width: max-content;
+        min-width: min(158px, 68vw);
+        max-width: min(158px, 68vw);
+        width: min(158px, 68vw);
     }
 
     .simulation-info-table th:nth-child(2),
     .simulation-info-table td:nth-child(2) {
         position: static;
         left: auto;
-        min-width: 170px;
+        min-width: 148px;
         background: inherit;
     }
 

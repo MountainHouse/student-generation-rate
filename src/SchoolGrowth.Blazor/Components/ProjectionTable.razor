@@ -15,7 +15,7 @@
             </div>
         }
     </div>
-    <div class="table-viz @(ActiveChartLines.Count == 0 ? "table-viz-no-chart" : "")">
+    <div class="table-viz projection-table @TableClass @(ActiveChartLines.Count == 0 ? "table-viz-no-chart" : "")">
         <div class="table-wrap">
             <table>
                 <thead>
@@ -168,6 +168,9 @@
 @code {
     [Parameter]
     public required string Title { get; set; }
+
+    [Parameter]
+    public string? TableClass { get; set; }
 
     [Parameter]
     public required IReadOnlyList<string> Names { get; set; }

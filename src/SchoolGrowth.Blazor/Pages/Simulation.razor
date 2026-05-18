@@ -640,7 +640,7 @@ else
     <ToolPanel Id="@ToolGrades" Title="Simulation Grades" Style="@ToolStyle(ToolGrades)"
                Collapsed="@IsToolCollapsed(ToolGrades)" CanMoveUp="@CanMoveToolUp(ToolGrades)" CanMoveDown="@CanMoveToolDown(ToolGrades)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <ProjectionTable Title="Simulation Grades" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
+    <ProjectionTable Title="Simulation Grades" TableClass="grades-table" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GradeValue"
                      Subtotals="GradeSubtotals"
@@ -655,7 +655,7 @@ else
     <ToolPanel Id="@ToolGridTotals" Title="Simulation Grid Totals" Style="@ToolStyle(ToolGridTotals)"
                Collapsed="@IsToolCollapsed(ToolGridTotals)" CanMoveUp="@CanMoveToolUp(ToolGridTotals)" CanMoveDown="@CanMoveToolDown(ToolGridTotals)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <ProjectionTable Title="Simulation Grid Totals" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
+    <ProjectionTable Title="Simulation Grid Totals" TableClass="grid-table" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GridValue"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"

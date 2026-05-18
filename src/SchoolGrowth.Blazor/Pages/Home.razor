@@ -183,7 +183,7 @@ else
         </label>
     </section>
 
-    <ProjectionTable Title="Projected Grade Bands" Names="GradeBandNames" Projection="Result.Projection" ValueSelector="GradeBandValue"
+    <ProjectionTable Title="Projected Grade Bands" TableClass="grades-table" Names="GradeBandNames" Projection="Result.Projection" ValueSelector="GradeBandValue"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"
                      ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                      ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
@@ -193,18 +193,18 @@ else
                          ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                          ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
                          ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
-    <ProjectionTable Title="Projected Grades" Names="GradeOrder" Projection="Result.Projection" ValueSelector="GradeValue"
+    <ProjectionTable Title="Projected Grades" TableClass="grades-table" Names="GradeOrder" Projection="Result.Projection" ValueSelector="GradeValue"
                      Subtotals="GradeSubtotals"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"
                      ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                      ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
                      ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
-    <ProjectionTable Title="Projected Grid Totals" Names="GridNames" Projection="Result.Projection" ValueSelector="GridValue"
+    <ProjectionTable Title="Projected Grid Totals" TableClass="grid-table" Names="GridNames" Projection="Result.Projection" ValueSelector="GridValue"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"
                      ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                      ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
                      ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
-    <ProjectionTable Title="Projected School Totals" Names="SchoolNames" Projection="Result.Projection" ValueSelector="SchoolValue"
+    <ProjectionTable Title="Projected School Totals" TableClass="school-table" Names="SchoolNames" Projection="Result.Projection" ValueSelector="SchoolValue"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"
                      ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                      ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
