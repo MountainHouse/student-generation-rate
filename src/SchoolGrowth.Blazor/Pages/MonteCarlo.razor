@@ -438,6 +438,117 @@ else
     </ToolPanel>
     }
 
+    @if (IsToolActive(ToolSimulationInfo))
+    {
+    <ToolPanel Id="@ToolSimulationInfo" Title="Simulation Info" Style="@ToolStyle(ToolSimulationInfo)"
+               Collapsed="@IsToolCollapsed(ToolSimulationInfo)" CanMoveUp="@CanMoveToolUp(ToolSimulationInfo)" CanMoveDown="@CanMoveToolDown(ToolSimulationInfo)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <div class="table-viz simulation-info-viz @(SelectedSimulationInfoChartRows.Count == 0 ? "table-viz-no-chart" : "")">
+            <div class="table-wrap simulation-info-wrap">
+                <table class="simulation-info-table">
+                    <thead>
+                        <tr>
+                            <th>
+                                <label class="row-legend">
+                                    <input type="checkbox" checked="@AllSimulationInfoRowsSelected" @onchange="ToggleAllSimulationInfoLines" />
+                                    <span>Group</span>
+                                </label>
+                            </th>
+                            <th>Metric</th>
+                            @foreach (var year in Result!.SimulationInfo)
+                            {
+                                <th>@year.Year</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in SimulationInfoRows)
+                        {
+                            <tr>
+                                <td>
+                                    <label class="row-legend">
+                                        <input type="checkbox" checked="@SelectedSimulationInfoRows.Contains(row.Key)" @onchange="eventArgs => ToggleSimulationInfoLine(row.Key, eventArgs)" />
+                                        <span class="legend-swatch" style="background:@SimulationInfoColor(row.Key)"></span>
+                                        <span>@row.Group</span>
+                                    </label>
+                                </td>
+                                <td>@row.Metric</td>
+                                @foreach (var year in Result!.SimulationInfo)
+                                {
+                                    <td>@row.Value(year)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (SelectedSimulationInfoChartRows.Count > 0)
+            {
+            <aside class="table-chart simulation-info-chart">
+                <svg viewBox="0 0 520 260" role="img" @onmouseleave="() => SimulationInfoHoverIndex = null">
+                    @foreach (var tick in SimulationInfoYTicks)
+                    {
+                        <line x1="46" y1="@tick.Y" x2="500" y2="@tick.Y" class="chart-grid" />
+                        <SvgText X="40" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                    }
+                    <line x1="46" y1="220" x2="500" y2="220" class="chart-axis" />
+                    <line x1="46" y1="28" x2="46" y2="220" class="chart-axis" />
+                    @foreach (var tick in SimulationInfoXTicks)
+                    {
+                        <line x1="@tick.X" y1="220" x2="@tick.X" y2="226" class="chart-axis" />
+                        <SvgText X="@tick.X" Y="246" Anchor="middle" Label="@tick.Label" />
+                    }
+                    @foreach (var row in SelectedSimulationInfoChartRows)
+                    {
+                        @if (SimulationInfoReferencePoints(row) is var referencePoints && !string.IsNullOrWhiteSpace(referencePoints))
+                        {
+                            <polyline points="@referencePoints" fill="none" stroke="@SimulationInfoColor(row.Key)" stroke-width="3" stroke-dasharray="7 5" opacity="0.85" />
+                        }
+                        <polyline points="@SimulationInfoChartPoints(row)" fill="none" stroke="@SimulationInfoColor(row.Key)" stroke-width="3" />
+                    }
+                    @if (SimulationInfoHoverIndex.HasValue)
+                    {
+                        <line x1="@SimulationInfoHoverX" y1="28" x2="@SimulationInfoHoverX" y2="220" class="chart-hover-line" />
+                        <rect x="@SimulationInfoHoverLabelX" y="32" width="54" height="20" rx="4" class="chart-hover-label-bg" />
+                        <SvgText X="@(SimulationInfoHoverLabelX + 27)" Y="46" Anchor="middle" Label="@Result!.SimulationInfo[SimulationInfoHoverIndex.Value].Year.ToString()" />
+                        @foreach (var item in SimulationInfoHoverMarkers.Select((marker, index) => new { marker, index }))
+                        {
+                            <circle cx="@item.marker.X" cy="@item.marker.Y" r="4" fill="@item.marker.Color" class="chart-hover-dot" />
+                        }
+                        <rect x="@SimulationInfoHoverPanelX" y="@SimulationInfoHoverPanelY" width="@SimulationInfoHoverPanelWidth" height="@SimulationInfoHoverPanelHeight" rx="5" class="chart-hover-label-bg" />
+                        @foreach (var item in SimulationInfoHoverMarkers.Take(SimulationInfoMaxHoverLabels).Select((marker, index) => new { marker, index }))
+                        {
+                            <circle cx="@(SimulationInfoHoverPanelX + 9)" cy="@(SimulationInfoHoverPanelY + 16 + item.index * 15)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
+                            <SvgText X="@(SimulationInfoHoverPanelX + 16)" Y="@(SimulationInfoHoverPanelY + 20 + item.index * 15)" Anchor="start" Label="@item.marker.Label" />
+                        }
+                        @if (SimulationInfoHoverMarkers.Count > SimulationInfoMaxHoverLabels)
+                        {
+                            <SvgText X="@(SimulationInfoHoverPanelX + 16)" Y="@(SimulationInfoHoverPanelY + 20 + SimulationInfoMaxHoverLabels * 15)" Anchor="start" Label="@SimulationInfoMoreHoverLabel" />
+                        }
+                    }
+                    @foreach (var zone in SimulationInfoHoverZones)
+                    {
+                        <rect x="@zone.X" y="28" width="@zone.Width" height="192" fill="transparent" class="chart-hover-zone"
+                              @onmouseover="() => SimulationInfoHoverIndex = zone.Index"
+                              @onfocus="() => SimulationInfoHoverIndex = zone.Index" />
+                    }
+                </svg>
+                <div class="inline-legend">
+                    @foreach (var row in SelectedSimulationInfoChartRows)
+                    {
+                        <span><i style="background:@SimulationInfoColor(row.Key)"></i>@row.Metric</span>
+                    }
+                    @if (SelectedSimulationInfoChartRows.Any(row => row.ReferenceValue is not null))
+                    {
+                        <span><i style="background:#172026"></i>Reference dashed</span>
+                    }
+                </div>
+            </aside>
+            }
+        </div>
+    </ToolPanel>
+    }
+
     @if (IsToolActive(ToolTableDetails))
     {
     <ToolPanel Id="@ToolTableDetails" Title="Table Details" Style="@ToolStyle(ToolTableDetails)"
@@ -797,6 +908,7 @@ else
     private const string ToolModelSettings = "model-settings";
     private const string ToolModelScoring = "model-scoring";
     private const string ToolValidationSummary = "validation-summary";
+    private const string ToolSimulationInfo = "simulation-info";
     private const string ToolTableDetails = "table-details";
     private const string ToolCohorts = "cohorts";
     private const string ToolGrades = "grades";
@@ -812,6 +924,7 @@ else
         new(ToolModelSettings, "Model Settings"),
         new(ToolModelScoring, "Model Scoring"),
         new(ToolValidationSummary, "Validation Summary"),
+        new(ToolSimulationInfo, "Simulation Info"),
         new(ToolTableDetails, "Table Details"),
         new(ToolCohorts, "Progressing Cohorts"),
         new(ToolGrades, "Grades"),
@@ -825,6 +938,7 @@ else
     private static readonly HashSet<string> ResultToolIds =
     [
         ToolValidationSummary,
+        ToolSimulationInfo,
         ToolTableDetails,
         ToolCohorts,
         ToolGrades,
@@ -914,6 +1028,7 @@ else
     private bool ShowIncreaseFromPrevious { get; set; }
     private bool ShowIncreaseFromPreviousPercent { get; set; }
     private int? TotalChartHoverIndex { get; set; }
+    private int? SimulationInfoHoverIndex { get; set; }
     private CancellationTokenSource? ValidationDebounce { get; set; }
     private string ExecutionMode { get; set; } = "Auto";
     private string ServerApiBaseAddress { get; set; } = "";
@@ -921,8 +1036,9 @@ else
     private string? ServerApiStatus { get; set; }
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
-    private List<string> ActiveToolIds { get; set; } = [ToolRunEnvironment, ToolModelSettings, ToolModelScoring, ToolValidationSummary];
+    private List<string> ActiveToolIds { get; set; } = [ToolRunEnvironment, ToolModelSettings, ToolModelScoring, ToolValidationSummary, ToolSimulationInfo];
     private HashSet<string> CollapsedToolIds { get; set; } = [];
+    private HashSet<string> SelectedSimulationInfoRows { get; } = new(StringComparer.OrdinalIgnoreCase);
     private string NewToolId { get; set; } = "";
     private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
         .Select(id => ToolDefinitions.FirstOrDefault(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
@@ -989,6 +1105,43 @@ else
         ScoreGradeWeight,
         ScoreHighSchoolTotalWeight,
         ScoreHighSchoolGradeWeight);
+    private IReadOnlyList<SimulationInfoRow> SimulationInfoRows =>
+    [
+        BuildSimulationInfoRow("Housing", "Total DU", year => year.TotalHomes, FormatCount),
+        BuildSimulationInfoRow("Housing", "Low density DU", year => year.LowDensityHomes, FormatCount),
+        BuildSimulationInfoRow("Housing", "Medium density DU", year => year.MediumDensityHomes, FormatCount),
+        BuildSimulationInfoRow("Housing", "Medium-high density DU", year => year.MediumHighDensityHomes, FormatCount),
+        BuildSimulationInfoRow("Housing", "High density DU", year => year.HighDensityHomes, FormatCount),
+        BuildSimulationInfoRow("Housing", "Other/existing DU", year => year.OtherDensityHomes, FormatCount),
+        BuildSimulationInfoRow("Students", "K-12 students", year => year.K12Students, FormatCount, ReferenceK12Students),
+        BuildSimulationInfoRow("Students", "TK students", year => year.TkStudents, FormatCount, ReferenceTkStudents),
+        BuildSimulationInfoRow("Students", "K-8 students", year => year.K8Students, FormatCount, ReferenceK8Students),
+        BuildSimulationInfoRow("Students", "HS students", year => year.HighSchoolStudents, FormatCount, ReferenceHighSchoolStudents),
+        BuildSimulationInfoRow("Student generation", "K-12 per DU", year => year.K12StudentsPerHome, FormatGeneration, year => ReferenceGeneration(year, ReferenceK12Students(year))),
+        BuildSimulationInfoRow("Student generation", "K-8 per DU", year => year.K8StudentsPerHome, FormatGeneration, year => ReferenceGeneration(year, ReferenceK8Students(year))),
+        BuildSimulationInfoRow("Student generation", "HS per DU", year => year.HighSchoolStudentsPerHome, FormatGeneration, year => ReferenceGeneration(year, ReferenceHighSchoolStudents(year))),
+        BuildSimulationInfoRow("Low/medium generation", "K-12 per DU", year => year.LowMediumK12StudentsPerHome, FormatGeneration, year => ReferenceDensityGeneration(year, "low-medium", ReferenceK12Students(year))),
+        BuildSimulationInfoRow("Low/medium generation", "K-8 per DU", year => year.LowMediumK8StudentsPerHome, FormatGeneration, year => ReferenceDensityGeneration(year, "low-medium", ReferenceK8Students(year))),
+        BuildSimulationInfoRow("Low/medium generation", "HS per DU", year => year.LowMediumHighSchoolStudentsPerHome, FormatGeneration, year => ReferenceDensityGeneration(year, "low-medium", ReferenceHighSchoolStudents(year))),
+        BuildSimulationInfoRow("Medium-high/high generation", "K-12 per DU", year => year.MediumHighHighK12StudentsPerHome, FormatGeneration, year => ReferenceDensityGeneration(year, "medium-high-high", ReferenceK12Students(year))),
+        BuildSimulationInfoRow("Medium-high/high generation", "K-8 per DU", year => year.MediumHighHighK8StudentsPerHome, FormatGeneration, year => ReferenceDensityGeneration(year, "medium-high-high", ReferenceK8Students(year))),
+        BuildSimulationInfoRow("Medium-high/high generation", "HS per DU", year => year.MediumHighHighHighSchoolStudentsPerHome, FormatGeneration, year => ReferenceDensityGeneration(year, "medium-high-high", ReferenceHighSchoolStudents(year))),
+        BuildSimulationInfoRow("Family profile", "0 kid families", year => year.FamiliesWithZeroChildren, year => SimulationCell(FormatCountShare(year.FamiliesWithZeroChildren, year.FamiliesWithZeroChildrenShare))),
+        BuildSimulationInfoRow("Family profile", "1 kid families", year => year.FamiliesWithOneChild, year => SimulationCell(FormatCountShare(year.FamiliesWithOneChild, year.FamiliesWithOneChildShare))),
+        BuildSimulationInfoRow("Family profile", "2 kid families", year => year.FamiliesWithTwoChildren, year => SimulationCell(FormatCountShare(year.FamiliesWithTwoChildren, year.FamiliesWithTwoChildrenShare))),
+        BuildSimulationInfoRow("Family profile", "3 kid families", year => year.FamiliesWithThreeChildren, year => SimulationCell(FormatCountShare(year.FamiliesWithThreeChildren, year.FamiliesWithThreeChildrenShare))),
+        BuildSimulationInfoRow("Family profile", "4+ kid families", year => year.FamiliesWithFourPlusChildren, year => SimulationCell(FormatCountShare(year.FamiliesWithFourPlusChildren, year.FamiliesWithFourPlusChildrenShare))),
+        BuildSimulationInfoRow("Turnover", "Turnover events", year => year.TurnoverEvents, FormatCount),
+        BuildSimulationInfoRow("Turnover", "Turnover factor", year => year.TurnoverFactor, value => value.ToString("P1")),
+        BuildSimulationInfoRow("Turnover", "Avg longevity before turnover", year => year.AverageLongevityBeforeTurnover, value => $"{value:0.0} yrs")
+    ];
+    private IReadOnlyList<SimulationInfoRow> SelectedSimulationInfoChartRows => SimulationInfoRows
+        .Where(row => SelectedSimulationInfoRows.Contains(row.Key))
+        .ToList();
+    private double SimulationInfoChartMax => ChartAxis.NiceMaximum(Math.Max(1, SelectedSimulationInfoChartRows
+        .SelectMany(row => SimulationInfoValues(row).Concat(SimulationInfoReferenceValues(row)))
+        .DefaultIfEmpty(0)
+        .Max() * 1.08));
     private IReadOnlyList<DensityEffectRow> DensityEffectRows =>
     [
         BuildDensityEffectRow(
@@ -1099,6 +1252,7 @@ else
         if (Data is not null)
         {
             await Js.InvokeVoidAsync("schoolGrowthMasonry.attach", ".settings-stack");
+            await Js.InvokeVoidAsync("schoolGrowthTables.attach", ".table-wrap");
         }
     }
 
@@ -1561,6 +1715,178 @@ else
             .ToList();
     }
 
+    private SimulationInfoRow BuildSimulationInfoRow(
+        string group,
+        string metric,
+        Func<MonteCarloSimulationYearInfo, double> modeledValue,
+        Func<double, string> formatter,
+        Func<MonteCarloSimulationYearInfo, double?>? referenceValue = null)
+    {
+        return new SimulationInfoRow(
+            group,
+            metric,
+            year => SimulationCell(formatter(modeledValue(year)), referenceValue?.Invoke(year), formatter),
+            year => modeledValue(year),
+            referenceValue,
+            formatter);
+    }
+
+    private SimulationInfoRow BuildSimulationInfoRow(
+        string group,
+        string metric,
+        Func<MonteCarloSimulationYearInfo, double> chartValue,
+        Func<MonteCarloSimulationYearInfo, MarkupString> value)
+    {
+        return new SimulationInfoRow(group, metric, value, year => chartValue(year), null, FormatCount);
+    }
+
+    private void ToggleSimulationInfoLine(string key, ChangeEventArgs eventArgs)
+    {
+        var selected = eventArgs.Value is bool value && value;
+        if (selected)
+        {
+            SelectedSimulationInfoRows.Add(key);
+        }
+        else
+        {
+            SelectedSimulationInfoRows.Remove(key);
+        }
+    }
+
+    private bool AllSimulationInfoRowsSelected => SimulationInfoRows.Count > 0 && SimulationInfoRows.All(row => SelectedSimulationInfoRows.Contains(row.Key));
+
+    private void ToggleAllSimulationInfoLines(ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool selected && selected)
+        {
+            foreach (var row in SimulationInfoRows)
+            {
+                SelectedSimulationInfoRows.Add(row.Key);
+            }
+        }
+        else
+        {
+            SelectedSimulationInfoRows.Clear();
+        }
+    }
+
+    private MonteCarloYearComparison? ComparisonForYear(int year)
+    {
+        return Result?.Comparisons.FirstOrDefault(item => item.Year == year);
+    }
+
+    private double? ReferenceTkStudents(MonteCarloSimulationYearInfo year)
+    {
+        var comparison = ComparisonForYear(year.Year);
+        if (comparison?.ActualGrades.GetValueOrDefault("TK").HasValue != true)
+        {
+            return null;
+        }
+
+        return comparison.AdjustedActualGrades.GetValueOrDefault("TK");
+    }
+
+    private double? ReferenceK8Students(MonteCarloSimulationYearInfo year)
+    {
+        var comparison = ComparisonForYear(year.Year);
+        return HasGradeReferenceData(comparison)
+            ? SumAdjustedGrades(comparison!, "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th")
+            : null;
+    }
+
+    private double? ReferenceHighSchoolStudents(MonteCarloSimulationYearInfo year)
+    {
+        var comparison = ComparisonForYear(year.Year);
+        return HasGradeReferenceData(comparison)
+            ? SumAdjustedGrades(comparison!, "9th", "10th", "11th", "12th")
+            : null;
+    }
+
+    private double? ReferenceK12Students(MonteCarloSimulationYearInfo year)
+    {
+        var comparison = ComparisonForYear(year.Year);
+        return HasGradeReferenceData(comparison)
+            ? SumAdjustedGrades(comparison!, "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "Sp. Ed.")
+            : null;
+    }
+
+    private static double? ReferenceGeneration(MonteCarloSimulationYearInfo year, double? referenceStudents)
+    {
+        return referenceStudents.HasValue && year.TotalHomes > 0
+            ? referenceStudents.Value / year.TotalHomes
+            : null;
+    }
+
+    private double? ReferenceDensityGeneration(MonteCarloSimulationYearInfo year, string densityGroup, double? referenceStudents)
+    {
+        var comparison = ComparisonForYear(year.Year);
+        if (Data is null || comparison is null || !referenceStudents.HasValue || comparison.ActualGradeTotal <= 0)
+        {
+            return null;
+        }
+
+        var districtGradeShare = referenceStudents.Value / comparison.ActualGradeTotal;
+        var referenceStudentsInDensity = 0.0;
+        var homesInDensity = 0.0;
+
+        foreach (var (grid, actualTotal) in comparison.ActualGridTotals)
+        {
+            if (ExcludedValidationGrids.Contains(grid) || actualTotal is not > 0)
+            {
+                continue;
+            }
+
+            var gridHomes = BuiltHomesForGrid(grid, year.Year, "all");
+            var gridDensityHomes = BuiltHomesForGrid(grid, year.Year, densityGroup);
+            if (gridHomes <= 0 || gridDensityHomes <= 0)
+            {
+                continue;
+            }
+
+            referenceStudentsInDensity += actualTotal.Value * (gridDensityHomes / gridHomes) * districtGradeShare;
+            homesInDensity += gridDensityHomes;
+        }
+
+        return homesInDensity > 0 ? referenceStudentsInDensity / homesInDensity : null;
+    }
+
+    private double BuiltHomesForGrid(string grid, int year, string densityGroup)
+    {
+        if (Data is null)
+        {
+            return 0;
+        }
+
+        return Data.HomeRows
+            .Where(row => row.Neighborhood.Equals(grid, StringComparison.OrdinalIgnoreCase))
+            .Where(row => densityGroup.Equals("all", StringComparison.OrdinalIgnoreCase)
+                || DensityGroupMatches(row.Density, densityGroup))
+            .Sum(row => row.HomesByYear
+                .Where(kvp => kvp.Key <= year)
+                .Sum(kvp => kvp.Value));
+    }
+
+    private static bool DensityGroupMatches(string density, string densityGroup)
+    {
+        var normalizedDensity = NormalizeDensity(density);
+        return densityGroup switch
+        {
+            "low-medium" => normalizedDensity is "RL" or "RM",
+            "medium-high-high" => normalizedDensity is "RMH" or "RH",
+            _ => false
+        };
+    }
+
+    private static bool HasGradeReferenceData(MonteCarloYearComparison? comparison)
+    {
+        return comparison is not null && comparison.ActualGradeTotal > 0;
+    }
+
+    private static double SumAdjustedGrades(MonteCarloYearComparison comparison, params string[] grades)
+    {
+        return grades.Sum(grade => comparison.AdjustedActualGrades.GetValueOrDefault(grade));
+    }
+
     private MonteCarloYearComparison? SelectedComparison => Result?.Comparisons.FirstOrDefault(item => item.Year == SelectedComparisonYear);
 
     private IReadOnlyList<(string Grid, double? Actual, double Modeled)> SelectedGridComparisons =>
@@ -1758,6 +2084,157 @@ else
         }
     }
 
+    private IReadOnlyList<(double Y, string Label)> SimulationInfoYTicks => ChartAxis.YTicks(SimulationInfoChartMax, 28, 220);
+
+    private IReadOnlyList<(double X, string Label)> SimulationInfoXTicks
+    {
+        get
+        {
+            var points = Result?.SimulationInfo ?? [];
+            if (points.Count == 0) return [];
+            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 6.0));
+            return points.Select((point, index) => new { point.Year, index })
+                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
+                .Select(item =>
+                {
+                    var x = points.Count == 1 ? 46 : 46 + (item.index * 454.0 / (points.Count - 1));
+                    return (x, item.Year.ToString());
+                })
+                .ToList();
+        }
+    }
+
+    private IReadOnlyList<double> SimulationInfoValues(SimulationInfoRow row)
+    {
+        return Result?.SimulationInfo
+            .Select(year => row.ChartValue(year))
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToList() ?? [];
+    }
+
+    private IReadOnlyList<double> SimulationInfoReferenceValues(SimulationInfoRow row)
+    {
+        return row.ReferenceValue is null
+            ? []
+            : Result?.SimulationInfo
+                .Select(year => row.ReferenceValue(year))
+                .Where(value => value.HasValue)
+                .Select(value => value!.Value)
+                .ToList() ?? [];
+    }
+
+    private string SimulationInfoChartPoints(SimulationInfoRow row)
+    {
+        return SimulationInfoChartPoints(row.ChartValue);
+    }
+
+    private string SimulationInfoReferencePoints(SimulationInfoRow row)
+    {
+        return row.ReferenceValue is null ? "" : SimulationInfoChartPoints(row.ReferenceValue);
+    }
+
+    private string SimulationInfoChartPoints(Func<MonteCarloSimulationYearInfo, double?> selector)
+    {
+        var points = Result?.SimulationInfo ?? [];
+        if (points.Count == 0) return "";
+        var max = SimulationInfoChartMax;
+        return string.Join(" ", points.Select((point, index) =>
+        {
+            var value = selector(point);
+            if (!value.HasValue) return null;
+            var x = points.Count == 1 ? 46 : 46 + (index * 454.0 / (points.Count - 1));
+            var y = 220 - (value.Value / max * 192);
+            return $"{x:0.##},{y:0.##}";
+        }).Where(point => point is not null));
+    }
+
+    private double SimulationInfoXForIndex(int index)
+    {
+        var points = Result?.SimulationInfo ?? [];
+        return points.Count == 1 ? 46 : 46 + (index * 454.0 / Math.Max(1, points.Count - 1));
+    }
+
+    private double SimulationInfoYForValue(double value)
+    {
+        return 220 - (value / SimulationInfoChartMax * 192);
+    }
+
+    private double SimulationInfoHoverX => SimulationInfoHoverIndex.HasValue ? SimulationInfoXForIndex(SimulationInfoHoverIndex.Value) : 46;
+
+    private double SimulationInfoHoverLabelX => Math.Clamp(SimulationInfoHoverX - 27, 48, 446);
+
+    private const int SimulationInfoMaxHoverLabels = 7;
+    private double SimulationInfoHoverPanelWidth => 190;
+    private double SimulationInfoHoverPanelHeight => 14 + Math.Min(SimulationInfoHoverMarkers.Count, SimulationInfoMaxHoverLabels) * 15 + (SimulationInfoHoverMarkers.Count > SimulationInfoMaxHoverLabels ? 15 : 0);
+    private double SimulationInfoHoverPanelX => SimulationInfoHoverX > 300 ? 500 - SimulationInfoHoverPanelWidth : 300;
+    private double SimulationInfoHoverPanelY => 56;
+    private string SimulationInfoMoreHoverLabel => $"+{SimulationInfoHoverMarkers.Count - SimulationInfoMaxHoverLabels} more";
+
+    private IReadOnlyList<(int Index, double X, double Width)> SimulationInfoHoverZones
+    {
+        get
+        {
+            var points = Result?.SimulationInfo ?? [];
+            if (points.Count == 0) return [];
+            if (points.Count == 1) return [(0, 46, 454)];
+
+            var zones = new List<(int Index, double X, double Width)>();
+            for (var index = 0; index < points.Count; index++)
+            {
+                var previousMid = index == 0 ? 46 : (SimulationInfoXForIndex(index - 1) + SimulationInfoXForIndex(index)) / 2;
+                var nextMid = index == points.Count - 1 ? 500 : (SimulationInfoXForIndex(index) + SimulationInfoXForIndex(index + 1)) / 2;
+                zones.Add((index, previousMid, nextMid - previousMid));
+            }
+
+            return zones;
+        }
+    }
+
+    private IReadOnlyList<(double X, double Y, string Label, string Color)> SimulationInfoHoverMarkers
+    {
+        get
+        {
+            var points = Result?.SimulationInfo ?? [];
+            if (!SimulationInfoHoverIndex.HasValue || SimulationInfoHoverIndex.Value < 0 || SimulationInfoHoverIndex.Value >= points.Count) return [];
+
+            var index = SimulationInfoHoverIndex.Value;
+            var year = points[index];
+            var x = SimulationInfoXForIndex(index);
+            var markers = new List<(double X, double Y, string Label, string Color)>();
+
+            foreach (var row in SelectedSimulationInfoChartRows)
+            {
+                var color = SimulationInfoColor(row.Key);
+                var value = row.ChartValue(year);
+                if (value.HasValue)
+                {
+                    markers.Add((x, SimulationInfoYForValue(value.Value), $"{row.Metric}: {row.Formatter(value.Value)}", color));
+                }
+
+                var reference = row.ReferenceValue?.Invoke(year);
+                if (reference.HasValue)
+                {
+                    markers.Add((x, SimulationInfoYForValue(reference.Value), $"{row.Metric} ref: {row.Formatter(reference.Value)}", color));
+                }
+            }
+
+            return markers;
+        }
+    }
+
+    private string SimulationInfoColor(string key)
+    {
+        var index = SimulationInfoRows.ToList().FindIndex(row => row.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        return ColorFor(Math.Max(0, index));
+    }
+
+    private static string ColorFor(int index)
+    {
+        var colors = new[] { "#0f766e", "#b45309", "#2563eb", "#7c3aed", "#be123c", "#4d7c0f", "#0f4c81", "#a16207" };
+        return colors[index % colors.Length];
+    }
+
     private static string FormatNullable(double? value) => value.HasValue ? value.Value.ToString("N0") : "n/a";
 
     private static IReadOnlyList<double> NormalizeUiWeights(params double[] weights)
@@ -1787,6 +2264,33 @@ else
             < 0.0001 => "<0.0001",
             _ => value.ToString("0.####")
         };
+    }
+
+    private static string FormatCount(double value)
+    {
+        return value.ToString("N0");
+    }
+
+    private static string FormatGeneration(double value)
+    {
+        return value.ToString("0.000");
+    }
+
+    private static string FormatCountShare(double count, double share)
+    {
+        return $"{count:N0} ({share:P1})";
+    }
+
+    private static MarkupString SimulationCell(string modeled)
+    {
+        return new MarkupString($"<span>{modeled}</span>");
+    }
+
+    private static MarkupString SimulationCell(string modeled, double? reference, Func<double, string> formatter)
+    {
+        return reference.HasValue
+            ? new MarkupString($"<span>{modeled}</span><small class=\"simulation-ref\">ref {formatter(reference.Value)}</small>")
+            : SimulationCell(modeled);
     }
 
     private static string FormatElapsed(TimeSpan elapsed)
@@ -1932,6 +2436,17 @@ else
     }
 
     private sealed record MonteCarloToolDefinition(string Id, string Title);
+
+    private sealed record SimulationInfoRow(
+        string Group,
+        string Metric,
+        Func<MonteCarloSimulationYearInfo, MarkupString> Value,
+        Func<MonteCarloSimulationYearInfo, double?> ChartValue,
+        Func<MonteCarloSimulationYearInfo, double?>? ReferenceValue,
+        Func<double, string> Formatter)
+    {
+        public string Key => $"{Group}|{Metric}";
+    }
 
     private sealed record DensityEffectRow(
         string Label,

@@ -1,5 +1,13 @@
 @inherits LayoutComponentBase
+@inject IJSRuntime Js
 
 <main>
     @Body
 </main>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await Js.InvokeVoidAsync("schoolGrowthTables.attach", ".table-wrap");
+    }
+}

@@ -84,9 +84,45 @@ public sealed record MonteCarloYearComparison(
     double HighSchoolGradeMeanAbsoluteError,
     double HighSchoolGradeMeanAbsolutePercentageError);
 
+public sealed record MonteCarloSimulationYearInfo(
+    int Year,
+    double TotalHomes,
+    double LowDensityHomes,
+    double MediumDensityHomes,
+    double MediumHighDensityHomes,
+    double HighDensityHomes,
+    double OtherDensityHomes,
+    double K12Students,
+    double TkStudents,
+    double K8Students,
+    double HighSchoolStudents,
+    double K12StudentsPerHome,
+    double K8StudentsPerHome,
+    double HighSchoolStudentsPerHome,
+    double LowMediumK12StudentsPerHome,
+    double LowMediumK8StudentsPerHome,
+    double LowMediumHighSchoolStudentsPerHome,
+    double MediumHighHighK12StudentsPerHome,
+    double MediumHighHighK8StudentsPerHome,
+    double MediumHighHighHighSchoolStudentsPerHome,
+    double FamiliesWithZeroChildren,
+    double FamiliesWithOneChild,
+    double FamiliesWithTwoChildren,
+    double FamiliesWithThreeChildren,
+    double FamiliesWithFourPlusChildren,
+    double FamiliesWithZeroChildrenShare,
+    double FamiliesWithOneChildShare,
+    double FamiliesWithTwoChildrenShare,
+    double FamiliesWithThreeChildrenShare,
+    double FamiliesWithFourPlusChildrenShare,
+    double TurnoverEvents,
+    double TurnoverFactor,
+    double AverageLongevityBeforeTurnover);
+
 public sealed record MonteCarloValidationResult(
     MonteCarloParameters Parameters,
     IReadOnlyList<MonteCarloYearComparison> Comparisons,
+    IReadOnlyList<MonteCarloSimulationYearInfo> SimulationInfo,
     double GridMeanAbsoluteError,
     double GridMeanAbsolutePercentageError,
     double GridLevelMeanAbsoluteError,
@@ -236,7 +272,13 @@ public sealed class MonteCarloEnrollmentModel
                     }
 
                     AddBuiltHomes(homes, year, parameters, random);
-                    AdvanceHomes(homes, year, parameters, random);
+                    AdvanceHomes(
+                        homes,
+                        year,
+                        parameters,
+                        random,
+                        turnoverLongevityObserver: localAccumulators[year].AddTurnover,
+                        turnoverObserver: () => { });
                     localAccumulators[year].Add(homes, year);
                 }
 
@@ -257,6 +299,10 @@ public sealed class MonteCarloEnrollmentModel
         var comparisons = accumulators
             .OrderBy(kvp => kvp.Key)
             .Select(kvp => BuildComparison(kvp.Key, kvp.Value, parameters))
+            .ToList();
+        var simulationInfo = accumulators
+            .OrderBy(kvp => kvp.Key)
+            .Select(kvp => BuildSimulationInfo(kvp.Key, kvp.Value, parameters))
             .ToList();
         var referenceYearWeights = comparisons.ToDictionary(
             item => item.Year,
@@ -284,7 +330,7 @@ public sealed class MonteCarloEnrollmentModel
             + highSchoolMape * scoreWeights.HighSchoolTotal
             + highSchoolGradeMape * scoreWeights.HighSchoolGrade;
 
-        return new MonteCarloValidationResult(parameters, comparisons, gridMae, gridMape, gridLevelMae, gridLevelMape, gradeMae, gradeMape, gradeLevelMae, gradeLevelMape, highSchoolMae, highSchoolMape, highSchoolGradeMae, highSchoolGradeMape, score);
+        return new MonteCarloValidationResult(parameters, comparisons, simulationInfo, gridMae, gridMape, gridLevelMae, gridLevelMape, gradeMae, gradeMape, gradeLevelMae, gradeLevelMape, highSchoolMae, highSchoolMape, highSchoolGradeMae, highSchoolGradeMape, score);
     }
 
     private Dictionary<int, YearAccumulator> CreateYearAccumulators(int startYear, int endYear)
@@ -905,6 +951,58 @@ public sealed class MonteCarloEnrollmentModel
             highSchoolGradeMape);
     }
 
+    private static MonteCarloSimulationYearInfo BuildSimulationInfo(int year, YearAccumulator accumulator, MonteCarloParameters parameters)
+    {
+        var runs = Math.Max(1, parameters.Runs);
+        var totalHomes = accumulator.TotalHomes / runs;
+        var lowHomes = accumulator.LowDensityHomes / runs;
+        var mediumHomes = accumulator.MediumDensityHomes / runs;
+        var mediumHighHomes = accumulator.MediumHighDensityHomes / runs;
+        var highHomes = accumulator.HighDensityHomes / runs;
+        var otherHomes = accumulator.OtherDensityHomes / runs;
+        var lowMediumHomes = lowHomes + mediumHomes + otherHomes;
+        var mediumHighHighHomes = mediumHighHomes + highHomes;
+        var k12Students = accumulator.K12Students / runs;
+        var k8Students = accumulator.K8Students / runs;
+        var highSchoolStudents = accumulator.HighSchoolStudents / runs;
+        var turnoverEvents = accumulator.TurnoverEvents / runs;
+
+        return new MonteCarloSimulationYearInfo(
+            year,
+            totalHomes,
+            lowHomes,
+            mediumHomes,
+            mediumHighHomes,
+            highHomes,
+            otherHomes,
+            k12Students,
+            accumulator.TkStudents / runs,
+            k8Students,
+            highSchoolStudents,
+            Ratio(k12Students, totalHomes),
+            Ratio(k8Students, totalHomes),
+            Ratio(highSchoolStudents, totalHomes),
+            Ratio(accumulator.LowMediumK12Students / runs, lowMediumHomes),
+            Ratio(accumulator.LowMediumK8Students / runs, lowMediumHomes),
+            Ratio(accumulator.LowMediumHighSchoolStudents / runs, lowMediumHomes),
+            Ratio(accumulator.MediumHighHighK12Students / runs, mediumHighHighHomes),
+            Ratio(accumulator.MediumHighHighK8Students / runs, mediumHighHighHomes),
+            Ratio(accumulator.MediumHighHighHighSchoolStudents / runs, mediumHighHighHomes),
+            accumulator.ChildCountBuckets[0] / runs,
+            accumulator.ChildCountBuckets[1] / runs,
+            accumulator.ChildCountBuckets[2] / runs,
+            accumulator.ChildCountBuckets[3] / runs,
+            accumulator.ChildCountBuckets[4] / runs,
+            Ratio(accumulator.ChildCountBuckets[0], accumulator.TotalHomes),
+            Ratio(accumulator.ChildCountBuckets[1], accumulator.TotalHomes),
+            Ratio(accumulator.ChildCountBuckets[2], accumulator.TotalHomes),
+            Ratio(accumulator.ChildCountBuckets[3], accumulator.TotalHomes),
+            Ratio(accumulator.ChildCountBuckets[4], accumulator.TotalHomes),
+            turnoverEvents,
+            Ratio(accumulator.TurnoverEvents, accumulator.TotalHomes),
+            Ratio(accumulator.TurnoverLongevityTotal, accumulator.TurnoverEvents));
+    }
+
     private double ActualGridValue(string grid, int year)
     {
         return ActualGridValueOrNull(grid, year) ?? 0;
@@ -1173,6 +1271,11 @@ public sealed class MonteCarloEnrollmentModel
         return weightTotal > 0 ? weightedValueTotal / weightTotal : 0;
     }
 
+    private static double Ratio(double numerator, double denominator)
+    {
+        return denominator > 0 ? numerator / denominator : 0;
+    }
+
     private static bool IsExcludedValidationGrid(string grid)
     {
         return ExcludedValidationGrids.Contains(grid);
@@ -1397,6 +1500,25 @@ public sealed class MonteCarloEnrollmentModel
 
         public Dictionary<string, double> GridTotals { get; }
         public Dictionary<string, double> GradeTotals { get; }
+        public double TotalHomes { get; private set; }
+        public double LowDensityHomes { get; private set; }
+        public double MediumDensityHomes { get; private set; }
+        public double MediumHighDensityHomes { get; private set; }
+        public double HighDensityHomes { get; private set; }
+        public double OtherDensityHomes { get; private set; }
+        public double K12Students { get; private set; }
+        public double TkStudents { get; private set; }
+        public double K8Students { get; private set; }
+        public double HighSchoolStudents { get; private set; }
+        public double LowMediumK12Students { get; private set; }
+        public double LowMediumK8Students { get; private set; }
+        public double LowMediumHighSchoolStudents { get; private set; }
+        public double MediumHighHighK12Students { get; private set; }
+        public double MediumHighHighK8Students { get; private set; }
+        public double MediumHighHighHighSchoolStudents { get; private set; }
+        public double[] ChildCountBuckets { get; } = new double[5];
+        public double TurnoverEvents { get; private set; }
+        public double TurnoverLongevityTotal { get; private set; }
 
         public void Add(IEnumerable<SimHome> homes, int year)
         {
@@ -1404,13 +1526,21 @@ public sealed class MonteCarloEnrollmentModel
             {
                 if (!home.IsActive(year)) continue;
 
+                AddHome(home);
                 foreach (var child in home.Children)
                 {
                     if (!child.IsStudent) continue;
                     GridTotals[home.Grid] = GridTotals.GetValueOrDefault(home.Grid) + 1;
                     GradeTotals[child.Grade] = GradeTotals.GetValueOrDefault(child.Grade) + 1;
+                    AddStudent(home, child);
                 }
             }
+        }
+
+        public void AddTurnover(int longevity)
+        {
+            TurnoverEvents++;
+            TurnoverLongevityTotal += Math.Max(0, longevity);
         }
 
         public void Merge(YearAccumulator other)
@@ -1423,6 +1553,82 @@ public sealed class MonteCarloEnrollmentModel
             foreach (var (grade, total) in other.GradeTotals)
             {
                 GradeTotals[grade] = GradeTotals.GetValueOrDefault(grade) + total;
+            }
+
+            TotalHomes += other.TotalHomes;
+            LowDensityHomes += other.LowDensityHomes;
+            MediumDensityHomes += other.MediumDensityHomes;
+            MediumHighDensityHomes += other.MediumHighDensityHomes;
+            HighDensityHomes += other.HighDensityHomes;
+            OtherDensityHomes += other.OtherDensityHomes;
+            K12Students += other.K12Students;
+            TkStudents += other.TkStudents;
+            K8Students += other.K8Students;
+            HighSchoolStudents += other.HighSchoolStudents;
+            LowMediumK12Students += other.LowMediumK12Students;
+            LowMediumK8Students += other.LowMediumK8Students;
+            LowMediumHighSchoolStudents += other.LowMediumHighSchoolStudents;
+            MediumHighHighK12Students += other.MediumHighHighK12Students;
+            MediumHighHighK8Students += other.MediumHighHighK8Students;
+            MediumHighHighHighSchoolStudents += other.MediumHighHighHighSchoolStudents;
+            TurnoverEvents += other.TurnoverEvents;
+            TurnoverLongevityTotal += other.TurnoverLongevityTotal;
+            for (var i = 0; i < ChildCountBuckets.Length; i++)
+            {
+                ChildCountBuckets[i] += other.ChildCountBuckets[i];
+            }
+        }
+
+        private void AddHome(SimHome home)
+        {
+            TotalHomes++;
+            ChildCountBuckets[Math.Min(Math.Max(0, home.Children.Count), 4)]++;
+
+            switch (NormalizeDensity(home.Density))
+            {
+                case "RL":
+                    LowDensityHomes++;
+                    break;
+                case "RM":
+                    MediumDensityHomes++;
+                    break;
+                case "RMH":
+                    MediumHighDensityHomes++;
+                    break;
+                case "RH":
+                    HighDensityHomes++;
+                    break;
+                default:
+                    OtherDensityHomes++;
+                    break;
+            }
+        }
+
+        private void AddStudent(SimHome home, SimChild child)
+        {
+            var isTk = child.GradeIndex == 0;
+            var isK12 = child.GradeIndex is >= 1 and <= 13;
+            var isK8 = child.GradeIndex is >= 1 and <= 9;
+            var isHighSchool = child.GradeIndex is >= 10 and <= 13;
+            var density = NormalizeDensity(home.Density);
+            var isMediumHighHigh = density is "RMH" or "RH";
+
+            if (isTk) TkStudents++;
+            if (isK12) K12Students++;
+            if (isK8) K8Students++;
+            if (isHighSchool) HighSchoolStudents++;
+
+            if (isMediumHighHigh)
+            {
+                if (isK12) MediumHighHighK12Students++;
+                if (isK8) MediumHighHighK8Students++;
+                if (isHighSchool) MediumHighHighHighSchoolStudents++;
+            }
+            else
+            {
+                if (isK12) LowMediumK12Students++;
+                if (isK8) LowMediumK8Students++;
+                if (isHighSchool) LowMediumHighSchoolStudents++;
             }
         }
     }

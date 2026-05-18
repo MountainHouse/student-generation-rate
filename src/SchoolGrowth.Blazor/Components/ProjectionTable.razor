@@ -15,12 +15,17 @@
             </div>
         }
     </div>
-    <div class="table-viz">
+    <div class="table-viz @(ActiveChartLines.Count == 0 ? "table-viz-no-chart" : "")">
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
-                        <th>Name</th>
+                        <th>
+                            <label class="row-legend">
+                                <input type="checkbox" checked="@AllLinesSelected" @onchange="ToggleAllLines" />
+                                <span>Name</span>
+                            </label>
+                        </th>
                         @foreach (var year in Projection)
                         {
                             <th>@year.Year</th>
@@ -94,6 +99,8 @@
                 </tbody>
             </table>
         </div>
+        @if (ActiveChartLines.Count > 0)
+        {
         <aside class="table-chart">
             <svg viewBox="0 0 520 260" role="img" @onmouseleave="() => HoverIndex = null">
                 @foreach (var tick in YTicks)
@@ -154,6 +161,7 @@
                 </div>
             }
         </aside>
+        }
     </div>
 </section>
 
@@ -205,15 +213,6 @@
 
     protected override void OnParametersSet()
     {
-        if (SelectedLines.Count == 0)
-        {
-            SelectedLines.Add("Total");
-            foreach (var name in Names.Take(3))
-            {
-                SelectedLines.Add(name);
-            }
-        }
-
         SelectedLines.RemoveWhere(line => !ChartLines.Contains(line, StringComparer.OrdinalIgnoreCase));
         if (HoverIndex >= Projection.Count)
         {
@@ -230,6 +229,23 @@
         else
         {
             SelectedLines.Remove(line);
+        }
+    }
+
+    private bool AllLinesSelected => ChartLines.Count > 0 && ChartLines.All(line => SelectedLines.Contains(line));
+
+    private void ToggleAllLines(ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool isChecked && isChecked)
+        {
+            foreach (var line in ChartLines)
+            {
+                SelectedLines.Add(line);
+            }
+        }
+        else
+        {
+            SelectedLines.Clear();
         }
     }
 

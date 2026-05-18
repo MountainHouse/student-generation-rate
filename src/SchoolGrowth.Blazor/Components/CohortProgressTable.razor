@@ -15,12 +15,17 @@
             </div>
         }
     </div>
-    <div class="table-viz">
+    <div class="table-viz @(ActiveCohorts.Count == 0 ? "table-viz-no-chart" : "")">
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
-                        <th>Cohort</th>
+                        <th>
+                            <label class="row-legend">
+                                <input type="checkbox" checked="@AllCohortsSelected" @onchange="ToggleAllLines" />
+                                <span>Cohort</span>
+                            </label>
+                        </th>
                         @foreach (var year in Projection)
                         {
                             <th>@year.Year</th>
@@ -59,6 +64,8 @@
                 </tbody>
             </table>
         </div>
+        @if (ActiveCohorts.Count > 0)
+        {
         <aside class="table-chart">
             <svg viewBox="0 0 520 260" role="img" @onmouseleave="() => HoverIndex = null">
                 @foreach (var tick in YTicks)
@@ -119,6 +126,7 @@
                 </div>
             }
         </aside>
+        }
     </div>
 </section>
 
@@ -171,14 +179,6 @@
 
     protected override void OnParametersSet()
     {
-        if (SelectedCohorts.Count == 0)
-        {
-            foreach (var cohort in Cohorts.Where(cohort => HasAnyProjectedValue(cohort)).TakeLast(5))
-            {
-                SelectedCohorts.Add(cohort.Label);
-            }
-        }
-
         SelectedCohorts.RemoveWhere(label => !Cohorts.Any(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase)));
         if (HoverIndex >= Projection.Count)
         {
@@ -195,6 +195,23 @@
         else
         {
             SelectedCohorts.Remove(label);
+        }
+    }
+
+    private bool AllCohortsSelected => Cohorts.Count > 0 && Cohorts.All(cohort => SelectedCohorts.Contains(cohort.Label));
+
+    private void ToggleAllLines(ChangeEventArgs eventArgs)
+    {
+        if (eventArgs.Value is bool isChecked && isChecked)
+        {
+            foreach (var cohort in Cohorts)
+            {
+                SelectedCohorts.Add(cohort.Label);
+            }
+        }
+        else
+        {
+            SelectedCohorts.Clear();
         }
     }
 

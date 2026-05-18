@@ -23,9 +23,22 @@ public static class ChartAxis
             {
                 var value = max - step * index;
                 var y = top + ((max - value) / max * (bottom - top));
-                return (y, value.ToString("N0"));
+                return (y, FormatTickLabel(value, max));
             })
             .ToList();
+    }
+
+    private static string FormatTickLabel(double value, double max)
+    {
+        if (Math.Abs(value) < 0.0000001) return "0";
+
+        return max switch
+        {
+            <= 0.1 => value.ToString("0.###"),
+            <= 1 => value.ToString("0.##"),
+            <= 10 => value.ToString("0.#"),
+            _ => value.ToString("N0")
+        };
     }
 
     private static double NiceStep(double rawStep)

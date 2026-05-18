@@ -419,10 +419,12 @@ dd {
 }
 
 .table-wrap {
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: visible;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: #ffffff;
+    width: 100%;
 }
 
 .density-factor-table {
@@ -484,6 +486,53 @@ dd {
     align-items: start;
 }
 
+.table-viz-no-chart {
+    display: block;
+    width: 100%;
+}
+
+.floating-table-head {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 80;
+    display: none;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 5px rgba(23, 32, 38, 0.08);
+}
+
+.floating-table-head table {
+    margin: 0;
+}
+
+.floating-table-head th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    background: #f0f3f5;
+}
+
+.table-wrap th:first-child,
+.table-wrap td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    min-width: 180px;
+    background: #ffffff;
+}
+
+.table-wrap th:first-child {
+    z-index: 5;
+    background: #f0f3f5;
+}
+
+.table-wrap tr.summary-row td:first-child {
+    background: #f7f8f9;
+}
+
 .table-chart {
     position: sticky;
     top: 12px;
@@ -491,13 +540,46 @@ dd {
     border-radius: 8px;
     background: #ffffff;
     padding: 12px;
-    min-height: min(620px, calc(100vh - 28px));
+    min-height: calc(100vh - 28px);
 }
 
 .table-chart svg {
     height: min(560px, calc(100vh - 84px));
     min-height: 360px;
     margin-top: 10px;
+}
+
+.simulation-info-viz {
+    grid-template-columns: minmax(640px, 1fr) minmax(420px, 32vw);
+}
+
+.simulation-info-wrap {
+    max-width: 100%;
+}
+
+.simulation-info-table th:first-child,
+.simulation-info-table td:first-child {
+    min-width: 150px;
+}
+
+.simulation-info-table th:nth-child(2),
+.simulation-info-table td:nth-child(2) {
+    position: sticky;
+    left: 150px;
+    z-index: 2;
+    min-width: 230px;
+    background: #ffffff;
+}
+
+.simulation-info-table th:first-child,
+.simulation-info-table th:nth-child(2) {
+    z-index: 3;
+    background: #f0f3f5;
+}
+
+.simulation-info-chart .inline-legend {
+    max-height: 120px;
+    overflow: auto;
 }
 
 .chart-picker {
@@ -534,6 +616,10 @@ dd {
     color: var(--ink);
     font-size: 13px;
     font-weight: 650;
+}
+
+.row-legend:has(input:first-child:nth-last-child(2)) {
+    grid-template-columns: 16px max-content;
 }
 
 .row-legend input {
@@ -627,6 +713,14 @@ th:first-child, td:first-child {
 th {
     background: #f0f3f5;
     color: #44515b;
+}
+
+.simulation-ref {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .summary-row td {
