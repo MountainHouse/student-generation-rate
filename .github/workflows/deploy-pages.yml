@@ -30,7 +30,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore WebAssembly workloads
-        run: dotnet workload restore src/SchoolGrowth.Blazor/SchoolGrowth.Blazor.csproj
+        run: dotnet workload restore src/SchoolGrowth.Blazor/SchoolGrowth.Blazor.csproj -p:RunAOTCompilation=true -p:WasmEnableThreads=true
 
       - name: Restore packages
         run: dotnet restore SchoolGrowthSimulator.sln
