@@ -513,6 +513,11 @@ dd {
     left: 0;
     z-index: 6;
     background: #f0f3f5;
+    transform: translateX(var(--table-scroll-left, 0px));
+}
+
+.floating-table-head .simulation-info-table th:nth-child(2) {
+    transform: translateX(var(--table-scroll-left, 0px));
 }
 
 .table-wrap th:first-child,
@@ -575,6 +580,52 @@ dd {
 .simulation-info-table th:nth-child(2) {
     z-index: 3;
     background: #f0f3f5;
+}
+
+@media (max-width: 700px) {
+    .table-viz,
+    .simulation-info-viz {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .table-wrap th:first-child,
+    .table-wrap td:first-child {
+        min-width: 118px;
+        max-width: 118px;
+        width: 118px;
+    }
+
+    .floating-table-head th:first-child {
+        max-width: 118px;
+    }
+
+    .row-legend {
+        gap: 5px;
+        font-size: 12px;
+    }
+
+    .simulation-info-table th:first-child,
+    .simulation-info-table td:first-child {
+        min-width: 96px;
+        max-width: 96px;
+        width: 96px;
+    }
+
+    .simulation-info-table th:nth-child(2),
+    .simulation-info-table td:nth-child(2) {
+        position: static;
+        left: auto;
+        min-width: 170px;
+        background: inherit;
+    }
+
+    .simulation-info-table th:nth-child(2) {
+        background: #f0f3f5;
+    }
+
+    .floating-table-head .simulation-info-table th:nth-child(2) {
+        transform: none;
+    }
 }
 
 .simulation-info-chart .inline-legend {

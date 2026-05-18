@@ -148,6 +148,7 @@ window.schoolGrowthTables = (() => {
         instance.floating.style.display = "block";
         instance.floating.style.left = `${Math.max(0, wrapRect.left)}px`;
         instance.floating.style.width = `${Math.min(wrapRect.width, window.innerWidth - Math.max(0, wrapRect.left))}px`;
+        instance.floating.style.setProperty("--table-scroll-left", `${wrap.scrollLeft}px`);
         instance.floatingTable.style.transform = `translateX(${-wrap.scrollLeft}px)`;
     }
 
