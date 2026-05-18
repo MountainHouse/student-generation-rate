@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SchoolGrowth.Blazor</title>
     <base href="/" />
-    <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -20,7 +19,7 @@
             <circle r="40%" cx="50%" cy="50%" />
             <circle r="40%" cx="50%" cy="50%" />
         </svg>
-        <div class="loading-progress-text"></div>
+        <div class="loading-progress-text">Preparing WebAssembly...</div>
     </div>
 
     <div id="blazor-error-ui">
@@ -28,8 +27,23 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
+    <script src="coi-serviceworker.js"></script>
     <script src="js/masonry.js"></script>
-    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script>
+        (function () {
+            const loadBlazor = () => {
+                const script = document.createElement("script");
+                script.src = "_framework/blazor.webassembly#[.{fingerprint}].js";
+                document.body.appendChild(script);
+            };
+
+            if (window.schoolGrowthCoiReady) {
+                loadBlazor();
+            } else {
+                window.addEventListener("schoolgrowth-coi-ready", loadBlazor, { once: true });
+            }
+        })();
+    </script>
 </body>
 
 </html>

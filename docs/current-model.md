@@ -1,5 +1,7 @@
 # Current Model
 
+> Status: legacy/reference model. Avoid using this document unless you are intentionally maintaining Deterministic Projection or comparing old behavior. Household Simulation, implemented with the Monte Carlo household model, is now the primary product path; otherwise start with `household-simulation-model.md`.
+
 The current model is a deterministic, grid-first enrollment projection implemented in `SchoolGrowth.Core`.
 
 It starts from known reference data, calibrates a few aggregate parameters, projects future students by residence grid, and then rolls those students into school totals.
@@ -203,4 +205,3 @@ absolute_percentage_error = abs(error) / actual_total
 - Grade-by-grid values are estimated, not observed.
 - Retention is not yet exposed per grade in the UI.
 - Capacity overflow and school assignment policy are out of scope.
-

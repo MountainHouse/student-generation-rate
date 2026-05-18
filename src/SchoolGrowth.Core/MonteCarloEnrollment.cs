@@ -8,7 +8,7 @@ public sealed record MonteCarloParameters(
     double MoveInOneChildShare = 0.2390,
     double MoveInTwoChildShare = 0.6150,
     double MoveInThreeChildShare = 0.0350,
-    double MoveInFourPlusChildShare = 0.0,
+    double MoveInFourChildShare = 0.0,
     double StudentExitProbability = 0.0,
     double MoveInTkKWeight = 0.232,
     double MoveInElementaryWeight = 0.58,
@@ -119,10 +119,19 @@ public sealed record MonteCarloSimulationYearInfo(
     double TurnoverFactor,
     double AverageLongevityBeforeTurnover);
 
+public sealed record MonteCarloSyntheticHomeDiagnostic(
+    string Grid,
+    int BaselineYear,
+    double AdjustedBaselineStudents,
+    double ListedHomesThroughBaseline,
+    double ExpectedStudentsPerHome,
+    double SyntheticHomes);
+
 public sealed record MonteCarloValidationResult(
     MonteCarloParameters Parameters,
     IReadOnlyList<MonteCarloYearComparison> Comparisons,
     IReadOnlyList<MonteCarloSimulationYearInfo> SimulationInfo,
+    IReadOnlyList<MonteCarloSyntheticHomeDiagnostic> SyntheticHomeDiagnostics,
     double GridMeanAbsoluteError,
     double GridMeanAbsolutePercentageError,
     double GridLevelMeanAbsoluteError,
@@ -147,7 +156,7 @@ public sealed record MonteCarloSearchRequest(
     IReadOnlyList<double> MoveInOneChildShares,
     IReadOnlyList<double> MoveInTwoChildShares,
     IReadOnlyList<double> MoveInThreeChildShares,
-    IReadOnlyList<double> MoveInFourPlusChildShares,
+    IReadOnlyList<double> MoveInFourChildShares,
     IReadOnlyList<double> StudentExitProbabilities,
     MonteCarloParameters? BaseParameters = null);
 
@@ -304,6 +313,7 @@ public sealed class MonteCarloEnrollmentModel
             .OrderBy(kvp => kvp.Key)
             .Select(kvp => BuildSimulationInfo(kvp.Key, kvp.Value, parameters))
             .ToList();
+        var syntheticHomeDiagnostics = BuildSyntheticHomeDiagnostics(baselineYear, parameters);
         var referenceYearWeights = comparisons.ToDictionary(
             item => item.Year,
             item => ReferenceYearWeight(item.Year, startYear, anchorStartYear, parameters));
@@ -330,7 +340,7 @@ public sealed class MonteCarloEnrollmentModel
             + highSchoolMape * scoreWeights.HighSchoolTotal
             + highSchoolGradeMape * scoreWeights.HighSchoolGrade;
 
-        return new MonteCarloValidationResult(parameters, comparisons, simulationInfo, gridMae, gridMape, gridLevelMae, gridLevelMape, gradeMae, gradeMape, gradeLevelMae, gradeLevelMape, highSchoolMae, highSchoolMape, highSchoolGradeMae, highSchoolGradeMape, score);
+        return new MonteCarloValidationResult(parameters, comparisons, simulationInfo, syntheticHomeDiagnostics, gridMae, gridMape, gridLevelMae, gridLevelMape, gradeMae, gradeMape, gradeLevelMae, gradeLevelMape, highSchoolMae, highSchoolMape, highSchoolGradeMae, highSchoolGradeMape, score);
     }
 
     private Dictionary<int, YearAccumulator> CreateYearAccumulators(int startYear, int endYear)
@@ -367,6 +377,44 @@ public sealed class MonteCarloEnrollmentModel
         return data.GridRows.Any(row => (ActualSeriesValueOrNull(row.Name, year, data.GridRows) ?? 0) > 0);
     }
 
+    private IReadOnlyList<MonteCarloSyntheticHomeDiagnostic> BuildSyntheticHomeDiagnostics(int baselineYear, MonteCarloParameters parameters)
+    {
+        var baselineGradeShares = BuildDistrictGradeShares(data, baselineYear);
+        var expectedStudentsPerHome = Math.Max(0.25, ExpectedStudentsPerNewHousehold(parameters));
+
+        return data.GridRows
+            .Where(grid => !IsExcludedValidationGrid(grid.Name))
+            .Select(grid =>
+            {
+                var adjustedBaselineStudents = AllocateGradesForGrid(
+                        grid.Name,
+                        ActualGridValue(grid.Name, baselineYear),
+                        baselineGradeShares)
+                    .Values
+                    .Sum();
+                var listedHomes = data.HomeRows
+                    .Where(row => row.Neighborhood.Equals(grid.Name, StringComparison.OrdinalIgnoreCase))
+                    .Sum(row => row.HomesByYear
+                        .Where(kvp => kvp.Key <= baselineYear)
+                        .Sum(kvp => kvp.Value));
+                var syntheticHomes = listedHomes <= 0 && adjustedBaselineStudents > 0
+                    ? Math.Ceiling(adjustedBaselineStudents / expectedStudentsPerHome)
+                    : 0;
+
+                return new MonteCarloSyntheticHomeDiagnostic(
+                    grid.Name,
+                    baselineYear,
+                    adjustedBaselineStudents,
+                    listedHomes,
+                    expectedStudentsPerHome,
+                    syntheticHomes);
+            })
+            .Where(row => row.SyntheticHomes > 0)
+            .OrderByDescending(row => row.SyntheticHomes)
+            .ThenBy(row => row.Grid, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     public MonteCarloSearchResult FindBest(MonteCarloSearchRequest request)
     {
         var candidates = new List<MonteCarloValidationResult>();
@@ -383,7 +431,7 @@ public sealed class MonteCarloEnrollmentModel
         foreach (var one in request.MoveInOneChildShares.DefaultIfEmpty(0.30))
         foreach (var two in request.MoveInTwoChildShares.DefaultIfEmpty(0.60))
         foreach (var three in request.MoveInThreeChildShares.DefaultIfEmpty(0.05))
-        foreach (var fourPlus in request.MoveInFourPlusChildShares.DefaultIfEmpty(0.0))
+        foreach (var fourChild in request.MoveInFourChildShares.DefaultIfEmpty(0.0))
         foreach (var exit in exitCandidates)
         {
             var parameters = baseParameters with
@@ -395,7 +443,7 @@ public sealed class MonteCarloEnrollmentModel
                 MoveInOneChildShare = one,
                 MoveInTwoChildShare = two,
                 MoveInThreeChildShare = three,
-                MoveInFourPlusChildShare = fourPlus
+                MoveInFourChildShare = fourChild
             };
             if (exit is double exitProbability)
             {
@@ -1193,7 +1241,7 @@ public sealed class MonteCarloEnrollmentModel
             MoveInOneChildShare = childShares.One,
             MoveInTwoChildShare = childShares.Two,
             MoveInThreeChildShare = childShares.Three,
-            MoveInFourPlusChildShare = childShares.FourPlus,
+            MoveInFourChildShare = childShares.Four,
             StudentExitProbability = ClampProbability(parameters.StudentExitProbability),
             MoveInTkKWeight = Math.Max(0, parameters.MoveInTkKWeight),
             MoveInElementaryWeight = Math.Max(0, parameters.MoveInElementaryWeight),
@@ -1353,7 +1401,7 @@ public sealed class MonteCarloEnrollmentModel
             childShares.One +
             childShares.Two * 2 +
             childShares.Three * 3 +
-            childShares.FourPlus * 4;
+            childShares.Four * 4;
         return expectedChildren * studentShare;
     }
 
@@ -1377,24 +1425,24 @@ public sealed class MonteCarloEnrollmentModel
         return 4;
     }
 
-    private static (double Zero, double One, double Two, double Three, double FourPlus) NormalizeMoveInChildShares(MonteCarloParameters parameters, string? density = null)
+    private static (double Zero, double One, double Two, double Three, double Four) NormalizeMoveInChildShares(MonteCarloParameters parameters, string? density = null)
     {
         var densityFactors = DensityMoveInChildFactors(density, parameters);
         var zero = Math.Max(0, parameters.MoveInZeroChildShare);
         var one = Math.Max(0, parameters.MoveInOneChildShare) * densityFactors.One;
         var two = Math.Max(0, parameters.MoveInTwoChildShare) * densityFactors.Two;
         var three = Math.Max(0, parameters.MoveInThreeChildShare) * densityFactors.Three;
-        var fourPlus = Math.Max(0, parameters.MoveInFourPlusChildShare) * densityFactors.FourPlus;
-        var total = zero + one + two + three + fourPlus;
+        var four = Math.Max(0, parameters.MoveInFourChildShare) * densityFactors.Four;
+        var total = zero + one + two + three + four;
         if (total <= 0)
         {
             return (0.05, 0.30, 0.60, 0.05, 0.0);
         }
 
-        return (zero / total, one / total, two / total, three / total, fourPlus / total);
+        return (zero / total, one / total, two / total, three / total, four / total);
     }
 
-    private static (double One, double Two, double Three, double FourPlus) DensityMoveInChildFactors(string? density, MonteCarloParameters parameters)
+    private static (double One, double Two, double Three, double Four) DensityMoveInChildFactors(string? density, MonteCarloParameters parameters)
     {
         var densityName = NormalizeDensity(density);
         var profile = densityName switch

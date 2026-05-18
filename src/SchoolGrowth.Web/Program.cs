@@ -24,8 +24,19 @@ var dataRoot = ResolveDataRoot(app.Environment.ContentRootPath);
 var store = EnrollmentData.Load(dataRoot);
 var model = EnrollmentModel.Calibrate(store);
 var monteCarloModel = new MonteCarloEnrollmentModel(store);
+var enableCrossOriginIsolationHeaders = builder.Configuration.GetValue("SchoolGrowth:EnableCrossOriginIsolationHeaders", true);
 
 app.UseCors("LocalBlazor");
+if (enableCrossOriginIsolationHeaders)
+{
+    app.Use(async (context, next) =>
+    {
+        context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
+        context.Response.Headers["Cross-Origin-Embedder-Policy"] = "require-corp";
+        context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
+        await next();
+    });
+}
 app.UseBlazorFrameworkFiles();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -51,20 +62,20 @@ app.MapPost("/api/simulate", (SimulationRequest request) =>
     return Results.Ok(result);
 });
 
-app.MapGet("/api/monte-carlo/status", () => Results.Ok(new
+app.MapGet("/api/simulation/status", () => Results.Ok(new
 {
     available = true,
     mode = "server",
     maxDegreeOfParallelism = Environment.ProcessorCount
 }));
 
-app.MapPost("/api/monte-carlo/validate", (MonteCarloValidationRequest request) =>
+app.MapPost("/api/simulation/validate", (MonteCarloValidationRequest request) =>
 {
     var result = monteCarloModel.Validate(request);
     return Results.Ok(result);
 });
 
-app.MapPost("/api/monte-carlo/search", (MonteCarloSearchRequest request) =>
+app.MapPost("/api/simulation/search", (MonteCarloSearchRequest request) =>
 {
     var result = monteCarloModel.FindBest(request);
     return Results.Ok(result);

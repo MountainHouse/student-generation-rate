@@ -1,17 +1,19 @@
-@page "/monte-carlo"
+@page "/simulation"
+@page "/"
 @inject HttpClient Http
 @inject IJSRuntime Js
+@inject NavigationManager Navigation
 
-<PageTitle>Monte Carlo Model</PageTitle>
+<PageTitle>Household Simulation</PageTitle>
 
 <header class="topbar">
     <div>
-        <h1>Monte Carlo Model</h1>
+        <h1>Household Simulation</h1>
         <p>Validate a household-style simulation against grid and grade reference data.</p>
     </div>
     <div class="top-actions">
-        <a class="nav-button secondary" href="">Simulator</a>
-        <a class="nav-button secondary" href="validation">Model Validation</a>
+        <a class="nav-button secondary" href="projection">Deterministic Projection</a>
+        <a class="nav-button secondary" href="projection-validation">Projection Validation</a>
     </div>
 </header>
 
@@ -23,7 +25,7 @@
 }
 else if (Data is null)
 {
-    <section class="band">Loading Monte Carlo model...</section>
+    <section class="band">Loading household simulation model...</section>
 }
 else
 {
@@ -89,7 +91,7 @@ else
             <label>
                 <span>Execution</span>
                 <select @bind="ExecutionMode" @bind:after="RunValidationAsync">
-                    <option value="Auto">Auto server preferred</option>
+                    <option value="Auto">Auto</option>
                     <option value="Server">Server API</option>
                     <option value="Browser">Browser only</option>
                 </select>
@@ -150,7 +152,7 @@ else
             </label>
             <label>
                 <span>4 child share</span>
-                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInFourPlusChildShare" @oninput="value => MoveInFourPlusChildShare = ParseInputDouble(value, MoveInFourPlusChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[4])</output></span>
+                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInFourChildShare" @oninput="value => MoveInFourChildShare = ParseInputDouble(value, MoveInFourChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[4])</output></span>
             </label>
         </div>
         </details>
@@ -363,7 +365,7 @@ else
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <div class="charts">
         <div class="chart-box">
-            <h2>Actual vs Monte Carlo Grid Total</h2>
+            <h2>Actual vs Simulation Grid Total</h2>
             <svg viewBox="0 0 920 300" role="img" @onmouseleave="() => TotalChartHoverIndex = null">
                 @foreach (var tick in YTicks)
                 {
@@ -404,7 +406,7 @@ else
             </svg>
             <div class="inline-legend">
                 <span><i style="background:#0f766e"></i>Actual</span>
-                <span><i style="background:#b45309"></i>Monte Carlo mean</span>
+                <span><i style="background:#b45309"></i>Simulation mean</span>
             </div>
         </div>
         <div class="chart-box">
@@ -432,6 +434,8 @@ else
                 <dd>@Result.HighSchoolGradeMeanAbsolutePercentageError.ToString("P1")</dd>
                 <dt>Combined score</dt>
                 <dd>@Result.CombinedScore.ToString("P2")</dd>
+                <dt>Synthetic baseline homes</dt>
+                <dd>@Result.SyntheticHomeDiagnostics.Sum(row => row.SyntheticHomes).ToString("N0")</dd>
             </dl>
         </div>
     </div>
@@ -549,6 +553,48 @@ else
     </ToolPanel>
     }
 
+    @if (IsToolActive(ToolDataGaps))
+    {
+    <ToolPanel Id="@ToolDataGaps" Title="Data Gaps" Style="@ToolStyle(ToolDataGaps)"
+               Collapsed="@IsToolCollapsed(ToolDataGaps)" CanMoveUp="@CanMoveToolUp(ToolDataGaps)" CanMoveDown="@CanMoveToolDown(ToolDataGaps)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        @if (Result!.SyntheticHomeDiagnostics.Count == 0)
+        {
+            <p>No baseline grids needed synthetic played-back homes.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Grid</th>
+                            <th>Baseline year</th>
+                            <th>Adjusted baseline students</th>
+                            <th>Listed homes through baseline</th>
+                            <th>Expected students / home</th>
+                            <th>Synthetic homes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Result.SyntheticHomeDiagnostics)
+                        {
+                            <tr>
+                                <td>@row.Grid</td>
+                                <td>@row.BaselineYear</td>
+                                <td>@row.AdjustedBaselineStudents.ToString("N0")</td>
+                                <td>@row.ListedHomesThroughBaseline.ToString("N0")</td>
+                                <td>@row.ExpectedStudentsPerHome.ToString("0.00")</td>
+                                <td>@row.SyntheticHomes.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ToolPanel>
+    }
+
     @if (IsToolActive(ToolTableDetails))
     {
     <ToolPanel Id="@ToolTableDetails" Title="Table Details" Style="@ToolStyle(ToolTableDetails)"
@@ -577,10 +623,10 @@ else
 
     @if (IsToolActive(ToolCohorts))
     {
-    <ToolPanel Id="@ToolCohorts" Title="Monte Carlo Progressing Cohorts" Style="@ToolStyle(ToolCohorts)"
+    <ToolPanel Id="@ToolCohorts" Title="Simulation Progressing Cohorts" Style="@ToolStyle(ToolCohorts)"
                Collapsed="@IsToolCollapsed(ToolCohorts)" CanMoveUp="@CanMoveToolUp(ToolCohorts)" CanMoveDown="@CanMoveToolDown(ToolCohorts)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <CohortProgressTable Title="Monte Carlo Progressing Cohorts" Cohorts="MonteCarloProgressingCohorts" Projection="MonteCarloModeledProjection"
+    <CohortProgressTable Title="Simulation Progressing Cohorts" Cohorts="MonteCarloProgressingCohorts" Projection="MonteCarloModeledProjection"
                          ReferenceProjection="MonteCarloReferenceProjection"
                          ProgressionGrades="VisibleCohortGrades"
                          ShowIncreaseFromStart="ShowIncreaseFromStart"
@@ -591,10 +637,10 @@ else
     }
     @if (IsToolActive(ToolGrades))
     {
-    <ToolPanel Id="@ToolGrades" Title="Monte Carlo Grades" Style="@ToolStyle(ToolGrades)"
+    <ToolPanel Id="@ToolGrades" Title="Simulation Grades" Style="@ToolStyle(ToolGrades)"
                Collapsed="@IsToolCollapsed(ToolGrades)" CanMoveUp="@CanMoveToolUp(ToolGrades)" CanMoveDown="@CanMoveToolDown(ToolGrades)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <ProjectionTable Title="Monte Carlo Grades" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
+    <ProjectionTable Title="Simulation Grades" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GradeValue"
                      Subtotals="GradeSubtotals"
@@ -606,10 +652,10 @@ else
     }
     @if (IsToolActive(ToolGridTotals))
     {
-    <ToolPanel Id="@ToolGridTotals" Title="Monte Carlo Grid Totals" Style="@ToolStyle(ToolGridTotals)"
+    <ToolPanel Id="@ToolGridTotals" Title="Simulation Grid Totals" Style="@ToolStyle(ToolGridTotals)"
                Collapsed="@IsToolCollapsed(ToolGridTotals)" CanMoveUp="@CanMoveToolUp(ToolGridTotals)" CanMoveDown="@CanMoveToolDown(ToolGridTotals)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <ProjectionTable Title="Monte Carlo Grid Totals" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
+    <ProjectionTable Title="Simulation Grid Totals" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GridValue"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"
@@ -657,7 +703,7 @@ else
                 </label>
                 <label>
                     <span>4 child candidates</span>
-                    <input @bind="FourPlusChildCandidatesText" />
+                    <input @bind="FourChildCandidatesText" />
                 </label>
             </div>
         </div>
@@ -675,7 +721,7 @@ else
                     <dt>Turnover</dt>
                     <dd>@SearchResult.Best.Parameters.OwnershipChangeProbability.ToString("P1")</dd>
                     <dt>Move-in children</dt>
-                    <dd>@SearchResult.Best.Parameters.MoveInZeroChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInOneChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInTwoChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInThreeChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInFourPlusChildShare.ToString("P1")</dd>
+                    <dd>@SearchResult.Best.Parameters.MoveInZeroChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInOneChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInTwoChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInThreeChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInFourChildShare.ToString("P1")</dd>
                     <dt>Special ed probability</dt>
                     <dd>@SearchResult.Best.Parameters.SpecialEducationProbability.ToString("P1")</dd>
                     <dt>Births/year</dt>
@@ -860,10 +906,10 @@ else
 
     @if (IsToolActive(ToolRules))
     {
-    <ToolPanel Id="@ToolRules" Title="Monte Carlo Rules" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
+    <ToolPanel Id="@ToolRules" Title="Simulation Rules" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
                Collapsed="@IsToolCollapsed(ToolRules)" CanMoveUp="@CanMoveToolUp(ToolRules)" CanMoveDown="@CanMoveToolDown(ToolRules)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-        <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the validation window starts.</p>
+        <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the validation window starts. If a reference grid has students but no listed homes through the baseline year, the model creates synthetic played-back homes and reports them in Data Gaps.</p>
         <p><strong>Special grids:</strong> Lammersville and Inter-Districts use fair grade shares; MHESD uses grades 9-12 only.</p>
         <p><strong>Ownership change:</strong> each home has a yearly chance to replace its household, with lower early-year turnover and forced turnover by year 50.</p>
         <p><strong>Children at move-in:</strong> the model draws a household child count from explicit 0, 1, 2, 3, and 4 child shares. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
@@ -903,12 +949,12 @@ else
         "MHESD"
     };
     private static readonly MonteCarloParameters DefaultParameters = new();
-    private const int BrowserRunLimit = 100;
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
     private const string ToolModelScoring = "model-scoring";
     private const string ToolValidationSummary = "validation-summary";
     private const string ToolSimulationInfo = "simulation-info";
+    private const string ToolDataGaps = "data-gaps";
     private const string ToolTableDetails = "table-details";
     private const string ToolCohorts = "cohorts";
     private const string ToolGrades = "grades";
@@ -925,6 +971,7 @@ else
         new(ToolModelScoring, "Model Scoring"),
         new(ToolValidationSummary, "Validation Summary"),
         new(ToolSimulationInfo, "Simulation Info"),
+        new(ToolDataGaps, "Data Gaps"),
         new(ToolTableDetails, "Table Details"),
         new(ToolCohorts, "Progressing Cohorts"),
         new(ToolGrades, "Grades"),
@@ -933,12 +980,13 @@ else
         new(ToolModeledReference, "Modeled vs Reference Totals"),
         new(ToolGridDetail, "Grid Detail"),
         new(ToolGradeDetail, "Grade Detail"),
-        new(ToolRules, "Monte Carlo Rules")
+        new(ToolRules, "Simulation Rules")
     ];
     private static readonly HashSet<string> ResultToolIds =
     [
         ToolValidationSummary,
         ToolSimulationInfo,
+        ToolDataGaps,
         ToolTableDetails,
         ToolCohorts,
         ToolGrades,
@@ -977,7 +1025,7 @@ else
     private double MoveInOneChildShare { get; set; } = DefaultParameters.MoveInOneChildShare;
     private double MoveInTwoChildShare { get; set; } = DefaultParameters.MoveInTwoChildShare;
     private double MoveInThreeChildShare { get; set; } = DefaultParameters.MoveInThreeChildShare;
-    private double MoveInFourPlusChildShare { get; set; } = DefaultParameters.MoveInFourPlusChildShare;
+    private double MoveInFourChildShare { get; set; } = DefaultParameters.MoveInFourChildShare;
     private double StudentExitProbability { get; set; } = DefaultParameters.StudentExitProbability;
     private double Tk8ExitProbability { get; set; } = DefaultParameters.Tk8ExitProbability;
     private double HighSchoolExitProbability { get; set; } = DefaultParameters.HighSchoolExitProbability;
@@ -1019,7 +1067,7 @@ else
     private string OneChildCandidatesText { get; set; } = "0.25,0.30,0.35";
     private string TwoChildCandidatesText { get; set; } = "0.55,0.60,0.65";
     private string ThreeChildCandidatesText { get; set; } = "0.03,0.05,0.08";
-    private string FourPlusChildCandidatesText { get; set; } = "0,0.01";
+    private string FourChildCandidatesText { get; set; } = "0,0.01";
     private bool SearchRunning { get; set; }
     private bool ValidationRunning { get; set; }
     private bool PendingValidation { get; set; }
@@ -1036,7 +1084,7 @@ else
     private string? ServerApiStatus { get; set; }
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
-    private List<string> ActiveToolIds { get; set; } = [ToolRunEnvironment, ToolModelSettings, ToolModelScoring, ToolValidationSummary, ToolSimulationInfo];
+    private List<string> ActiveToolIds { get; set; } = [ToolRunEnvironment, ToolModelSettings, ToolModelScoring, ToolValidationSummary, ToolSimulationInfo, ToolDataGaps];
     private HashSet<string> CollapsedToolIds { get; set; } = [];
     private HashSet<string> SelectedSimulationInfoRows { get; } = new(StringComparer.OrdinalIgnoreCase);
     private string NewToolId { get; set; } = "";
@@ -1091,7 +1139,7 @@ else
         MoveInOneChildShare,
         MoveInTwoChildShare,
         MoveInThreeChildShare,
-        MoveInFourPlusChildShare);
+        MoveInFourChildShare);
     private IReadOnlyList<double> MoveInAgeNormalizers => NormalizeUiWeights(
         MoveInPreschoolWeight,
         MoveInTkKWeight,
@@ -1260,7 +1308,7 @@ else
     {
         try
         {
-            var presets = await Http.GetFromJsonAsync<IReadOnlyList<MonteCarloParameterPreset>>("data/monte-carlo-presets.json");
+            var presets = await Http.GetFromJsonAsync<IReadOnlyList<MonteCarloParameterPreset>>("data/simulation-presets.json");
             if (presets is not null && presets.Count > 0)
             {
                 ParameterPresets = presets;
@@ -1326,7 +1374,7 @@ else
         {
             PendingValidation = false;
             var executionLabel = ShouldUseServer() ? "server" : "browser";
-            StatusMessage = $"Running Monte Carlo validation on {executionLabel}: {Runs:N0} runs...";
+            StatusMessage = $"Running simulation validation on {executionLabel}: {Runs:N0} runs...";
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
 
@@ -1368,7 +1416,7 @@ else
         {
             try
             {
-                Result = await PostServerAsync<MonteCarloValidationRequest, MonteCarloValidationResult>("api/monte-carlo/validate", request);
+                Result = await PostServerAsync<MonteCarloValidationRequest, MonteCarloValidationResult>("api/simulation/validate", request);
                 ServerApiAvailable = true;
                 ServerApiStatus = $"Server API: {ServerApiBaseAddress}";
                 LastExecutionLabel = "server";
@@ -1377,19 +1425,12 @@ else
             {
                 ServerApiAvailable = false;
                 LastExecutionLabel = "none";
-                ServerApiStatus = $"Server unavailable; validation was not run in the browser automatically ({ex.Message}). Select Browser only with {BrowserRunLimit:N0} runs or fewer, or restart the server API.";
+                ServerApiStatus = $"Server unavailable; validation was not run in the browser automatically ({ex.Message}). Select Browser only, or restart the server API.";
                 return false;
             }
         }
         else
         {
-            if (Runs > BrowserRunLimit)
-            {
-                LastExecutionLabel = "none";
-                ServerApiStatus = $"Browser validation skipped: reduce runs to {BrowserRunLimit:N0} or fewer, or use the Server API.";
-                return false;
-            }
-
             Result = Model.Validate(request);
             LastExecutionLabel = "browser";
             ServerApiStatus = BrowserOnlyStatus();
@@ -1417,7 +1458,7 @@ else
     {
         if (Model is null) return;
         SearchRunning = true;
-        StatusMessage = "Searching Monte Carlo parameter candidates...";
+        StatusMessage = "Searching simulation parameter candidates...";
         await InvokeAsync(StateHasChanged);
         await Task.Yield();
 
@@ -1433,7 +1474,7 @@ else
                 ParseCandidates(OneChildCandidatesText),
                 ParseCandidates(TwoChildCandidatesText),
                 ParseCandidates(ThreeChildCandidatesText),
-                ParseCandidates(FourPlusChildCandidatesText),
+                ParseCandidates(FourChildCandidatesText),
                 Array.Empty<double>(),
                 CurrentParameters());
 
@@ -1441,26 +1482,19 @@ else
             {
                 try
                 {
-                    SearchResult = await PostServerAsync<MonteCarloSearchRequest, MonteCarloSearchResult>("api/monte-carlo/search", request);
+                    SearchResult = await PostServerAsync<MonteCarloSearchRequest, MonteCarloSearchResult>("api/simulation/search", request);
                     LastExecutionLabel = "server";
                 }
                 catch (Exception ex) when (ExecutionMode != "Server")
                 {
                     ServerApiAvailable = false;
-                    ServerApiStatus = $"Server unavailable; parameter search was not run in the browser automatically ({ex.Message}). Select Browser only with {BrowserRunLimit:N0} runs per candidate or fewer, or restart the server API.";
+                    ServerApiStatus = $"Server unavailable; parameter search was not run in the browser automatically ({ex.Message}). Select Browser only, or restart the server API.";
                     LastExecutionLabel = "none";
                     return;
                 }
             }
             else
             {
-                if (request.RunsPerCandidate > BrowserRunLimit)
-                {
-                    LastExecutionLabel = "none";
-                    StatusMessage = $"Browser search skipped: reduce runs per candidate to {BrowserRunLimit:N0} or fewer, or use the Server API.";
-                    return;
-                }
-
                 SearchResult = Model.FindBest(request);
                 LastExecutionLabel = "browser";
             }
@@ -1489,22 +1523,23 @@ else
 
     private async Task DetectServerApiAsync()
     {
-        var candidates = new[]
-        {
-            Http.BaseAddress?.ToString().TrimEnd('/'),
-            "http://localhost:5003",
-            "https://localhost:7275"
-        }
-        .Where(value => !string.IsNullOrWhiteSpace(value))
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToList();
+        var candidates = new List<string?>();
+        candidates.Add(Http.BaseAddress?.ToString().TrimEnd('/'));
 
-        foreach (var candidate in candidates)
+        if (IsLocalAppHost())
+        {
+            candidates.Add("http://localhost:5003");
+            candidates.Add("https://localhost:7275");
+        }
+
+        foreach (var candidate in candidates
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             try
             {
                 using var client = new HttpClient { BaseAddress = new Uri(candidate! + "/") };
-                using var response = await client.GetAsync("api/monte-carlo/status");
+                using var response = await client.GetAsync("api/simulation/status");
                 if (!response.IsSuccessStatusCode)
                 {
                     continue;
@@ -1522,7 +1557,7 @@ else
         }
 
         ServerApiAvailable = false;
-        ServerApiBaseAddress = candidates.FirstOrDefault() ?? "";
+        ServerApiBaseAddress = candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
         ServerApiStatus = "Server API not detected; browser-only mode is active.";
     }
 
@@ -1532,15 +1567,36 @@ else
         {
             "Server" => true,
             "Browser" => false,
-            _ => ServerApiAvailable && !string.IsNullOrWhiteSpace(ServerApiBaseAddress)
+            _ => IsLocalAppHost() && ServerApiAvailable && !string.IsNullOrWhiteSpace(ServerApiBaseAddress)
         };
+    }
+
+    private bool IsLocalAppHost()
+    {
+        if (!Uri.TryCreate(Navigation.Uri, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return uri.IsLoopback ||
+            uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
     }
 
     private string BrowserOnlyStatus()
     {
-        return ExecutionMode == "Browser"
-            ? "Browser-only mode selected."
-            : ServerApiStatus ?? "Browser-only mode is active.";
+        if (ExecutionMode == "Browser")
+        {
+            return "Browser-only mode selected.";
+        }
+
+        if (!IsLocalAppHost())
+        {
+            return "Auto selected browser mode for this deployed/static host.";
+        }
+
+        return ServerApiStatus ?? "Browser-only mode is active.";
     }
 
     private async Task<TResponse> PostServerAsync<TRequest, TResponse>(string relativeUrl, TRequest request)
@@ -1568,7 +1624,7 @@ else
         MoveInOneChildShare = parameters.MoveInOneChildShare;
         MoveInTwoChildShare = parameters.MoveInTwoChildShare;
         MoveInThreeChildShare = parameters.MoveInThreeChildShare;
-        MoveInFourPlusChildShare = parameters.MoveInFourPlusChildShare;
+        MoveInFourChildShare = parameters.MoveInFourChildShare;
         StudentExitProbability = parameters.StudentExitProbability;
         Tk8ExitProbability = parameters.Tk8ExitProbability;
         HighSchoolExitProbability = parameters.HighSchoolExitProbability;
@@ -1617,7 +1673,7 @@ else
             MoveInOneChildShare: MoveInOneChildShare,
             MoveInTwoChildShare: MoveInTwoChildShare,
             MoveInThreeChildShare: MoveInThreeChildShare,
-            MoveInFourPlusChildShare: MoveInFourPlusChildShare,
+            MoveInFourChildShare: MoveInFourChildShare,
             StudentExitProbability: StudentExitProbability,
             MoveInTkKWeight: MoveInTkKWeight,
             MoveInElementaryWeight: MoveInElementaryWeight,
@@ -2339,7 +2395,7 @@ else
         var one = Math.Max(0, MoveInOneChildShare) * DensityMoveInChildFactor(density, 1);
         var two = Math.Max(0, MoveInTwoChildShare) * DensityMoveInChildFactor(density, 2);
         var three = Math.Max(0, MoveInThreeChildShare) * DensityMoveInChildFactor(density, 3);
-        var four = Math.Max(0, MoveInFourPlusChildShare) * DensityMoveInChildFactor(density, 4);
+        var four = Math.Max(0, MoveInFourChildShare) * DensityMoveInChildFactor(density, 4);
         var total = zero + one + two + three + four;
         if (total <= 0) return 0;
 

@@ -1,5 +1,7 @@
 # Model 2.0: Deterministic Housing Cohort Model
 
+> Status: design reference only. Avoid using this document unless you are extracting a specific idea to port into Household Simulation. This model has not been implemented as the primary product direction; Household Simulation, implemented with the Monte Carlo household model, is now the main product path.
+
 Model 2.0 is a proposed deterministic replacement for the current aggregate trend model.
 
 The goal is to make the math more explainable by separating three forces:
@@ -255,4 +257,3 @@ school_proxy_ratio[grid]
 - True grid-by-grade data is unavailable.
 - Pre-existing homes must be estimated.
 - The model may need constraints to keep parameters realistic.
-

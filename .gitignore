@@ -1,5 +1,7 @@
 bin/
 obj/
+artifacts/
+monte-carlo-*.csv
 
 .server-logs
 *.log

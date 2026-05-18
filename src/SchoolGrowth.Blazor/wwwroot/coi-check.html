@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COI Check</title>
+</head>
+<body>
+    <pre id="status">checking</pre>
+    <script src="coi-serviceworker.js"></script>
+    <script>
+        setInterval(() => {
+            document.getElementById("status").textContent = JSON.stringify({
+                crossOriginIsolated: window.crossOriginIsolated,
+                hasServiceWorker: "serviceWorker" in navigator,
+                controlled: Boolean(navigator.serviceWorker?.controller)
+            }, null, 2);
+        }, 250);
+    </script>
+</body>
+</html>

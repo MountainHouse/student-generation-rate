@@ -1,14 +1,17 @@
-# School Growth Model Documentation
+# School Growth Planning Documentation
 
 This folder documents the enrollment projection model and candidate future model designs.
 
 ## Documents
 
-- [Current Model](current-model.md) describes the model implemented in the C# core library today.
-- [Model 2.0](model-2.0.md) describes a deterministic next-generation model based on housing cohorts, home age, grade progression, and tunable retention.
-- [Monte Carlo Household Model](monte-carlo-model.md) describes a future simulation model that treats each home and household as a simulated unit.
+- [Household Simulation Model](household-simulation-model.md) describes the active Household Simulation model, which treats each home and household as a simulated unit.
+- [Current Model](current-model.md) should usually be avoided; read it only when maintaining Deterministic Projection or comparing old behavior.
+- [Model 2.0](model-2.0.md) should usually be avoided; read it only when extracting a specific deterministic-model idea to port into Household Simulation.
+- [Project Rules and Assumptions](project-rules.md) collects shared domain, data, execution, and validation rules.
+- [User Interface Notes](ui.md) describes UI structure and interaction conventions.
+- [Deployment](deployment.md) describes hosted, static, AOT, and threaded WebAssembly deployment paths.
+- [Project Tasks and Follow-Ups](tasks.md) tracks known investigation and cleanup tasks.
 
 ## Model Roadmap
 
-The current implementation is useful as a fast browser-based projection and validation tool, but it mixes several real-world effects into aggregate trend factors. Model 2.0 should separate those effects so the math is easier to inspect and tune. The Monte Carlo model goes one step further by simulating household events directly and deriving enrollment from many possible futures.
-
+Household Simulation is the primary product path. Avoid expanding Deterministic Projection or Model 2.0 unless the work is specifically about maintaining old behavior or porting a useful idea into Household Simulation.

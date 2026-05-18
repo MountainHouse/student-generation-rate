@@ -83,7 +83,7 @@ static void RunSearch(MonteCarloEnrollmentModel model, CliOptions options)
             parameters.MoveInOneChildShare,
             parameters.MoveInTwoChildShare,
             parameters.MoveInThreeChildShare,
-            parameters.MoveInFourPlusChildShare,
+            parameters.MoveInFourChildShare,
             parameters.AnnualFirstNewChildProbability,
             parameters.AnnualSecondNewChildProbability,
             parameters.AnnualThirdNewChildProbability,
@@ -231,7 +231,7 @@ static void RunLifecycle(MonteCarloEnrollmentModel model, CliOptions options)
     Console.WriteLine($"  density:    {options.Density}");
     Console.WriteLine($"  turnover:   {result.Parameters.OwnershipChangeProbability:P2}");
     Console.WriteLine($"  realized:   {result.RealizedTurnoverRate:P2}");
-    Console.WriteLine($"  move-in:    0 child {result.Parameters.MoveInZeroChildShare:P2}, 1 child {result.Parameters.MoveInOneChildShare:P2}, 2 child {result.Parameters.MoveInTwoChildShare:P2}, 3 child {result.Parameters.MoveInThreeChildShare:P2}, 4 child {result.Parameters.MoveInFourPlusChildShare:P2}");
+    Console.WriteLine($"  move-in:    0 child {result.Parameters.MoveInZeroChildShare:P2}, 1 child {result.Parameters.MoveInOneChildShare:P2}, 2 child {result.Parameters.MoveInTwoChildShare:P2}, 3 child {result.Parameters.MoveInThreeChildShare:P2}, 4 child {result.Parameters.MoveInFourChildShare:P2}");
     Console.WriteLine($"  births/yr:  1st {result.Parameters.AnnualFirstNewChildProbability:P2}, 2nd {result.Parameters.AnnualSecondNewChildProbability:P2}, 3rd {result.Parameters.AnnualThirdNewChildProbability:P2}, 4th+ {result.Parameters.AnnualFourthPlusNewChildProbability:P2}");
     Console.WriteLine($"  exits:      TK-8 {result.Parameters.Tk8ExitProbability:P2}, HS {result.Parameters.HighSchoolExitProbability:P2}, SpEd {result.Parameters.SpecialExitProbability:P2}");
     Console.WriteLine($"  weights:    pre-school {result.Parameters.MoveInPreschoolWeight:0.###}, TK/K {result.Parameters.MoveInTkKWeight:0.###}, elem {result.Parameters.MoveInElementaryWeight:0.###}, middle {result.Parameters.MoveInMiddleWeight:0.###}, high {result.Parameters.MoveInHighWeight:0.###}, post-school {result.Parameters.MoveInPostSchoolWeight:0.###}");
@@ -243,7 +243,7 @@ static void RunLifecycle(MonteCarloEnrollmentModel model, CliOptions options)
     PrintFamilyLongevity("Completed family longevity", result.CompletedFamilyLongevity);
     PrintFamilyLongevity("Active-at-end family longevity", result.ActiveAtEndFamilyLongevity);
     Console.WriteLine();
-    Console.WriteLine("Years   Students/Home   TK-8/Home    HS/Home   SpEd/Home Children/Home  0 child  1 child  2 child  3 child    4 child");
+    Console.WriteLine("Years   Students/Home   TK-8/Home    HS/Home   SpEd/Home Children/Home  0 child  1 child  2 child  3 child   4+ child");
     foreach (var year in result.Years)
     {
         Console.WriteLine(
@@ -286,7 +286,7 @@ static void PrintDistribution(string label, MonteCarloChildCountDistribution dis
 {
     Console.WriteLine(label);
     Console.WriteLine(
-        "  households: {0:N0}; 0 child {1:P1}, 1 child {2:P1}, 2 child {3:P1}, 3 child {4:P1}, 4 child {5:P1}",
+        "  households: {0:N0}; 0 child {1:P1}, 1 child {2:P1}, 2 child {3:P1}, 3 child {4:P1}, 4+ child {5:P1}",
         distribution.HouseholdCount,
         distribution.HomesWithoutChildrenShare,
         distribution.HomesWithOneChildShare,
@@ -302,7 +302,7 @@ static IEnumerable<MonteCarloParameters> BuildCandidates(CliOptions options)
     foreach (var one in options.OneChildCandidates.DefaultIfEmpty(options.Parameters.MoveInOneChildShare))
     foreach (var two in options.TwoChildCandidates.DefaultIfEmpty(options.Parameters.MoveInTwoChildShare))
     foreach (var three in options.ThreeChildCandidates.DefaultIfEmpty(options.Parameters.MoveInThreeChildShare))
-    foreach (var fourPlus in options.FourPlusChildCandidates.DefaultIfEmpty(options.Parameters.MoveInFourPlusChildShare))
+    foreach (var fourChild in options.FourChildCandidates.DefaultIfEmpty(options.Parameters.MoveInFourChildShare))
     foreach (var exit in options.ExitCandidates.DefaultIfEmpty(options.Parameters.StudentExitProbability))
     foreach (var firstBirth in options.FirstBirthCandidates.DefaultIfEmpty(options.Parameters.AnnualFirstNewChildProbability))
     foreach (var secondBirth in options.SecondBirthCandidates.DefaultIfEmpty(options.Parameters.AnnualSecondNewChildProbability))
@@ -320,7 +320,7 @@ static IEnumerable<MonteCarloParameters> BuildCandidates(CliOptions options)
             MoveInOneChildShare = one,
             MoveInTwoChildShare = two,
             MoveInThreeChildShare = three,
-            MoveInFourPlusChildShare = fourPlus,
+            MoveInFourChildShare = fourChild,
             StudentExitProbability = exit,
             AnnualFirstNewChildProbability = firstBirth,
             AnnualSecondNewChildProbability = secondBirth,
@@ -377,12 +377,12 @@ static IEnumerable<OptimizeVariable> BuildOptimizeVariables(CliOptions options)
         (p, value) => p with { MoveInThreeChildShare = value });
 
     yield return new OptimizeVariable(
-        "four-plus-child",
+        "four-child",
         0.005,
         0.00,
         0.03,
-        p => p.MoveInFourPlusChildShare,
-        (p, value) => p with { MoveInFourPlusChildShare = value });
+        p => p.MoveInFourChildShare,
+        (p, value) => p with { MoveInFourChildShare = value });
 
     yield return new OptimizeVariable(
         "first-birth",
@@ -557,7 +557,7 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     Console.WriteLine($"  1 child:    {result.Parameters.MoveInOneChildShare:P2}");
     Console.WriteLine($"  2 child:    {result.Parameters.MoveInTwoChildShare:P2}");
     Console.WriteLine($"  3 child:    {result.Parameters.MoveInThreeChildShare:P2}");
-    Console.WriteLine($"  4 child:    {result.Parameters.MoveInFourPlusChildShare:P2}");
+    Console.WriteLine($"  4 child:    {result.Parameters.MoveInFourChildShare:P2}");
     Console.WriteLine($"  births/yr:  1st {result.Parameters.AnnualFirstNewChildProbability:P2}, 2nd {result.Parameters.AnnualSecondNewChildProbability:P2}, 3rd {result.Parameters.AnnualThirdNewChildProbability:P2}, 4th+ {result.Parameters.AnnualFourthPlusNewChildProbability:P2}");
     Console.WriteLine($"  TK-8 exit:  {result.Parameters.Tk8ExitProbability:P2}");
     Console.WriteLine($"  HS exit:    {result.Parameters.HighSchoolExitProbability:P2}");
@@ -660,8 +660,14 @@ static string FormatParallelism(int maxDegreeOfParallelism)
 
 static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> results)
 {
+    var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+    if (!string.IsNullOrWhiteSpace(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
     using var writer = new StreamWriter(path);
-    writer.WriteLine("score,total_mape,grid_year_mape,grade_total_mape,grade_year_mape,hs_total_mape,hs_grade_mape,total_mae,grid_year_mae,grade_total_mae,grade_year_mae,hs_total_mae,hs_grade_mae,runs,seed,parallelism,grade_smoothing_window,score_total_weight,score_grid_weight,score_grade_weight,score_hs_total_weight,score_hs_grade_weight,anchor_year_weight,year_weight_slope,year_weight_cap,density_low_medium,density_medium_high,density_high,turnover,zero_child_share,one_child_share,two_child_share,three_child_share,four_plus_child_share,student_exit,annual_first_birth,annual_second_birth,annual_third_birth,annual_fourth_plus_birth,tk8_exit,high_exit,special_exit,special_education_probability,same_school_year,preschool_weight,tkk_weight,elementary_weight,middle_weight,high_weight,postschool_weight");
+    writer.WriteLine("score,total_mape,grid_year_mape,grade_total_mape,grade_year_mape,hs_total_mape,hs_grade_mape,total_mae,grid_year_mae,grade_total_mae,grade_year_mae,hs_total_mae,hs_grade_mae,runs,seed,parallelism,grade_smoothing_window,score_total_weight,score_grid_weight,score_grade_weight,score_hs_total_weight,score_hs_grade_weight,anchor_year_weight,year_weight_slope,year_weight_cap,density_low_medium,density_medium_high,density_high,turnover,zero_child_share,one_child_share,two_child_share,three_child_share,four_child_share,student_exit,annual_first_birth,annual_second_birth,annual_third_birth,annual_fourth_plus_birth,tk8_exit,high_exit,special_exit,special_education_probability,same_school_year,preschool_weight,tkk_weight,elementary_weight,middle_weight,high_weight,postschool_weight");
     foreach (var result in results.OrderBy(item => item.CombinedScore))
     {
         var p = result.Parameters;
@@ -699,7 +705,7 @@ static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> resu
             p.MoveInOneChildShare,
             p.MoveInTwoChildShare,
             p.MoveInThreeChildShare,
-            p.MoveInFourPlusChildShare,
+            p.MoveInFourChildShare,
             p.StudentExitProbability,
             p.AnnualFirstNewChildProbability,
             p.AnnualSecondNewChildProbability,
@@ -744,7 +750,7 @@ static string ResolveDataRoot(string? provided)
 static void PrintHelp()
 {
     Console.WriteLine("""
-SchoolGrowth.Cli Monte Carlo tools
+SchoolGrowth.Cli Household Simulation tools
 
 Usage:
   dotnet run --project src/SchoolGrowth.Cli -- validate [options]
@@ -757,7 +763,7 @@ Common options:
   --start <year>      Validation start year, default 2020
   --end <year>        Validation end year, default 2024
   --runs <n>          Runs for validate, default 1000
-  --parallelism <n>   Worker threads for Monte Carlo validation runs, default CPU count
+  --parallelism <n>   Worker threads for simulation validation runs, default CPU count
   --grade-window <n>  Cohort smoothing years for grade/year validation, 0-2, default 2
   --score-total <n>   Score weight for district total MAPE, default 1.00
   --score-grid <n>    Score weight for grid/year MAPE, default 6.00
@@ -785,7 +791,7 @@ Common options:
   --one-child <p>     Move-in share with 1 child, default 0.2390
   --two-child <p>     Move-in share with 2 children, default 0.6150
   --three-child <p>   Move-in share with 3 children, default 0.0350
-  --four-plus-child <p> Move-in share with 4 children, default 0.00
+  --four-child <p> Move-in share with 4 children, default 0.00
   --exit <p>          Student exit probability, default 0.00
   --first-birth <p>   Yearly probability of a household's 1st new child, default 0.045
   --second-birth <p>  Yearly probability of a household's 2nd new child, default 0.033
@@ -817,7 +823,7 @@ Search options:
   --one-children <csv> Candidate move-in shares with 1 child
   --two-children <csv> Candidate move-in shares with 2 children
   --three-children <csv> Candidate move-in shares with 3 children
-  --four-plus-children <csv> Candidate move-in shares with 4 children
+  --four-children <csv> Candidate move-in shares with 4 children
   --exits <csv>       Candidate exit probabilities
   --first-births <csv> Candidate yearly 1st new-child probabilities
   --second-births <csv> Candidate yearly 2nd new-child probabilities
@@ -853,7 +859,7 @@ sealed class CliOptions
     public IReadOnlyList<double> OneChildCandidates { get; init; } = [];
     public IReadOnlyList<double> TwoChildCandidates { get; init; } = [];
     public IReadOnlyList<double> ThreeChildCandidates { get; init; } = [];
-    public IReadOnlyList<double> FourPlusChildCandidates { get; init; } = [];
+    public IReadOnlyList<double> FourChildCandidates { get; init; } = [];
     public IReadOnlyList<double> ExitCandidates { get; init; } = [];
     public IReadOnlyList<double> FirstBirthCandidates { get; init; } = [];
     public IReadOnlyList<double> SecondBirthCandidates { get; init; } = [];
@@ -902,7 +908,7 @@ sealed class CliOptions
                 ReadDouble(values, "one-child", ReadDouble(values, "first", 0.2390)),
                 ReadDouble(values, "two-child", ReadDouble(values, "second", 0.6150)),
                 ReadDouble(values, "three-child", ReadDouble(values, "third", 0.0350)),
-                ReadDouble(values, "four-plus-child", 0.0),
+                ReadDouble(values, "four-child", 0.0),
                 ReadDouble(values, "exit", 0.0),
                 ReadDouble(values, "tkk-weight", 0.232),
                 ReadDouble(values, "elem-weight", 0.58),
@@ -946,7 +952,7 @@ sealed class CliOptions
             OneChildCandidates = ReadDoubles(values, "one-children", "firsts"),
             TwoChildCandidates = ReadDoubles(values, "two-children", "seconds"),
             ThreeChildCandidates = ReadDoubles(values, "three-children", "thirds"),
-            FourPlusChildCandidates = ReadDoubles(values, "four-plus-children"),
+            FourChildCandidates = ReadDoubles(values, "four-children"),
             ExitCandidates = ReadDoubles(values, "exits"),
             FirstBirthCandidates = ReadDoubles(values, "first-births"),
             SecondBirthCandidates = ReadDoubles(values, "second-births"),
