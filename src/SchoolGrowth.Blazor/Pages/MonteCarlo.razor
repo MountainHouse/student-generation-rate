@@ -1,5 +1,6 @@
 @page "/monte-carlo"
 @inject HttpClient Http
+@inject IJSRuntime Js
 
 <PageTitle>Monte Carlo Model</PageTitle>
 
@@ -33,146 +34,157 @@ else
         </section>
     }
 
-    <section class="band parameter-group">
-        <h2>Validation Run</h2>
-        <div class="controls monte-controls">
-        <label>
-            <span>Start year</span>
-            <input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="StartYear" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>End year</span>
-            <input type="number" min="@StartYear" max="@MaxSimulationEndYear" @bind="EndYear" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Runs</span>
-            <input type="number" min="10" max="10000" step="10" @bind="Runs" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Seed</span>
-            <input type="number" @bind="Seed" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Execution</span>
-            <select @bind="ExecutionMode" @bind:after="RunValidationAsync">
-                <option value="Auto">Auto server preferred</option>
-                <option value="Server">Server API</option>
-                <option value="Browser">Browser only</option>
-            </select>
-        </label>
-        <label>
-            <span>Server API</span>
-            <input @bind="ServerApiBaseAddress" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Grade smoothing window</span>
-            <input type="number" min="0" max="4" step="1" @bind="GradeSmoothingWindow" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Total score weight</span>
-            <input type="number" min="0" step="0.1" @bind="ScoreTotalWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Grid score weight</span>
-            <input type="number" min="0" step="0.1" @bind="ScoreGridWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Grade score weight</span>
-            <input type="number" min="0" step="0.1" @bind="ScoreGradeWeight" @bind:after="RunValidationAsync" />
-        </label>
+    <section class="band tool-menu">
+        <div class="section-head">
+            <h2>Tools</h2>
+            <div class="tool-create">
+                <select @bind="NewToolId" disabled="@(!InactiveTools.Any())">
+                    <option value="">@(InactiveTools.Any() ? "Select tool" : "All tools visible")</option>
+                    @foreach (var tool in InactiveTools)
+                    {
+                        <option value="@tool.Id">@tool.Title</option>
+                    }
+                </select>
+                <button type="button" class="secondary" disabled="@(!InactiveTools.Any())" @onclick="AddSelectedTool">Add Tool</button>
+            </div>
+        </div>
+        <div class="tool-strip">
+            @foreach (var tool in ActiveTools)
+            {
+                <button type="button" class="secondary tool-chip" @onclick="() => ToggleTool(tool.Id)">
+                    @(IsToolCollapsed(tool.Id) ? "+" : "-") @tool.Title
+                </button>
+            }
         </div>
     </section>
 
-    <section class="band parameter-group">
-        <h2>Household Turnover and Exit</h2>
+    <div class="tool-board">
+    @if (IsToolActive(ToolRunEnvironment))
+    {
+    <ToolPanel Id="@ToolRunEnvironment" Title="Run Environment" Style="@ToolStyle(ToolRunEnvironment)"
+               Collapsed="@IsToolCollapsed(ToolRunEnvironment)" CanMoveUp="@CanMoveToolUp(ToolRunEnvironment)" CanMoveDown="@CanMoveToolDown(ToolRunEnvironment)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="controls monte-controls">
-        <label>
-            <span>Ownership change</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="OwnershipChangeProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>0 child share</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="MoveInZeroChildShare" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>1 child share</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="MoveInOneChildShare" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>2 child share</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="MoveInTwoChildShare" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>3 child share</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="MoveInThreeChildShare" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>4+ child share</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="MoveInFourPlusChildShare" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Student exit</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="StudentExitProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>TK-8 exit</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="Tk8ExitProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>High school exit</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="HighSchoolExitProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Special ed exit</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="SpecialExitProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Special ed probability</span>
-            <input type="number" min="0" max="1" step="0.001" @bind="SpecialEducationProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Same school year</span>
-            <input type="number" min="0" max="1" step="0.005" @bind="SameSchoolYearProbability" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Max parallelism</span>
-            <input type="number" min="0" step="1" @bind="MaxDegreeOfParallelism" @bind:after="RunValidationAsync" />
-        </label>
+            <label>
+                <span>Parameter preset</span>
+                <select value="@SelectedPresetName" @onchange="LoadPresetAsync">
+                    @foreach (var preset in ParameterPresets)
+                    {
+                        <option value="@preset.Name">@preset.Name</option>
+                    }
+                </select>
+            </label>
+            @if (SelectedPreset is not null)
+            {
+                <div class="preset-note">@SelectedPreset.Description</div>
+            }
+            <label>
+                <span>Runs</span>
+                <input type="number" min="10" max="10000" step="10" @bind="Runs" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Seed</span>
+                <input type="number" @bind="Seed" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Execution</span>
+                <select @bind="ExecutionMode" @bind:after="RunValidationAsync">
+                    <option value="Auto">Auto server preferred</option>
+                    <option value="Server">Server API</option>
+                    <option value="Browser">Browser only</option>
+                </select>
+            </label>
+            <label>
+                <span>Server API</span>
+                <input @bind="ServerApiBaseAddress" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Max parallelism</span>
+                <input type="number" min="0" step="1" @bind="MaxDegreeOfParallelism" @bind:after="RunValidationAsync" />
+            </label>
         </div>
-    </section>
+    </ToolPanel>
+    }
 
-    <section class="band parameter-group">
-        <h2>Move-In Age Weights</h2>
+    @if (IsToolActive(ToolModelSettings))
+    {
+    <ToolPanel Id="@ToolModelSettings" Title="Model Settings" Style="@ToolStyle(ToolModelSettings)"
+               Collapsed="@IsToolCollapsed(ToolModelSettings)" CanMoveUp="@CanMoveToolUp(ToolModelSettings)" CanMoveDown="@CanMoveToolDown(ToolModelSettings)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <div class="settings-stack">
+        <details class="settings-subpanel" open>
+        <summary>Planning Window</summary>
         <div class="controls monte-controls">
-        <label>
-            <span>Preschool weight</span>
-            <input type="number" min="0" step="0.01" @bind="MoveInPreschoolWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>TK/K weight</span>
-            <input type="number" min="0" step="0.01" @bind="MoveInTkKWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Elementary weight</span>
-            <input type="number" min="0" step="0.01" @bind="MoveInElementaryWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Middle weight</span>
-            <input type="number" min="0" step="0.01" @bind="MoveInMiddleWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>High weight</span>
-            <input type="number" min="0" step="0.01" @bind="MoveInHighWeight" @bind:after="RunValidationAsync" />
-        </label>
-        <label>
-            <span>Post-school weight</span>
-            <input type="number" min="0" step="0.01" @bind="MoveInPostSchoolWeight" @bind:after="RunValidationAsync" />
-        </label>
+            <label>
+                <span>Start year</span>
+                <input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="StartYear" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>End year</span>
+                <input type="number" min="@StartYear" max="@MaxSimulationEndYear" @bind="EndYear" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Ownership change</span>
+                <input type="number" min="0" max="1" step="0.005" @bind="OwnershipChangeProbability" @bind:after="RunValidationAsync" />
+            </label>
         </div>
-    </section>
-
-    <section class="band parameter-group">
-        <h2>Birth/New Child Rates</h2>
+        </details>
+        <details class="settings-subpanel" open>
+        <summary>Move-In Kids Count</summary>
+        <div class="normalized-inputs">
+            <label>
+                <span>0 child share</span>
+                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInZeroChildShare" @oninput="value => MoveInZeroChildShare = ParseInputDouble(value, MoveInZeroChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[0])</output></span>
+            </label>
+            <label>
+                <span>1 child share</span>
+                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInOneChildShare" @oninput="value => MoveInOneChildShare = ParseInputDouble(value, MoveInOneChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[1])</output></span>
+            </label>
+            <label>
+                <span>2 child share</span>
+                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInTwoChildShare" @oninput="value => MoveInTwoChildShare = ParseInputDouble(value, MoveInTwoChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[2])</output></span>
+            </label>
+            <label>
+                <span>3 child share</span>
+                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInThreeChildShare" @oninput="value => MoveInThreeChildShare = ParseInputDouble(value, MoveInThreeChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[3])</output></span>
+            </label>
+            <label>
+                <span>4 child share</span>
+                <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInFourPlusChildShare" @oninput="value => MoveInFourPlusChildShare = ParseInputDouble(value, MoveInFourPlusChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[4])</output></span>
+            </label>
+        </div>
+        </details>
+        <details class="settings-subpanel" open>
+        <summary>Move-In Kids Age</summary>
+        <div class="normalized-inputs">
+            <label>
+                <span>Preschool weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInPreschoolWeight" @oninput="value => MoveInPreschoolWeight = ParseInputDouble(value, MoveInPreschoolWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[0])</output></span>
+            </label>
+            <label>
+                <span>TK/K weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInTkKWeight" @oninput="value => MoveInTkKWeight = ParseInputDouble(value, MoveInTkKWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[1])</output></span>
+            </label>
+            <label>
+                <span>Elementary weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInElementaryWeight" @oninput="value => MoveInElementaryWeight = ParseInputDouble(value, MoveInElementaryWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[2])</output></span>
+            </label>
+            <label>
+                <span>Middle weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInMiddleWeight" @oninput="value => MoveInMiddleWeight = ParseInputDouble(value, MoveInMiddleWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[3])</output></span>
+            </label>
+            <label>
+                <span>High weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInHighWeight" @oninput="value => MoveInHighWeight = ParseInputDouble(value, MoveInHighWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[4])</output></span>
+            </label>
+            <label>
+                <span>Post-school weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInPostSchoolWeight" @oninput="value => MoveInPostSchoolWeight = ParseInputDouble(value, MoveInPostSchoolWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[5])</output></span>
+            </label>
+        </div>
+        </details>
+        <details class="settings-subpanel" open>
+        <summary>Birth/New Child Rates</summary>
         <div class="controls monte-controls">
         <label>
             <span>1st birth / year</span>
@@ -191,22 +203,21 @@ else
             <input type="number" min="0" max="1" step="0.001" @bind="AnnualFourthPlusNewChildProbability" @bind:after="RunValidationAsync" />
         </label>
         </div>
-    </section>
-
-    <section class="band parameter-group">
-        <h2>Density Factors</h2>
+        </details>
+        <details class="settings-subpanel settings-subpanel-wide" open>
+        <summary>Density Factors</summary>
         <div class="controls monte-controls">
         <label>
             <span>Low/medium factor</span>
-            <input type="number" min="0" step="0.01" @bind="DensityLowMediumFactor" @bind:after="RunValidationAsync" />
+            <input type="number" min="0" step="0.01" value="@DensityLowMediumFactor" @oninput="value => DensityLowMediumFactor = ParseInputDouble(value, DensityLowMediumFactor)" @onchange="RunValidationAsync" />
         </label>
         <label>
             <span>Medium-high factor</span>
-            <input type="number" min="0" step="0.01" @bind="DensityMediumHighFactor" @bind:after="RunValidationAsync" />
+            <input type="number" min="0" step="0.01" value="@DensityMediumHighFactor" @oninput="value => DensityMediumHighFactor = ParseInputDouble(value, DensityMediumHighFactor)" @onchange="RunValidationAsync" />
         </label>
         <label>
             <span>High factor</span>
-            <input type="number" min="0" step="0.01" @bind="DensityHighFactor" @bind:after="RunValidationAsync" />
+            <input type="number" min="0" step="0.01" value="@DensityHighFactor" @oninput="value => DensityHighFactor = ParseInputDouble(value, DensityHighFactor)" @onchange="RunValidationAsync" />
         </label>
         </div>
         <div class="density-factor-table">
@@ -214,42 +225,143 @@ else
                 <thead>
                     <tr>
                         <th>Density</th>
+                        <th>0 child</th>
                         <th>1st child</th>
                         <th>2nd child</th>
                         <th>3rd child</th>
+                        <th>4th child</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>Low/Medium</td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityLowMediumFirstChildFactor" @bind:after="RunValidationAsync" /></td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityLowMediumSecondChildFactor" @bind:after="RunValidationAsync" /></td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityLowMediumThirdChildFactor" @bind:after="RunValidationAsync" /></td>
-                    </tr>
-                    <tr>
-                        <td>Medium-High</td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityMediumHighFirstChildFactor" @bind:after="RunValidationAsync" /></td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityMediumHighSecondChildFactor" @bind:after="RunValidationAsync" /></td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityMediumHighThirdChildFactor" @bind:after="RunValidationAsync" /></td>
-                    </tr>
-                    <tr>
-                        <td>High</td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityHighFirstChildFactor" @bind:after="RunValidationAsync" /></td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityHighSecondChildFactor" @bind:after="RunValidationAsync" /></td>
-                        <td><input type="number" min="0" step="0.01" @bind="DensityHighThirdChildFactor" @bind:after="RunValidationAsync" /></td>
-                    </tr>
+                    @foreach (var row in DensityEffectRows)
+                    {
+                        <tr>
+                            <td>@row.Label</td>
+                            @foreach (var child in row.Children)
+                            {
+                                <td>
+                                    @if (child.ChildNumber == 0)
+                                    {
+                                    }
+                                    else if (child.ChildNumber == 1)
+                                    {
+                                        <input type="number" min="0" step="0.01" value="@row.FirstFactor.Value" @oninput="value => row.FirstFactor.Value = ParseInputDouble(value, row.FirstFactor.Value)" @onchange="RunValidationAsync" />
+                                    }
+                                    else if (child.ChildNumber == 2)
+                                    {
+                                        <input type="number" min="0" step="0.01" value="@row.SecondFactor.Value" @oninput="value => row.SecondFactor.Value = ParseInputDouble(value, row.SecondFactor.Value)" @onchange="RunValidationAsync" />
+                                    }
+                                    else if (child.ChildNumber == 3)
+                                    {
+                                        <input type="number" min="0" step="0.01" value="@row.ThirdFactor.Value" @oninput="value => row.ThirdFactor.Value = ParseInputDouble(value, row.ThirdFactor.Value)" @onchange="RunValidationAsync" />
+                                    }
+                                    else
+                                    {
+                                    }
+                                    <div class="density-effective">
+                                        <span>Move-in @FormatNormalized(child.MoveInShare)</span>
+                                        <span>Birth @FormatPoint(child.BirthProbability)</span>
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
                 </tbody>
             </table>
         </div>
-    </section>
+        </details>
+        <details class="settings-subpanel" open>
+        <summary>Exit Probabilities</summary>
+        <div class="controls monte-controls">
+            <label>
+                <span>TK-8 exit</span>
+                <input type="number" min="0" max="1" step="0.005" @bind="Tk8ExitProbability" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>High school exit</span>
+                <input type="number" min="0" max="1" step="0.005" @bind="HighSchoolExitProbability" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Special ed exit</span>
+                <input type="number" min="0" max="1" step="0.005" @bind="SpecialExitProbability" @bind:after="RunValidationAsync" />
+            </label>
+        </div>
+        </details>
+        <details class="settings-subpanel" open>
+        <summary>Other Settings</summary>
+        <div class="controls monte-controls">
+            <label>
+                <span>Special ed probability</span>
+                <input type="number" min="0" max="1" step="0.001" @bind="SpecialEducationProbability" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Same school year</span>
+                <input type="number" min="0" max="1" step="0.005" @bind="SameSchoolYearProbability" @bind:after="RunValidationAsync" />
+            </label>
+        </div>
+        </details>
+        </div>
+    </ToolPanel>
+    }
 
-    @if (Result is null)
+    @if (IsToolActive(ToolModelScoring))
+    {
+    <ToolPanel Id="@ToolModelScoring" Title="Model Scoring" Style="@ToolStyle(ToolModelScoring)"
+               Collapsed="@IsToolCollapsed(ToolModelScoring)" CanMoveUp="@CanMoveToolUp(ToolModelScoring)" CanMoveDown="@CanMoveToolDown(ToolModelScoring)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <div class="controls monte-controls">
+            <label>
+                <span>Total score weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreTotalWeight" @oninput="value => ScoreTotalWeight = ParseInputDouble(value, ScoreTotalWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[0])</output></span>
+            </label>
+            <label>
+                <span>Grid score weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreGridWeight" @oninput="value => ScoreGridWeight = ParseInputDouble(value, ScoreGridWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[1])</output></span>
+            </label>
+            <label>
+                <span>Grade score weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreGradeWeight" @oninput="value => ScoreGradeWeight = ParseInputDouble(value, ScoreGradeWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[2])</output></span>
+            </label>
+            <label>
+                <span>Grade smoothing window</span>
+                <input type="number" min="0" max="4" step="1" @bind="GradeSmoothingWindow" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>HS total score weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreHighSchoolTotalWeight" @oninput="value => ScoreHighSchoolTotalWeight = ParseInputDouble(value, ScoreHighSchoolTotalWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[3])</output></span>
+            </label>
+            <label>
+                <span>HS grade score weight</span>
+                <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreHighSchoolGradeWeight" @oninput="value => ScoreHighSchoolGradeWeight = ParseInputDouble(value, ScoreHighSchoolGradeWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[4])</output></span>
+            </label>
+            <label>
+                <span>Year weight slope</span>
+                <input type="number" min="0" step="0.05" @bind="YearWeightSlope" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Year weight cap</span>
+                <input type="number" min="0.01" step="0.1" @bind="YearWeightCap" @bind:after="RunValidationAsync" />
+            </label>
+            <label>
+                <span>Anchor year weight</span>
+                <input type="number" min="0" step="0.05" @bind="AnchorYearWeight" @bind:after="RunValidationAsync" />
+            </label>
+        </div>
+    </ToolPanel>
+    }
+
+    @if (Result is null && ActiveTools.Any(tool => ResultToolIds.Contains(tool.Id)))
     {
         <section class="band">Choose parameters or wait for the first validation run.</section>
     }
     else
     {
-    <section class="band charts">
+    @if (IsToolActive(ToolValidationSummary))
+    {
+    <ToolPanel Id="@ToolValidationSummary" Title="Validation Summary" CssClass="band tool-panel charts-tool" Style="@ToolStyle(ToolValidationSummary)"
+               Collapsed="@IsToolCollapsed(ToolValidationSummary)" CanMoveUp="@CanMoveToolUp(ToolValidationSummary)" CanMoveDown="@CanMoveToolDown(ToolValidationSummary)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+    <div class="charts">
         <div class="chart-box">
             <h2>Actual vs Monte Carlo Grid Total</h2>
             <svg viewBox="0 0 920 300" role="img" @onmouseleave="() => TotalChartHoverIndex = null">
@@ -271,7 +383,7 @@ else
                 {
                     <line x1="@TotalHoverX" y1="40" x2="@TotalHoverX" y2="260" class="chart-hover-line" />
                     <rect x="@TotalHoverYearLabelX" y="44" width="58" height="20" rx="4" class="chart-hover-label-bg" />
-                    <SvgText X="@(TotalHoverYearLabelX + 29)" Y="58" Anchor="middle" Label="@Result.Comparisons[TotalChartHoverIndex.Value].Year.ToString()" />
+                    <SvgText X="@(TotalHoverYearLabelX + 29)" Y="58" Anchor="middle" Label="@Result!.Comparisons[TotalChartHoverIndex.Value].Year.ToString()" />
                     @foreach (var marker in TotalHoverMarkers)
                     {
                         <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
@@ -299,7 +411,7 @@ else
             <h2>Validation Error</h2>
             <dl>
                 <dt>Total MAE</dt>
-                <dd>@Result.GridMeanAbsoluteError.ToString("N0")</dd>
+                <dd>@Result!.GridMeanAbsoluteError.ToString("N0")</dd>
                 <dt>Total MAPE</dt>
                 <dd>@Result.GridMeanAbsolutePercentageError.ToString("P1")</dd>
                 <dt>Grid/year MAE</dt>
@@ -314,14 +426,24 @@ else
                 <dd>@Result.GradeLevelMeanAbsoluteError.ToString("N1")</dd>
                 <dt>Grade/year MAPE</dt>
                 <dd>@Result.GradeLevelMeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>HS total MAPE</dt>
+                <dd>@Result.HighSchoolMeanAbsolutePercentageError.ToString("P1")</dd>
+                <dt>HS grade MAPE</dt>
+                <dd>@Result.HighSchoolGradeMeanAbsolutePercentageError.ToString("P1")</dd>
                 <dt>Combined score</dt>
                 <dd>@Result.CombinedScore.ToString("P2")</dd>
             </dl>
         </div>
-    </section>
+    </div>
+    </ToolPanel>
+    }
 
-    <section class="band metric-options">
-        <h2>Table Details</h2>
+    @if (IsToolActive(ToolTableDetails))
+    {
+    <ToolPanel Id="@ToolTableDetails" Title="Table Details" Style="@ToolStyle(ToolTableDetails)"
+               Collapsed="@IsToolCollapsed(ToolTableDetails)" CanMoveUp="@CanMoveToolUp(ToolTableDetails)" CanMoveDown="@CanMoveToolDown(ToolTableDetails)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+    <div class="metric-options">
         <label>
             <input type="checkbox" @bind="ShowIncreaseFromStart" />
             <span>Increase from start</span>
@@ -338,8 +460,15 @@ else
             <input type="checkbox" @bind="ShowIncreaseFromPreviousPercent" />
             <span>Increase from previous year %</span>
         </label>
-    </section>
+    </div>
+    </ToolPanel>
+    }
 
+    @if (IsToolActive(ToolCohorts))
+    {
+    <ToolPanel Id="@ToolCohorts" Title="Monte Carlo Progressing Cohorts" Style="@ToolStyle(ToolCohorts)"
+               Collapsed="@IsToolCollapsed(ToolCohorts)" CanMoveUp="@CanMoveToolUp(ToolCohorts)" CanMoveDown="@CanMoveToolDown(ToolCohorts)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <CohortProgressTable Title="Monte Carlo Progressing Cohorts" Cohorts="MonteCarloProgressingCohorts" Projection="MonteCarloModeledProjection"
                          ReferenceProjection="MonteCarloReferenceProjection"
                          ProgressionGrades="VisibleCohortGrades"
@@ -347,6 +476,13 @@ else
                          ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                          ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
                          ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    </ToolPanel>
+    }
+    @if (IsToolActive(ToolGrades))
+    {
+    <ToolPanel Id="@ToolGrades" Title="Monte Carlo Grades" Style="@ToolStyle(ToolGrades)"
+               Collapsed="@IsToolCollapsed(ToolGrades)" CanMoveUp="@CanMoveToolUp(ToolGrades)" CanMoveDown="@CanMoveToolDown(ToolGrades)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <ProjectionTable Title="Monte Carlo Grades" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GradeValue"
@@ -355,6 +491,13 @@ else
                      ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                      ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
                      ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    </ToolPanel>
+    }
+    @if (IsToolActive(ToolGridTotals))
+    {
+    <ToolPanel Id="@ToolGridTotals" Title="Monte Carlo Grid Totals" Style="@ToolStyle(ToolGridTotals)"
+               Collapsed="@IsToolCollapsed(ToolGridTotals)" CanMoveUp="@CanMoveToolUp(ToolGridTotals)" CanMoveDown="@CanMoveToolDown(ToolGridTotals)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <ProjectionTable Title="Monte Carlo Grid Totals" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GridValue"
@@ -362,8 +505,15 @@ else
                      ShowIncreaseFromStartPercent="ShowIncreaseFromStartPercent"
                      ShowIncreaseFromPrevious="ShowIncreaseFromPrevious"
                      ShowIncreaseFromPreviousPercent="ShowIncreaseFromPreviousPercent" />
+    </ToolPanel>
+    }
 
-    <section class="band split">
+    @if (IsToolActive(ToolParameterSearch))
+    {
+    <ToolPanel Id="@ToolParameterSearch" Title="Parameter Search" Style="@ToolStyle(ToolParameterSearch)"
+               Collapsed="@IsToolCollapsed(ToolParameterSearch)" CanMoveUp="@CanMoveToolUp(ToolParameterSearch)" CanMoveDown="@CanMoveToolDown(ToolParameterSearch)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+    <div class="split">
         <div>
             <div class="section-head">
                 <h2>Parameter Search</h2>
@@ -395,12 +545,8 @@ else
                     <input @bind="ThreeChildCandidatesText" />
                 </label>
                 <label>
-                    <span>4+ child candidates</span>
+                    <span>4 child candidates</span>
                     <input @bind="FourPlusChildCandidatesText" />
-                </label>
-                <label>
-                    <span>Exit candidates</span>
-                    <input @bind="ExitCandidatesText" />
                 </label>
             </div>
         </div>
@@ -419,8 +565,6 @@ else
                     <dd>@SearchResult.Best.Parameters.OwnershipChangeProbability.ToString("P1")</dd>
                     <dt>Move-in children</dt>
                     <dd>@SearchResult.Best.Parameters.MoveInZeroChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInOneChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInTwoChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInThreeChildShare.ToString("P1") / @SearchResult.Best.Parameters.MoveInFourPlusChildShare.ToString("P1")</dd>
-                    <dt>Exit</dt>
-                    <dd>@SearchResult.Best.Parameters.StudentExitProbability.ToString("P1")</dd>
                     <dt>Special ed probability</dt>
                     <dd>@SearchResult.Best.Parameters.SpecialEducationProbability.ToString("P1")</dd>
                     <dt>Births/year</dt>
@@ -431,10 +575,15 @@ else
                 <button class="secondary" @onclick="UseBest">Use Best</button>
             }
         </aside>
-    </section>
+    </div>
+    </ToolPanel>
+    }
 
-    <section class="band">
-        <h2>Modeled vs Reference Totals</h2>
+    @if (IsToolActive(ToolModeledReference))
+    {
+    <ToolPanel Id="@ToolModeledReference" Title="Modeled vs Reference Totals" Style="@ToolStyle(ToolModeledReference)"
+               Collapsed="@IsToolCollapsed(ToolModeledReference)" CanMoveUp="@CanMoveToolUp(ToolModeledReference)" CanMoveDown="@CanMoveToolDown(ToolModeledReference)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="table-viz">
             <div class="table-wrap">
                 <table>
@@ -451,10 +600,14 @@ else
                             <th>Grade Error</th>
                             <th>Grade Error %</th>
                             <th>Grade/Year Error %</th>
+                            <th>Actual HS</th>
+                            <th>Modeled HS</th>
+                            <th>HS Error</th>
+                            <th>HS Error %</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var comparison in Result.Comparisons)
+                        @foreach (var comparison in Result!.Comparisons)
                         {
                             <tr>
                                 <td>@comparison.Year</td>
@@ -468,6 +621,10 @@ else
                                 <td>@comparison.GradeError.ToString("+#,##0;-#,##0;0")</td>
                                 <td>@comparison.GradeAbsolutePercentageError.ToString("P1")</td>
                                 <td>@comparison.GradeLevelMeanAbsolutePercentageError.ToString("P1")</td>
+                                <td>@comparison.HighSchoolActualTotal.ToString("N0")</td>
+                                <td>@comparison.HighSchoolModeledTotal.ToString("N0")</td>
+                                <td>@comparison.HighSchoolError.ToString("+#,##0;-#,##0;0")</td>
+                                <td>@comparison.HighSchoolAbsolutePercentageError.ToString("P1")</td>
                             </tr>
                         }
                     </tbody>
@@ -512,14 +669,18 @@ else
                 </div>
             </aside>
         </div>
-    </section>
+    </ToolPanel>
+    }
 
-    <section class="band">
-        <h2>Grid Detail for @SelectedComparisonYear</h2>
+    @if (IsToolActive(ToolGridDetail))
+    {
+    <ToolPanel Id="@ToolGridDetail" Title="@($"Grid Detail for {SelectedComparisonYear}")" Style="@ToolStyle(ToolGridDetail)"
+               Collapsed="@IsToolCollapsed(ToolGridDetail)" CanMoveUp="@CanMoveToolUp(ToolGridDetail)" CanMoveDown="@CanMoveToolDown(ToolGridDetail)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <label class="compact-select">
             <span>Comparison year</span>
             <select @bind="SelectedComparisonYear">
-                @foreach (var comparison in Result.Comparisons)
+                @foreach (var comparison in Result!.Comparisons)
                 {
                     <option value="@comparison.Year">@comparison.Year</option>
                 }
@@ -550,10 +711,14 @@ else
                 </tbody>
             </table>
         </div>
-    </section>
+    </ToolPanel>
+    }
 
-    <section class="band">
-        <h2>Grade Detail for @SelectedComparisonYear</h2>
+    @if (IsToolActive(ToolGradeDetail))
+    {
+    <ToolPanel Id="@ToolGradeDetail" Title="@($"Grade Detail for {SelectedComparisonYear}")" Style="@ToolStyle(ToolGradeDetail)"
+               Collapsed="@IsToolCollapsed(ToolGradeDetail)" CanMoveUp="@CanMoveToolUp(ToolGradeDetail)" CanMoveDown="@CanMoveToolDown(ToolGradeDetail)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="table-wrap">
             <table>
                 <thead>
@@ -579,22 +744,28 @@ else
                 </tbody>
             </table>
         </div>
-    </section>
+    </ToolPanel>
+    }
 
-    <section class="band formulas">
-        <h2>Monte Carlo Rules</h2>
+    @if (IsToolActive(ToolRules))
+    {
+    <ToolPanel Id="@ToolRules" Title="Monte Carlo Rules" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
+               Collapsed="@IsToolCollapsed(ToolRules)" CanMoveUp="@CanMoveToolUp(ToolRules)" CanMoveDown="@CanMoveToolDown(ToolRules)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the validation window starts.</p>
         <p><strong>Special grids:</strong> Lammersville and Inter-Districts use fair grade shares; MHESD uses grades 9-12 only.</p>
         <p><strong>Ownership change:</strong> each home has a yearly chance to replace its household, with lower early-year turnover and forced turnover by year 50.</p>
-        <p><strong>Children at move-in:</strong> the model draws a household child count from explicit 0, 1, 2, 3, and 4+ child shares. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
+        <p><strong>Children at move-in:</strong> the model draws a household child count from explicit 0, 1, 2, 3, and 4 child shares. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
         <p><strong>Density:</strong> low/medium, medium-high, and high density homes apply common density factors plus child-number factors for 1st, 2nd, and 3rd children.</p>
         <p><strong>Special education:</strong> every child has a probability of receiving a special education attribute. Special education children keep their underlying age/grade for aging, but are counted in the Sp. Ed. reporting bucket while enrolled.</p>
         <p><strong>Build timing:</strong> each newly built home joins either the same school year or the next school year, controlled by the same-school-year probability.</p>
         <p><strong>New children after move-in:</strong> annual 1st, 2nd, 3rd, and 4th+ child probabilities control births/new preschool children after the household arrives.</p>
-        <p><strong>Student exit:</strong> each student has a yearly probability to leave district enrollment without a home ownership change; TK-8, high school, and special education exits can be adjusted separately.</p>
+        <p><strong>Student exit:</strong> each enrolled student can leave district enrollment without a home ownership change; TK-8, high school, and special education students use separate exit probabilities.</p>
         <p><strong>Validation:</strong> results are averaged over all runs and compared year-over-year against total enrollment, grid spread, and smoothed grade-by-grade error. TK is excluded from grade validation.</p>
-    </section>
+    </ToolPanel>
     }
+    }
+    </div>
 }
 
 @code {
@@ -622,11 +793,60 @@ else
     };
     private static readonly MonteCarloParameters DefaultParameters = new();
     private const int BrowserRunLimit = 100;
+    private const string ToolRunEnvironment = "run-environment";
+    private const string ToolModelSettings = "model-settings";
+    private const string ToolModelScoring = "model-scoring";
+    private const string ToolValidationSummary = "validation-summary";
+    private const string ToolTableDetails = "table-details";
+    private const string ToolCohorts = "cohorts";
+    private const string ToolGrades = "grades";
+    private const string ToolGridTotals = "grid-totals";
+    private const string ToolParameterSearch = "parameter-search";
+    private const string ToolModeledReference = "modeled-reference";
+    private const string ToolGridDetail = "grid-detail";
+    private const string ToolGradeDetail = "grade-detail";
+    private const string ToolRules = "rules";
+    private static readonly IReadOnlyList<MonteCarloToolDefinition> ToolDefinitions =
+    [
+        new(ToolRunEnvironment, "Run Environment"),
+        new(ToolModelSettings, "Model Settings"),
+        new(ToolModelScoring, "Model Scoring"),
+        new(ToolValidationSummary, "Validation Summary"),
+        new(ToolTableDetails, "Table Details"),
+        new(ToolCohorts, "Progressing Cohorts"),
+        new(ToolGrades, "Grades"),
+        new(ToolGridTotals, "Grid Totals"),
+        new(ToolParameterSearch, "Parameter Search"),
+        new(ToolModeledReference, "Modeled vs Reference Totals"),
+        new(ToolGridDetail, "Grid Detail"),
+        new(ToolGradeDetail, "Grade Detail"),
+        new(ToolRules, "Monte Carlo Rules")
+    ];
+    private static readonly HashSet<string> ResultToolIds =
+    [
+        ToolValidationSummary,
+        ToolTableDetails,
+        ToolCohorts,
+        ToolGrades,
+        ToolGridTotals,
+        ToolParameterSearch,
+        ToolModeledReference,
+        ToolGridDetail,
+        ToolGradeDetail,
+        ToolRules
+    ];
 
     private EnrollmentData? Data { get; set; }
     private MonteCarloEnrollmentModel? Model { get; set; }
     private MonteCarloValidationResult? Result { get; set; }
     private MonteCarloSearchResult? SearchResult { get; set; }
+    private IReadOnlyList<MonteCarloParameterPreset> ParameterPresets { get; set; } =
+    [
+        new("default", "Current hand-tuned baseline parameters.", DefaultParameters)
+    ];
+    private string SelectedPresetName { get; set; } = "default";
+    private MonteCarloParameterPreset? SelectedPreset => ParameterPresets
+        .FirstOrDefault(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
     private string? LoadError { get; set; }
     private int StartYear { get; set; } = 2020;
     private int EndYear { get; set; } = 2024;
@@ -663,6 +883,11 @@ else
     private double ScoreTotalWeight { get; set; } = DefaultParameters.ScoreTotalWeight;
     private double ScoreGridWeight { get; set; } = DefaultParameters.ScoreGridWeight;
     private double ScoreGradeWeight { get; set; } = DefaultParameters.ScoreGradeWeight;
+    private double ScoreHighSchoolTotalWeight { get; set; } = DefaultParameters.ScoreHighSchoolTotalWeight;
+    private double ScoreHighSchoolGradeWeight { get; set; } = DefaultParameters.ScoreHighSchoolGradeWeight;
+    private double AnchorYearWeight { get; set; } = DefaultParameters.AnchorYearWeight;
+    private double YearWeightSlope { get; set; } = DefaultParameters.YearWeightSlope;
+    private double YearWeightCap { get; set; } = DefaultParameters.YearWeightCap;
     private double DensityLowMediumFactor { get; set; } = DefaultParameters.DensityLowMediumFactor;
     private double DensityMediumHighFactor { get; set; } = DefaultParameters.DensityMediumHighFactor;
     private double DensityHighFactor { get; set; } = DefaultParameters.DensityHighFactor;
@@ -681,7 +906,6 @@ else
     private string TwoChildCandidatesText { get; set; } = "0.55,0.60,0.65";
     private string ThreeChildCandidatesText { get; set; } = "0.03,0.05,0.08";
     private string FourPlusChildCandidatesText { get; set; } = "0,0.01";
-    private string ExitCandidatesText { get; set; } = "0.005,0.015,0.03";
     private bool SearchRunning { get; set; }
     private bool ValidationRunning { get; set; }
     private bool PendingValidation { get; set; }
@@ -697,9 +921,29 @@ else
     private string? ServerApiStatus { get; set; }
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
-    private int MinStartYear => Data?.AugustYears.Skip(1).FirstOrDefault() ?? 2017;
+    private List<string> ActiveToolIds { get; set; } = [ToolRunEnvironment, ToolModelSettings, ToolModelScoring, ToolValidationSummary];
+    private HashSet<string> CollapsedToolIds { get; set; } = [];
+    private string NewToolId { get; set; } = "";
+    private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
+        .Select(id => ToolDefinitions.FirstOrDefault(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+        .Where(tool => tool is not null)
+        .Cast<MonteCarloToolDefinition>()
+        .ToList();
+    private IReadOnlyList<MonteCarloToolDefinition> InactiveTools => ToolDefinitions
+        .Where(tool => !ActiveToolIds.Contains(tool.Id))
+        .ToList();
+    private int MinStartYear => Data is null
+        ? 2003
+        : Data.HomeRows
+            .SelectMany(row => row.HomesByYear.Keys)
+            .DefaultIfEmpty(Data.AugustYears.FirstOrDefault(2003))
+            .Min();
     private int LatestReferenceYear => Data?.AugustYears.Where(year => year <= 2024).DefaultIfEmpty(2024).Max() ?? 2024;
-    private int MaxSimulationEndYear => LatestReferenceYear + 50;
+    private int MaxSimulationEndYear => Data is null
+        ? LatestReferenceYear + 50
+        : Math.Max(
+            LatestReferenceYear,
+            Data.HomeRows.SelectMany(row => row.HomesByYear.Keys).DefaultIfEmpty(LatestReferenceYear).Max()) + 50;
     private IReadOnlyList<string> MonteCarloGridNames => Result?.Comparisons
         .SelectMany(comparison => comparison.ModeledGridTotals.Keys.Concat(comparison.ActualGridTotals.Keys))
         .Where(grid => !ExcludedValidationGrids.Contains(grid))
@@ -726,6 +970,106 @@ else
             comparison.ActualGradeTotal))
         .ToList() ?? [];
     private IReadOnlyList<CohortDefinition> MonteCarloProgressingCohorts => BuildProgressingCohorts(MonteCarloModeledProjection);
+    private IReadOnlyList<double> MoveInChildCountNormalizers => NormalizeUiWeights(
+        MoveInZeroChildShare,
+        MoveInOneChildShare,
+        MoveInTwoChildShare,
+        MoveInThreeChildShare,
+        MoveInFourPlusChildShare);
+    private IReadOnlyList<double> MoveInAgeNormalizers => NormalizeUiWeights(
+        MoveInPreschoolWeight,
+        MoveInTkKWeight,
+        MoveInElementaryWeight,
+        MoveInMiddleWeight,
+        MoveInHighWeight,
+        MoveInPostSchoolWeight);
+    private IReadOnlyList<double> ScoreWeightNormalizers => NormalizeUiWeights(
+        ScoreTotalWeight,
+        ScoreGridWeight,
+        ScoreGradeWeight,
+        ScoreHighSchoolTotalWeight,
+        ScoreHighSchoolGradeWeight);
+    private IReadOnlyList<DensityEffectRow> DensityEffectRows =>
+    [
+        BuildDensityEffectRow(
+            "Low/Medium",
+            "RL",
+            new DensityFactorBinding(() => DensityLowMediumFirstChildFactor, value => DensityLowMediumFirstChildFactor = value),
+            new DensityFactorBinding(() => DensityLowMediumSecondChildFactor, value => DensityLowMediumSecondChildFactor = value),
+            new DensityFactorBinding(() => DensityLowMediumThirdChildFactor, value => DensityLowMediumThirdChildFactor = value)),
+        BuildDensityEffectRow(
+            "Medium-High",
+            "RMH",
+            new DensityFactorBinding(() => DensityMediumHighFirstChildFactor, value => DensityMediumHighFirstChildFactor = value),
+            new DensityFactorBinding(() => DensityMediumHighSecondChildFactor, value => DensityMediumHighSecondChildFactor = value),
+            new DensityFactorBinding(() => DensityMediumHighThirdChildFactor, value => DensityMediumHighThirdChildFactor = value)),
+        BuildDensityEffectRow(
+            "High",
+            "RH",
+            new DensityFactorBinding(() => DensityHighFirstChildFactor, value => DensityHighFirstChildFactor = value),
+            new DensityFactorBinding(() => DensityHighSecondChildFactor, value => DensityHighSecondChildFactor = value),
+            new DensityFactorBinding(() => DensityHighThirdChildFactor, value => DensityHighThirdChildFactor = value))
+    ];
+
+    private bool IsToolActive(string id) => ActiveToolIds.Contains(id);
+
+    private bool IsToolCollapsed(string id) => CollapsedToolIds.Contains(id);
+
+    private string ToolStyle(string id) => $"order: {Math.Max(0, ActiveToolIds.IndexOf(id))};";
+
+    private bool CanMoveToolUp(string id) => ActiveToolIds.IndexOf(id) > 0;
+
+    private bool CanMoveToolDown(string id)
+    {
+        var index = ActiveToolIds.IndexOf(id);
+        return index >= 0 && index < ActiveToolIds.Count - 1;
+    }
+
+    private void ToggleTool(string id)
+    {
+        if (!CollapsedToolIds.Add(id))
+        {
+            CollapsedToolIds.Remove(id);
+        }
+    }
+
+    private void MoveToolUp(string id)
+    {
+        var index = ActiveToolIds.IndexOf(id);
+        if (index <= 0) return;
+
+        (ActiveToolIds[index - 1], ActiveToolIds[index]) = (ActiveToolIds[index], ActiveToolIds[index - 1]);
+    }
+
+    private void MoveToolDown(string id)
+    {
+        var index = ActiveToolIds.IndexOf(id);
+        if (index < 0 || index >= ActiveToolIds.Count - 1) return;
+
+        (ActiveToolIds[index + 1], ActiveToolIds[index]) = (ActiveToolIds[index], ActiveToolIds[index + 1]);
+    }
+
+    private void RemoveTool(string id)
+    {
+        ActiveToolIds.Remove(id);
+        CollapsedToolIds.Remove(id);
+        if (string.IsNullOrWhiteSpace(NewToolId))
+        {
+            NewToolId = id;
+        }
+    }
+
+    private void AddSelectedTool()
+    {
+        var id = !string.IsNullOrWhiteSpace(NewToolId) && InactiveTools.Any(tool => tool.Id == NewToolId)
+            ? NewToolId
+            : InactiveTools.FirstOrDefault()?.Id;
+        if (string.IsNullOrWhiteSpace(id) || ActiveToolIds.Contains(id)) return;
+
+        ActiveToolIds.Add(id);
+        CollapsedToolIds.Remove(id);
+        NewToolId = "";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -737,6 +1081,7 @@ else
             var schools = await Http.GetStringAsync("data/schools.csv");
             Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
             Model = new MonteCarloEnrollmentModel(Data);
+            await LoadPresetsAsync();
             StartYear = Math.Max(MinStartYear, LatestReferenceYear - 5);
             EndYear = LatestReferenceYear;
             SelectedComparisonYear = EndYear;
@@ -747,6 +1092,48 @@ else
         {
             LoadError = ex.Message;
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Data is not null)
+        {
+            await Js.InvokeVoidAsync("schoolGrowthMasonry.attach", ".settings-stack");
+        }
+    }
+
+    private async Task LoadPresetsAsync()
+    {
+        try
+        {
+            var presets = await Http.GetFromJsonAsync<IReadOnlyList<MonteCarloParameterPreset>>("data/monte-carlo-presets.json");
+            if (presets is not null && presets.Count > 0)
+            {
+                ParameterPresets = presets;
+                SelectedPresetName = presets.FirstOrDefault(preset => preset.Name.Equals("default", StringComparison.OrdinalIgnoreCase))?.Name
+                    ?? presets[0].Name;
+                ApplyParameters(SelectedPreset?.Parameters ?? presets[0].Parameters);
+            }
+        }
+        catch
+        {
+            SelectedPresetName = "default";
+            ApplyParameters(DefaultParameters);
+        }
+    }
+
+    private async Task LoadPresetAsync(ChangeEventArgs args)
+    {
+        var name = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        var preset = ParameterPresets.FirstOrDefault(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (preset is null) return;
+
+        SelectedPresetName = preset.Name;
+        ApplyParameters(preset.Parameters);
+        SearchResult = null;
+        await RunValidationAsync();
     }
 
     private async Task RunValidationAsync()
@@ -789,16 +1176,20 @@ else
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
 
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 var ran = await RunValidationCoreAsync();
+                stopwatch.Stop();
+                var elapsed = FormatElapsed(stopwatch.Elapsed);
                 StatusMessage = ran
-                    ? $"Validation complete on {LastExecutionLabel}: {Runs:N0} runs, score {Result?.CombinedScore:P2}. {ServerApiStatus}"
-                    : ServerApiStatus;
+                    ? $"Validation complete on {LastExecutionLabel}: {Runs:N0} runs in {elapsed}, score {Result?.CombinedScore:P2}. {ServerApiStatus}"
+                    : $"{ServerApiStatus} ({elapsed})";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Validation failed: {ex.Message}";
+                stopwatch.Stop();
+                StatusMessage = $"Validation failed after {FormatElapsed(stopwatch.Elapsed)}: {ex.Message}";
             }
             await InvokeAsync(StateHasChanged);
         }
@@ -889,7 +1280,8 @@ else
                 ParseCandidates(TwoChildCandidatesText),
                 ParseCandidates(ThreeChildCandidatesText),
                 ParseCandidates(FourPlusChildCandidatesText),
-                ParseCandidates(ExitCandidatesText));
+                Array.Empty<double>(),
+                CurrentParameters());
 
             if (ShouldUseServer())
             {
@@ -1042,6 +1434,11 @@ else
         ScoreTotalWeight = parameters.ScoreTotalWeight;
         ScoreGridWeight = parameters.ScoreGridWeight;
         ScoreGradeWeight = parameters.ScoreGradeWeight;
+        ScoreHighSchoolTotalWeight = parameters.ScoreHighSchoolTotalWeight;
+        ScoreHighSchoolGradeWeight = parameters.ScoreHighSchoolGradeWeight;
+        AnchorYearWeight = parameters.AnchorYearWeight;
+        YearWeightSlope = parameters.YearWeightSlope;
+        YearWeightCap = parameters.YearWeightCap;
         DensityLowMediumFactor = parameters.DensityLowMediumFactor;
         DensityMediumHighFactor = parameters.DensityMediumHighFactor;
         DensityHighFactor = parameters.DensityHighFactor;
@@ -1088,6 +1485,11 @@ else
             ScoreTotalWeight: ScoreTotalWeight,
             ScoreGridWeight: ScoreGridWeight,
             ScoreGradeWeight: ScoreGradeWeight,
+            ScoreHighSchoolTotalWeight: ScoreHighSchoolTotalWeight,
+            ScoreHighSchoolGradeWeight: ScoreHighSchoolGradeWeight,
+            AnchorYearWeight: AnchorYearWeight,
+            YearWeightSlope: YearWeightSlope,
+            YearWeightCap: YearWeightCap,
             DensityLowMediumFactor: DensityLowMediumFactor,
             DensityMediumHighFactor: DensityMediumHighFactor,
             DensityHighFactor: DensityHighFactor,
@@ -1357,4 +1759,195 @@ else
     }
 
     private static string FormatNullable(double? value) => value.HasValue ? value.Value.ToString("N0") : "n/a";
+
+    private static IReadOnlyList<double> NormalizeUiWeights(params double[] weights)
+    {
+        var positive = weights.Select(weight => Math.Max(0, weight)).ToArray();
+        var total = positive.Sum();
+        return total > 0
+            ? positive.Select(weight => weight / total).ToArray()
+            : positive.Select(_ => 0.0).ToArray();
+    }
+
+    private static string FormatNormalized(double value)
+    {
+        return value switch
+        {
+            0 => "0",
+            < 0.001 => "<0.1%",
+            _ => value.ToString("P1")
+        };
+    }
+
+    private static string FormatPoint(double value)
+    {
+        return value switch
+        {
+            0 => "0",
+            < 0.0001 => "<0.0001",
+            _ => value.ToString("0.####")
+        };
+    }
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed.TotalMinutes >= 1)
+        {
+            return $"{(int)elapsed.TotalMinutes:N0}m {elapsed.Seconds:N0}s";
+        }
+
+        if (elapsed.TotalSeconds >= 10)
+        {
+            return $"{elapsed.TotalSeconds:N0}s";
+        }
+
+        return $"{elapsed.TotalSeconds:0.0}s";
+    }
+
+    private static double ParseInputDouble(ChangeEventArgs args, double fallback)
+    {
+        return double.TryParse(args.Value?.ToString(), out var value) ? value : fallback;
+    }
+
+    private DensityEffectRow BuildDensityEffectRow(
+        string label,
+        string density,
+        DensityFactorBinding firstFactor,
+        DensityFactorBinding secondFactor,
+        DensityFactorBinding thirdFactor)
+    {
+        return new DensityEffectRow(
+            label,
+            firstFactor,
+            secondFactor,
+            thirdFactor,
+            Enumerable.Range(0, 5)
+                .Select(child => new DensityChildEffect(
+                    child,
+                    EffectiveDensityMoveInShare(density, child),
+                    EffectiveDensityBirthProbability(density, child)))
+                .ToList());
+    }
+
+    private double EffectiveDensityMoveInShare(string density, int childNumber)
+    {
+        var zero = Math.Max(0, MoveInZeroChildShare);
+        var one = Math.Max(0, MoveInOneChildShare) * DensityMoveInChildFactor(density, 1);
+        var two = Math.Max(0, MoveInTwoChildShare) * DensityMoveInChildFactor(density, 2);
+        var three = Math.Max(0, MoveInThreeChildShare) * DensityMoveInChildFactor(density, 3);
+        var four = Math.Max(0, MoveInFourPlusChildShare) * DensityMoveInChildFactor(density, 4);
+        var total = zero + one + two + three + four;
+        if (total <= 0) return 0;
+
+        return childNumber switch
+        {
+            0 => zero / total,
+            1 => one / total,
+            2 => two / total,
+            3 => three / total,
+            4 => four / total,
+            _ => 0
+        };
+    }
+
+    private double EffectiveDensityBirthProbability(string density, int childNumber)
+    {
+        var baseProbability = childNumber switch
+        {
+            0 => 0,
+            <= 1 => AnnualFirstNewChildProbability,
+            2 => AnnualSecondNewChildProbability,
+            3 => AnnualThirdNewChildProbability,
+            _ => AnnualFourthPlusNewChildProbability
+        };
+        return Math.Clamp(baseProbability * DensityBirthMultiplier(density, childNumber), 0, 1);
+    }
+
+    private double DensityMoveInChildFactor(string density, int childNumber)
+    {
+        var profile = (NormalizeDensity(density), childNumber) switch
+        {
+            ("RMH", 1) => 0.95,
+            ("RMH", 2) => 0.70,
+            ("RMH", 3) => 0.20,
+            ("RMH", _) => 0.05,
+            ("RH", 1) => 0.90,
+            ("RH", 2) => 0.50,
+            ("RH", 3) => 0.05,
+            ("RH", _) => 0.00,
+            _ => 1.00
+        };
+
+        return profile * DensityGroupFactor(density) * DensityChildFactor(density, childNumber);
+    }
+
+    private double DensityBirthMultiplier(string density, int childNumber)
+    {
+        var profile = (NormalizeDensity(density), childNumber) switch
+        {
+            ("RMH", <= 1) => 0.95,
+            ("RMH", 2) => 0.65,
+            ("RMH", 3) => 0.15,
+            ("RMH", _) => 0.05,
+            ("RH", <= 1) => 0.85,
+            ("RH", 2) => 0.45,
+            ("RH", 3) => 0.05,
+            ("RH", _) => 0.00,
+            _ => 1.00
+        };
+
+        return profile * DensityGroupFactor(density) * DensityChildFactor(density, childNumber);
+    }
+
+    private double DensityGroupFactor(string density)
+    {
+        return NormalizeDensity(density) switch
+        {
+            "RMH" => DensityMediumHighFactor,
+            "RH" => DensityHighFactor,
+            _ => DensityLowMediumFactor
+        };
+    }
+
+    private double DensityChildFactor(string density, int childNumber)
+    {
+        return (NormalizeDensity(density), childNumber) switch
+        {
+            ("RMH", <= 1) => DensityMediumHighFirstChildFactor,
+            ("RMH", 2) => DensityMediumHighSecondChildFactor,
+            ("RMH", 3) => DensityMediumHighThirdChildFactor,
+            ("RH", <= 1) => DensityHighFirstChildFactor,
+            ("RH", 2) => DensityHighSecondChildFactor,
+            ("RH", 3) => DensityHighThirdChildFactor,
+            (_, <= 1) => DensityLowMediumFirstChildFactor,
+            (_, 2) => DensityLowMediumSecondChildFactor,
+            (_, 3) => DensityLowMediumThirdChildFactor,
+            _ => 1.0
+        };
+    }
+
+    private static string NormalizeDensity(string density)
+    {
+        return density.Trim().ToUpperInvariant();
+    }
+
+    private sealed record MonteCarloToolDefinition(string Id, string Title);
+
+    private sealed record DensityEffectRow(
+        string Label,
+        DensityFactorBinding FirstFactor,
+        DensityFactorBinding SecondFactor,
+        DensityFactorBinding ThirdFactor,
+        IReadOnlyList<DensityChildEffect> Children);
+
+    private sealed record DensityChildEffect(int ChildNumber, double MoveInShare, double BirthProbability);
+
+    private sealed class DensityFactorBinding(Func<double> getter, Action<double> setter)
+    {
+        public double Value
+        {
+            get => getter();
+            set => setter(value);
+        }
+    }
 }

@@ -69,13 +69,15 @@ static void RunSearch(MonteCarloEnrollmentModel model, CliOptions options)
         }
 
         Console.WriteLine(
-            "[{0,4}/{1,4}] score={2:P2} total={3:P1} grid-detail={4:P1} grade-detail={5:P1} turnover={6:P1} move-in={7:P1}/{8:P1}/{9:P1}/{10:P1}/{11:P1} births={12:P1}/{13:P1}/{14:P1}/{15:P1} exit={16:P1}",
+            "[{0,4}/{1,4}] score={2:P2} total={3:P1} grid-detail={4:P1} grade-detail={5:P1} hs-total={6:P1} hs-detail={7:P1} turnover={8:P1} move-in={9:P1}/{10:P1}/{11:P1}/{12:P1}/{13:P1} births={14:P1}/{15:P1}/{16:P1}/{17:P1} exit={18:P1}",
             i + 1,
             candidates.Count,
             result.CombinedScore,
             result.GridMeanAbsolutePercentageError,
             result.GridLevelMeanAbsolutePercentageError,
             result.GradeLevelMeanAbsolutePercentageError,
+            result.HighSchoolMeanAbsolutePercentageError,
+            result.HighSchoolGradeMeanAbsolutePercentageError,
             parameters.OwnershipChangeProbability,
             parameters.MoveInZeroChildShare,
             parameters.MoveInOneChildShare,
@@ -117,12 +119,14 @@ static void RunOptimize(MonteCarloEnrollmentModel model, CliOptions options)
     results.Add(best);
 
     Console.WriteLine(
-        "[eval {0,4}] initial score={1:P2} total={2:P1} grid-detail={3:P1} grade-detail={4:P1}",
+        "[eval {0,4}] initial score={1:P2} total={2:P1} grid-detail={3:P1} grade-detail={4:P1} hs-total={5:P1} hs-detail={6:P1}",
         evaluation,
         best.CombinedScore,
         best.GridMeanAbsolutePercentageError,
         best.GridLevelMeanAbsolutePercentageError,
-        best.GradeLevelMeanAbsolutePercentageError);
+        best.GradeLevelMeanAbsolutePercentageError,
+        best.HighSchoolMeanAbsolutePercentageError,
+        best.HighSchoolGradeMeanAbsolutePercentageError);
 
     var current = best.Parameters;
     for (var iteration = 0; iteration < options.OptimizeIterations; iteration++)
@@ -150,7 +154,7 @@ static void RunOptimize(MonteCarloEnrollmentModel model, CliOptions options)
                 var directionText = direction > 0 ? "+" : "-";
                 var status = result.CombinedScore < best.CombinedScore ? "keep" : "skip";
                 Console.WriteLine(
-                    "[eval {0,4}] {1,-13} {2}{3:N4} score={4:P2} total={5:P1} grid-detail={6:P1} grade-detail={7:P1} {8}",
+                    "[eval {0,4}] {1,-13} {2}{3:N4} score={4:P2} total={5:P1} grid-detail={6:P1} grade-detail={7:P1} hs-total={8:P1} hs-detail={9:P1} {10}",
                     evaluation,
                     variable.Name,
                     directionText,
@@ -159,6 +163,8 @@ static void RunOptimize(MonteCarloEnrollmentModel model, CliOptions options)
                     result.GridMeanAbsolutePercentageError,
                     result.GridLevelMeanAbsolutePercentageError,
                     result.GradeLevelMeanAbsolutePercentageError,
+                    result.HighSchoolMeanAbsolutePercentageError,
+                    result.HighSchoolGradeMeanAbsolutePercentageError,
                     status);
 
                 if (result.CombinedScore >= best.CombinedScore)
@@ -225,7 +231,7 @@ static void RunLifecycle(MonteCarloEnrollmentModel model, CliOptions options)
     Console.WriteLine($"  density:    {options.Density}");
     Console.WriteLine($"  turnover:   {result.Parameters.OwnershipChangeProbability:P2}");
     Console.WriteLine($"  realized:   {result.RealizedTurnoverRate:P2}");
-    Console.WriteLine($"  move-in:    0 child {result.Parameters.MoveInZeroChildShare:P2}, 1 child {result.Parameters.MoveInOneChildShare:P2}, 2 child {result.Parameters.MoveInTwoChildShare:P2}, 3 child {result.Parameters.MoveInThreeChildShare:P2}, 4+ child {result.Parameters.MoveInFourPlusChildShare:P2}");
+    Console.WriteLine($"  move-in:    0 child {result.Parameters.MoveInZeroChildShare:P2}, 1 child {result.Parameters.MoveInOneChildShare:P2}, 2 child {result.Parameters.MoveInTwoChildShare:P2}, 3 child {result.Parameters.MoveInThreeChildShare:P2}, 4 child {result.Parameters.MoveInFourPlusChildShare:P2}");
     Console.WriteLine($"  births/yr:  1st {result.Parameters.AnnualFirstNewChildProbability:P2}, 2nd {result.Parameters.AnnualSecondNewChildProbability:P2}, 3rd {result.Parameters.AnnualThirdNewChildProbability:P2}, 4th+ {result.Parameters.AnnualFourthPlusNewChildProbability:P2}");
     Console.WriteLine($"  exits:      TK-8 {result.Parameters.Tk8ExitProbability:P2}, HS {result.Parameters.HighSchoolExitProbability:P2}, SpEd {result.Parameters.SpecialExitProbability:P2}");
     Console.WriteLine($"  weights:    pre-school {result.Parameters.MoveInPreschoolWeight:0.###}, TK/K {result.Parameters.MoveInTkKWeight:0.###}, elem {result.Parameters.MoveInElementaryWeight:0.###}, middle {result.Parameters.MoveInMiddleWeight:0.###}, high {result.Parameters.MoveInHighWeight:0.###}, post-school {result.Parameters.MoveInPostSchoolWeight:0.###}");
@@ -237,7 +243,7 @@ static void RunLifecycle(MonteCarloEnrollmentModel model, CliOptions options)
     PrintFamilyLongevity("Completed family longevity", result.CompletedFamilyLongevity);
     PrintFamilyLongevity("Active-at-end family longevity", result.ActiveAtEndFamilyLongevity);
     Console.WriteLine();
-    Console.WriteLine("Years   Students/Home   TK-8/Home    HS/Home   SpEd/Home Children/Home  0 child  1 child  2 child  3 child   4+ child");
+    Console.WriteLine("Years   Students/Home   TK-8/Home    HS/Home   SpEd/Home Children/Home  0 child  1 child  2 child  3 child    4 child");
     foreach (var year in result.Years)
     {
         Console.WriteLine(
@@ -280,7 +286,7 @@ static void PrintDistribution(string label, MonteCarloChildCountDistribution dis
 {
     Console.WriteLine(label);
     Console.WriteLine(
-        "  households: {0:N0}; 0 child {1:P1}, 1 child {2:P1}, 2 child {3:P1}, 3 child {4:P1}, 4+ child {5:P1}",
+        "  households: {0:N0}; 0 child {1:P1}, 1 child {2:P1}, 2 child {3:P1}, 3 child {4:P1}, 4 child {5:P1}",
         distribution.HouseholdCount,
         distribution.HomesWithoutChildrenShare,
         distribution.HomesWithOneChildShare,
@@ -371,6 +377,14 @@ static IEnumerable<OptimizeVariable> BuildOptimizeVariables(CliOptions options)
         (p, value) => p with { MoveInThreeChildShare = value });
 
     yield return new OptimizeVariable(
+        "four-plus-child",
+        0.005,
+        0.00,
+        0.03,
+        p => p.MoveInFourPlusChildShare,
+        (p, value) => p with { MoveInFourPlusChildShare = value });
+
+    yield return new OptimizeVariable(
         "first-birth",
         0.01,
         0.02,
@@ -395,12 +409,100 @@ static IEnumerable<OptimizeVariable> BuildOptimizeVariables(CliOptions options)
         (p, value) => p with { AnnualThirdNewChildProbability = value });
 
     yield return new OptimizeVariable(
+        "fourth-birth",
+        0.0005,
+        0.00,
+        0.003,
+        p => p.AnnualFourthPlusNewChildProbability,
+        (p, value) => p with { AnnualFourthPlusNewChildProbability = value });
+
+    yield return new OptimizeVariable(
+        "tk8-exit",
+        0.0025,
+        0.00,
+        0.02,
+        p => p.Tk8ExitProbability,
+        (p, value) => p with { Tk8ExitProbability = value });
+
+    yield return new OptimizeVariable(
+        "high-exit",
+        0.0025,
+        0.00,
+        0.02,
+        p => p.HighSchoolExitProbability,
+        (p, value) => p with { HighSchoolExitProbability = value });
+
+    yield return new OptimizeVariable(
+        "special-exit",
+        0.0025,
+        0.00,
+        0.03,
+        p => p.SpecialExitProbability,
+        (p, value) => p with { SpecialExitProbability = value });
+
+    yield return new OptimizeVariable(
+        "special-prob",
+        0.0025,
+        0.002,
+        0.03,
+        p => p.SpecialEducationProbability,
+        (p, value) => p with { SpecialEducationProbability = value });
+
+    yield return new OptimizeVariable(
         "same-year",
         0.05,
         0.25,
         0.65,
         p => p.SameSchoolYearProbability,
         (p, value) => p with { SameSchoolYearProbability = value });
+
+    yield return new OptimizeVariable(
+        "preschool-wt",
+        0.05,
+        0.10,
+        1.00,
+        p => p.MoveInPreschoolWeight,
+        (p, value) => p with { MoveInPreschoolWeight = value });
+
+    yield return new OptimizeVariable(
+        "tkk-wt",
+        0.04,
+        0.05,
+        0.60,
+        p => p.MoveInTkKWeight,
+        (p, value) => p with { MoveInTkKWeight = value });
+
+    yield return new OptimizeVariable(
+        "elem-wt",
+        0.05,
+        0.20,
+        1.20,
+        p => p.MoveInElementaryWeight,
+        (p, value) => p with { MoveInElementaryWeight = value });
+
+    yield return new OptimizeVariable(
+        "middle-wt",
+        0.04,
+        0.05,
+        0.70,
+        p => p.MoveInMiddleWeight,
+        (p, value) => p with { MoveInMiddleWeight = value });
+
+    yield return new OptimizeVariable(
+        "high-wt",
+        0.04,
+        0.03,
+        0.70,
+        p => p.MoveInHighWeight,
+        (p, value) => p with { MoveInHighWeight = value });
+
+    yield return new OptimizeVariable(
+        "postschool-wt",
+        0.01,
+        0.00,
+        0.20,
+        p => p.MoveInPostSchoolWeight,
+        (p, value) => p with { MoveInPostSchoolWeight = value });
 
     yield return new OptimizeVariable(
         "density-low",
@@ -444,7 +546,8 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     Console.WriteLine($"  seed:       {result.Parameters.Seed}");
     Console.WriteLine($"  parallel:   {FormatParallelism(result.Parameters.MaxDegreeOfParallelism)}");
     Console.WriteLine($"  grade win:  +/-{result.Parameters.GradeSmoothingWindow:N0} years");
-    Console.WriteLine($"  score wts:  total {result.Parameters.ScoreTotalWeight:N2}, grid {result.Parameters.ScoreGridWeight:N2}, grade {result.Parameters.ScoreGradeWeight:N2}");
+    Console.WriteLine($"  score wts:  total {result.Parameters.ScoreTotalWeight:N2}, grid {result.Parameters.ScoreGridWeight:N2}, grade {result.Parameters.ScoreGradeWeight:N2}, HS total {result.Parameters.ScoreHighSchoolTotalWeight:N2}, HS grade {result.Parameters.ScoreHighSchoolGradeWeight:N2}");
+    Console.WriteLine($"  year wts:   anchor {result.Parameters.AnchorYearWeight:N2}, slope {result.Parameters.YearWeightSlope:N2}/yr, cap {result.Parameters.YearWeightCap:N2}");
     Console.WriteLine($"  density:    low/med {result.Parameters.DensityLowMediumFactor:N2}, med-high {result.Parameters.DensityMediumHighFactor:N2}, high {result.Parameters.DensityHighFactor:N2}");
     Console.WriteLine($"  density 1:  low/med {result.Parameters.DensityLowMediumFirstChildFactor:N2}, med-high {result.Parameters.DensityMediumHighFirstChildFactor:N2}, high {result.Parameters.DensityHighFirstChildFactor:N2}");
     Console.WriteLine($"  density 2:  low/med {result.Parameters.DensityLowMediumSecondChildFactor:N2}, med-high {result.Parameters.DensityMediumHighSecondChildFactor:N2}, high {result.Parameters.DensityHighSecondChildFactor:N2}");
@@ -454,7 +557,7 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     Console.WriteLine($"  1 child:    {result.Parameters.MoveInOneChildShare:P2}");
     Console.WriteLine($"  2 child:    {result.Parameters.MoveInTwoChildShare:P2}");
     Console.WriteLine($"  3 child:    {result.Parameters.MoveInThreeChildShare:P2}");
-    Console.WriteLine($"  4+ child:   {result.Parameters.MoveInFourPlusChildShare:P2}");
+    Console.WriteLine($"  4 child:    {result.Parameters.MoveInFourPlusChildShare:P2}");
     Console.WriteLine($"  births/yr:  1st {result.Parameters.AnnualFirstNewChildProbability:P2}, 2nd {result.Parameters.AnnualSecondNewChildProbability:P2}, 3rd {result.Parameters.AnnualThirdNewChildProbability:P2}, 4th+ {result.Parameters.AnnualFourthPlusNewChildProbability:P2}");
     Console.WriteLine($"  TK-8 exit:  {result.Parameters.Tk8ExitProbability:P2}");
     Console.WriteLine($"  HS exit:    {result.Parameters.HighSchoolExitProbability:P2}");
@@ -473,12 +576,16 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     Console.WriteLine($"  grade total MAPE: {result.GradeMeanAbsolutePercentageError:P2} (diagnostic)");
     Console.WriteLine($"  grade/year MAE:   {result.GradeLevelMeanAbsoluteError:N1} (TK excluded, +/-{result.Parameters.GradeSmoothingWindow:N0} cohort window)");
     Console.WriteLine($"  grade/year MAPE:  {result.GradeLevelMeanAbsolutePercentageError:P2} (TK excluded, +/-{result.Parameters.GradeSmoothingWindow:N0} cohort window)");
+    Console.WriteLine($"  HS total MAE:     {result.HighSchoolMeanAbsoluteError:N0}");
+    Console.WriteLine($"  HS total MAPE:    {result.HighSchoolMeanAbsolutePercentageError:P2}");
+    Console.WriteLine($"  HS grade MAE:     {result.HighSchoolGradeMeanAbsoluteError:N1} (+/-{result.Parameters.GradeSmoothingWindow:N0} cohort window)");
+    Console.WriteLine($"  HS grade MAPE:    {result.HighSchoolGradeMeanAbsolutePercentageError:P2} (+/-{result.Parameters.GradeSmoothingWindow:N0} cohort window)");
     Console.WriteLine();
-    Console.WriteLine("Year                 Actual Grid   Modeled Grid     Grid Err   Grid/Yr MAPE   Actual Grade  Modeled Grade    Grade Err   Grade/Yr MAPE");
+    Console.WriteLine("Year                 Actual Grid   Modeled Grid     Grid Err   Grid/Yr MAPE   Actual Grade  Modeled Grade    Grade Err   Grade/Yr MAPE      Actual HS     Modeled HS       HS Err       HS MAPE");
     foreach (var comparison in result.Comparisons)
     {
         Console.WriteLine(
-            "{0} {1,20:N0} {2,14:N0} {3,12:+#,##0;-#,##0;0} {4,14:P2} {5,14:N0} {6,14:N0} {7,12:+#,##0;-#,##0;0} {8,15:P2}",
+            "{0} {1,20:N0} {2,14:N0} {3,12:+#,##0;-#,##0;0} {4,14:P2} {5,14:N0} {6,14:N0} {7,12:+#,##0;-#,##0;0} {8,15:P2} {9,14:N0} {10,14:N0} {11,12:+#,##0;-#,##0;0} {12,13:P2}",
             comparison.Year,
             comparison.ActualGridTotal,
             comparison.ModeledGridTotal,
@@ -487,7 +594,11 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
             comparison.ActualGradeTotal,
             comparison.ModeledGradeTotal,
             comparison.GradeError,
-            comparison.GradeLevelMeanAbsolutePercentageError);
+            comparison.GradeLevelMeanAbsolutePercentageError,
+            comparison.HighSchoolActualTotal,
+            comparison.HighSchoolModeledTotal,
+            comparison.HighSchoolError,
+            comparison.HighSchoolAbsolutePercentageError);
     }
 
     if (!showGradeDetails)
@@ -501,14 +612,15 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     {
         Console.WriteLine();
         Console.WriteLine($"{comparison.Year}");
-        Console.WriteLine("Grade        Actual      Modeled        Error      Error %");
+        Console.WriteLine("Grade        Actual  Adj Actual      Modeled        Error      Error %");
         foreach (var (grade, actual, modeled) in comparison.ModeledGrades
             .OrderBy(kvp => GradeSortKey(kvp.Key))
             .Select(kvp => (kvp.Key, comparison.ActualGrades.GetValueOrDefault(kvp.Key), kvp.Value)))
         {
-            var errorText = actual.HasValue ? (modeled - actual.Value).ToString("+#,##0;-#,##0;0") : "n/a";
-            var percentText = actual is > 0 ? (Math.Abs(modeled - actual.Value) / actual.Value).ToString("P1") : "n/a";
-            Console.WriteLine("{0,-8} {1,10} {2,12:N0} {3,12} {4,10}", grade, FormatNullable(actual), modeled, errorText, percentText);
+            var adjustedActual = comparison.AdjustedActualGrades.GetValueOrDefault(grade);
+            var errorText = adjustedActual > 0 ? (modeled - adjustedActual).ToString("+#,##0;-#,##0;0") : "n/a";
+            var percentText = adjustedActual > 0 ? (Math.Abs(modeled - adjustedActual) / adjustedActual).ToString("P1") : "n/a";
+            Console.WriteLine("{0,-8} {1,10} {2,11:N0} {3,12:N0} {4,12} {5,10}", grade, FormatNullable(actual), adjustedActual, modeled, errorText, percentText);
         }
     }
 }
@@ -549,7 +661,7 @@ static string FormatParallelism(int maxDegreeOfParallelism)
 static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> results)
 {
     using var writer = new StreamWriter(path);
-    writer.WriteLine("score,total_mape,grid_year_mape,grade_total_mape,grade_year_mape,total_mae,grid_year_mae,grade_total_mae,grade_year_mae,runs,seed,parallelism,grade_smoothing_window,score_total_weight,score_grid_weight,score_grade_weight,density_low_medium,density_medium_high,density_high,turnover,zero_child_share,one_child_share,two_child_share,three_child_share,four_plus_child_share,student_exit,annual_first_birth,annual_second_birth,annual_third_birth,annual_fourth_plus_birth,tk8_exit,high_exit,special_exit,special_education_probability,same_school_year,preschool_weight,tkk_weight,elementary_weight,middle_weight,high_weight,postschool_weight");
+    writer.WriteLine("score,total_mape,grid_year_mape,grade_total_mape,grade_year_mape,hs_total_mape,hs_grade_mape,total_mae,grid_year_mae,grade_total_mae,grade_year_mae,hs_total_mae,hs_grade_mae,runs,seed,parallelism,grade_smoothing_window,score_total_weight,score_grid_weight,score_grade_weight,score_hs_total_weight,score_hs_grade_weight,anchor_year_weight,year_weight_slope,year_weight_cap,density_low_medium,density_medium_high,density_high,turnover,zero_child_share,one_child_share,two_child_share,three_child_share,four_plus_child_share,student_exit,annual_first_birth,annual_second_birth,annual_third_birth,annual_fourth_plus_birth,tk8_exit,high_exit,special_exit,special_education_probability,same_school_year,preschool_weight,tkk_weight,elementary_weight,middle_weight,high_weight,postschool_weight");
     foreach (var result in results.OrderBy(item => item.CombinedScore))
     {
         var p = result.Parameters;
@@ -559,10 +671,14 @@ static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> resu
             result.GridLevelMeanAbsolutePercentageError,
             result.GradeMeanAbsolutePercentageError,
             result.GradeLevelMeanAbsolutePercentageError,
+            result.HighSchoolMeanAbsolutePercentageError,
+            result.HighSchoolGradeMeanAbsolutePercentageError,
             result.GridMeanAbsoluteError,
             result.GridLevelMeanAbsoluteError,
             result.GradeMeanAbsoluteError,
             result.GradeLevelMeanAbsoluteError,
+            result.HighSchoolMeanAbsoluteError,
+            result.HighSchoolGradeMeanAbsoluteError,
             p.Runs,
             p.Seed,
             p.MaxDegreeOfParallelism,
@@ -570,6 +686,11 @@ static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> resu
             p.ScoreTotalWeight,
             p.ScoreGridWeight,
             p.ScoreGradeWeight,
+            p.ScoreHighSchoolTotalWeight,
+            p.ScoreHighSchoolGradeWeight,
+            p.AnchorYearWeight,
+            p.YearWeightSlope,
+            p.YearWeightCap,
             p.DensityLowMediumFactor,
             p.DensityMediumHighFactor,
             p.DensityHighFactor,
@@ -641,6 +762,11 @@ Common options:
   --score-total <n>   Score weight for district total MAPE, default 1.00
   --score-grid <n>    Score weight for grid/year MAPE, default 6.00
   --score-grade <n>   Score weight for grade/year MAPE, default 1.00
+  --score-hs-total <n> Score weight for high-school total MAPE, default 2.00
+  --score-hs-grade <n> Score weight for high-school grade/year MAPE, default 1.00
+  --anchor-weight <n>  Weight for anchored start year when actual data exists, default 0.25
+  --year-weight-slope <n> Extra validation weight per year after start, default 0.15
+  --year-weight-cap <n> Maximum validation year weight, default 2.00
   --density-low <n>   Low/medium density student factor, default 1.00
   --density-rmh <n>   Medium-high density student factor, default 0.90
   --density-high <n>  High density student factor, default 0.95
@@ -659,7 +785,7 @@ Common options:
   --one-child <p>     Move-in share with 1 child, default 0.2390
   --two-child <p>     Move-in share with 2 children, default 0.6150
   --three-child <p>   Move-in share with 3 children, default 0.0350
-  --four-plus-child <p> Move-in share with 4+ children, default 0.00
+  --four-plus-child <p> Move-in share with 4 children, default 0.00
   --exit <p>          Student exit probability, default 0.00
   --first-birth <p>   Yearly probability of a household's 1st new child, default 0.045
   --second-birth <p>  Yearly probability of a household's 2nd new child, default 0.033
@@ -691,7 +817,7 @@ Search options:
   --one-children <csv> Candidate move-in shares with 1 child
   --two-children <csv> Candidate move-in shares with 2 children
   --three-children <csv> Candidate move-in shares with 3 children
-  --four-plus-children <csv> Candidate move-in shares with 4+ children
+  --four-plus-children <csv> Candidate move-in shares with 4 children
   --exits <csv>       Candidate exit probabilities
   --first-births <csv> Candidate yearly 1st new-child probabilities
   --second-births <csv> Candidate yearly 2nd new-child probabilities
@@ -798,6 +924,8 @@ sealed class CliOptions
                 ReadDouble(values, "score-total", 1.0),
                 ReadDouble(values, "score-grid", 6.0),
                 ReadDouble(values, "score-grade", 1.0),
+                ReadDouble(values, "score-hs-total", 2.0),
+                ReadDouble(values, "score-hs-grade", 1.0),
                 ReadDouble(values, "density-low", 1.0),
                 ReadDouble(values, "density-rmh", 0.90),
                 ReadDouble(values, "density-high", 0.95),
@@ -809,7 +937,10 @@ sealed class CliOptions
                 ReadDouble(values, "density-rmh-3rd", 1.0),
                 ReadDouble(values, "density-high-1st", 1.0),
                 ReadDouble(values, "density-high-2nd", 1.0),
-                ReadDouble(values, "density-high-3rd", 0.59)),
+                ReadDouble(values, "density-high-3rd", 0.59),
+                ReadDouble(values, "anchor-weight", 0.25),
+                ReadDouble(values, "year-weight-slope", 0.15),
+                ReadDouble(values, "year-weight-cap", 2.0)),
             OwnershipCandidates = ReadDoubles(values, "turnovers"),
             ZeroChildCandidates = ReadDoubles(values, "zero-children"),
             OneChildCandidates = ReadDoubles(values, "one-children", "firsts"),

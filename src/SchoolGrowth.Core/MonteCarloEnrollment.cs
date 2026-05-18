@@ -1,7 +1,7 @@
 namespace SchoolGrowth.Core;
 
 public sealed record MonteCarloParameters(
-    int Runs = 1000,
+    int Runs = 50,
     int Seed = 2026,
     double OwnershipChangeProbability = 0.05,
     double MoveInZeroChildShare = 0.1109,
@@ -30,6 +30,8 @@ public sealed record MonteCarloParameters(
     double ScoreTotalWeight = 1.0,
     double ScoreGridWeight = 6.0,
     double ScoreGradeWeight = 1.0,
+    double ScoreHighSchoolTotalWeight = 2.0,
+    double ScoreHighSchoolGradeWeight = 1.0,
     double DensityLowMediumFactor = 1.0,
     double DensityMediumHighFactor = 0.90,
     double DensityHighFactor = 0.95,
@@ -41,7 +43,15 @@ public sealed record MonteCarloParameters(
     double DensityMediumHighThirdChildFactor = 1.0,
     double DensityHighFirstChildFactor = 1.0,
     double DensityHighSecondChildFactor = 1.0,
-    double DensityHighThirdChildFactor = 0.59);
+    double DensityHighThirdChildFactor = 0.59,
+    double AnchorYearWeight = 0.25,
+    double YearWeightSlope = 0.15,
+    double YearWeightCap = 2.0);
+
+public sealed record MonteCarloParameterPreset(
+    string Name,
+    string Description,
+    MonteCarloParameters Parameters);
 
 public sealed record MonteCarloValidationRequest(
     int StartYear,
@@ -66,7 +76,13 @@ public sealed record MonteCarloYearComparison(
     double GradeError,
     double GradeAbsolutePercentageError,
     double GradeLevelMeanAbsoluteError,
-    double GradeLevelMeanAbsolutePercentageError);
+    double GradeLevelMeanAbsolutePercentageError,
+    double HighSchoolActualTotal,
+    double HighSchoolModeledTotal,
+    double HighSchoolError,
+    double HighSchoolAbsolutePercentageError,
+    double HighSchoolGradeMeanAbsoluteError,
+    double HighSchoolGradeMeanAbsolutePercentageError);
 
 public sealed record MonteCarloValidationResult(
     MonteCarloParameters Parameters,
@@ -79,6 +95,10 @@ public sealed record MonteCarloValidationResult(
     double GradeMeanAbsolutePercentageError,
     double GradeLevelMeanAbsoluteError,
     double GradeLevelMeanAbsolutePercentageError,
+    double HighSchoolMeanAbsoluteError,
+    double HighSchoolMeanAbsolutePercentageError,
+    double HighSchoolGradeMeanAbsoluteError,
+    double HighSchoolGradeMeanAbsolutePercentageError,
     double CombinedScore);
 
 public sealed record MonteCarloSearchRequest(
@@ -92,7 +112,8 @@ public sealed record MonteCarloSearchRequest(
     IReadOnlyList<double> MoveInTwoChildShares,
     IReadOnlyList<double> MoveInThreeChildShares,
     IReadOnlyList<double> MoveInFourPlusChildShares,
-    IReadOnlyList<double> StudentExitProbabilities);
+    IReadOnlyList<double> StudentExitProbabilities,
+    MonteCarloParameters? BaseParameters = null);
 
 public sealed record MonteCarloSearchResult(
     MonteCarloValidationResult Best,
@@ -175,10 +196,17 @@ public sealed class MonteCarloEnrollmentModel
 
     public MonteCarloValidationResult Validate(MonteCarloValidationRequest request)
     {
-        var maximumEndYear = data.AugustYears.Last() + 50;
-        var startYear = Math.Clamp(request.StartYear, data.AugustYears.First(), maximumEndYear);
+        var minimumStartYear = FirstHomeBuildYear();
+        var maximumEndYear = Math.Max(data.AugustYears.Last(), LastHomeBuildYear()) + 50;
+        var startYear = Math.Clamp(request.StartYear, minimumStartYear, maximumEndYear);
         var endYear = Math.Clamp(request.EndYear, startYear, maximumEndYear);
-        var baselineYear = data.AugustYears.Where(year => year < startYear).DefaultIfEmpty(startYear).Max();
+        var anchorStartYear = HasActualGradeData(startYear) && HasActualGridData(startYear);
+        var baselineYear = anchorStartYear
+            ? startYear
+            : data.AugustYears
+                .Where(year => year < startYear)
+                .Select(year => (int?)year)
+                .Max() ?? startYear - 1;
         var parameters = Sanitize(request.Parameters);
         var accumulators = CreateYearAccumulators(startYear, endYear);
         var mergeLock = new object();
@@ -201,6 +229,12 @@ public sealed class MonteCarloEnrollmentModel
 
                 for (var year = startYear; year <= endYear; year++)
                 {
+                    if (anchorStartYear && year == startYear)
+                    {
+                        localAccumulators[year].Add(homes, year);
+                        continue;
+                    }
+
                     AddBuiltHomes(homes, year, parameters, random);
                     AdvanceHomes(homes, year, parameters, random);
                     localAccumulators[year].Add(homes, year);
@@ -224,23 +258,33 @@ public sealed class MonteCarloEnrollmentModel
             .OrderBy(kvp => kvp.Key)
             .Select(kvp => BuildComparison(kvp.Key, kvp.Value, parameters))
             .ToList();
+        var referenceYearWeights = comparisons.ToDictionary(
+            item => item.Year,
+            item => ReferenceYearWeight(item.Year, startYear, anchorStartYear, parameters));
 
         var gridReferenceComparisons = comparisons.Where(item => item.ActualGridTotal > 0).ToList();
         var gradeReferenceComparisons = comparisons.Where(item => item.ActualGradeTotal > 0).ToList();
-        var gridMae = gridReferenceComparisons.Select(item => Math.Abs(item.GridError)).DefaultIfEmpty(0).Average();
-        var gridMape = gridReferenceComparisons.Select(item => item.GridAbsolutePercentageError).DefaultIfEmpty(0).Average();
-        var gridLevelMae = gridReferenceComparisons.Select(item => item.GridLevelMeanAbsoluteError).DefaultIfEmpty(0).Average();
-        var gridLevelMape = gridReferenceComparisons.Select(item => item.GridLevelMeanAbsolutePercentageError).DefaultIfEmpty(0).Average();
-        var gradeMae = gradeReferenceComparisons.Select(item => Math.Abs(item.GradeError)).DefaultIfEmpty(0).Average();
-        var gradeMape = gradeReferenceComparisons.Select(item => item.GradeAbsolutePercentageError).DefaultIfEmpty(0).Average();
-        var gradeLevelMae = gradeReferenceComparisons.Select(item => item.GradeLevelMeanAbsoluteError).DefaultIfEmpty(0).Average();
-        var gradeLevelMape = gradeReferenceComparisons.Select(item => item.GradeLevelMeanAbsolutePercentageError).DefaultIfEmpty(0).Average();
+        var gridMae = WeightedAverage(gridReferenceComparisons, item => Math.Abs(item.GridError), item => referenceYearWeights[item.Year]);
+        var gridMape = WeightedAverage(gridReferenceComparisons, item => item.GridAbsolutePercentageError, item => referenceYearWeights[item.Year]);
+        var gridLevelMae = WeightedAverage(gridReferenceComparisons, item => item.GridLevelMeanAbsoluteError, item => referenceYearWeights[item.Year]);
+        var gridLevelMape = WeightedAverage(gridReferenceComparisons, item => item.GridLevelMeanAbsolutePercentageError, item => referenceYearWeights[item.Year]);
+        var gradeMae = WeightedAverage(gradeReferenceComparisons, item => Math.Abs(item.GradeError), item => referenceYearWeights[item.Year]);
+        var gradeMape = WeightedAverage(gradeReferenceComparisons, item => item.GradeAbsolutePercentageError, item => referenceYearWeights[item.Year]);
+        var gradeLevelMae = WeightedAverage(gradeReferenceComparisons, item => item.GradeLevelMeanAbsoluteError, item => referenceYearWeights[item.Year]);
+        var gradeLevelMape = WeightedAverage(gradeReferenceComparisons, item => item.GradeLevelMeanAbsolutePercentageError, item => referenceYearWeights[item.Year]);
+        var highSchoolReferenceComparisons = comparisons.Where(item => item.HighSchoolActualTotal > 0).ToList();
+        var highSchoolMae = WeightedAverage(highSchoolReferenceComparisons, item => Math.Abs(item.HighSchoolError), item => referenceYearWeights[item.Year]);
+        var highSchoolMape = WeightedAverage(highSchoolReferenceComparisons, item => item.HighSchoolAbsolutePercentageError, item => referenceYearWeights[item.Year]);
+        var highSchoolGradeMae = WeightedAverage(highSchoolReferenceComparisons, item => item.HighSchoolGradeMeanAbsoluteError, item => referenceYearWeights[item.Year]);
+        var highSchoolGradeMape = WeightedAverage(highSchoolReferenceComparisons, item => item.HighSchoolGradeMeanAbsolutePercentageError, item => referenceYearWeights[item.Year]);
         var scoreWeights = NormalizeScoreWeights(parameters);
         var score = gridMape * scoreWeights.Total
             + gridLevelMape * scoreWeights.Grid
-            + gradeLevelMape * scoreWeights.Grade;
+            + gradeLevelMape * scoreWeights.Grade
+            + highSchoolMape * scoreWeights.HighSchoolTotal
+            + highSchoolGradeMape * scoreWeights.HighSchoolGrade;
 
-        return new MonteCarloValidationResult(parameters, comparisons, gridMae, gridMape, gridLevelMae, gridLevelMape, gradeMae, gradeMape, gradeLevelMae, gradeLevelMape, score);
+        return new MonteCarloValidationResult(parameters, comparisons, gridMae, gridMape, gridLevelMae, gridLevelMape, gradeMae, gradeMape, gradeLevelMae, gradeLevelMape, highSchoolMae, highSchoolMape, highSchoolGradeMae, highSchoolGradeMape, score);
     }
 
     private Dictionary<int, YearAccumulator> CreateYearAccumulators(int startYear, int endYear)
@@ -251,31 +295,73 @@ public sealed class MonteCarloEnrollmentModel
                 _ => new YearAccumulator(data.GridRows.Select(row => row.Name), GradeOrder));
     }
 
+    private int FirstHomeBuildYear()
+    {
+        return data.HomeRows
+            .SelectMany(row => row.HomesByYear.Keys)
+            .DefaultIfEmpty(data.AugustYears.FirstOrDefault(2003))
+            .Min();
+    }
+
+    private int LastHomeBuildYear()
+    {
+        return data.HomeRows
+            .SelectMany(row => row.HomesByYear.Keys)
+            .DefaultIfEmpty(data.AugustYears.LastOrDefault(2024))
+            .Max();
+    }
+
+    private bool HasActualGradeData(int year)
+    {
+        return data.GradeRows.Any(row => (ActualSeriesValueOrNull(row.Name, year, data.GradeRows) ?? 0) > 0);
+    }
+
+    private bool HasActualGridData(int year)
+    {
+        return data.GridRows.Any(row => (ActualSeriesValueOrNull(row.Name, year, data.GridRows) ?? 0) > 0);
+    }
+
     public MonteCarloSearchResult FindBest(MonteCarloSearchRequest request)
     {
         var candidates = new List<MonteCarloValidationResult>();
         var index = 0;
+        var baseParameters = Sanitize(request.BaseParameters ?? new MonteCarloParameters(
+            Runs: request.RunsPerCandidate,
+            Seed: request.Seed));
+        var exitCandidates = request.StudentExitProbabilities.Count > 0
+            ? request.StudentExitProbabilities.Select(value => (double?)value)
+            : new double?[] { null };
+
         foreach (var turnover in request.OwnershipChangeProbabilities.DefaultIfEmpty(0.04))
         foreach (var zero in request.MoveInZeroChildShares.DefaultIfEmpty(0.05))
         foreach (var one in request.MoveInOneChildShares.DefaultIfEmpty(0.30))
         foreach (var two in request.MoveInTwoChildShares.DefaultIfEmpty(0.60))
         foreach (var three in request.MoveInThreeChildShares.DefaultIfEmpty(0.05))
         foreach (var fourPlus in request.MoveInFourPlusChildShares.DefaultIfEmpty(0.0))
-        foreach (var exit in request.StudentExitProbabilities.DefaultIfEmpty(0.015))
+        foreach (var exit in exitCandidates)
         {
-            var parameters = new MonteCarloParameters(
-                request.RunsPerCandidate,
-                request.Seed + index * 7919,
-                turnover,
-                zero,
-                one,
-                two,
-                three,
-                fourPlus,
-                exit,
-                Tk8ExitProbability: exit,
-                HighSchoolExitProbability: exit,
-                SpecialExitProbability: exit);
+            var parameters = baseParameters with
+            {
+                Runs = request.RunsPerCandidate,
+                Seed = request.Seed + index * 7919,
+                OwnershipChangeProbability = turnover,
+                MoveInZeroChildShare = zero,
+                MoveInOneChildShare = one,
+                MoveInTwoChildShare = two,
+                MoveInThreeChildShare = three,
+                MoveInFourPlusChildShare = fourPlus
+            };
+            if (exit is double exitProbability)
+            {
+                parameters = parameters with
+                {
+                    StudentExitProbability = exitProbability,
+                    Tk8ExitProbability = exitProbability,
+                    HighSchoolExitProbability = exitProbability,
+                    SpecialExitProbability = exitProbability
+                };
+            }
+
             candidates.Add(Validate(new MonteCarloValidationRequest(request.StartYear, request.EndYear, parameters)));
             index++;
         }
@@ -383,7 +469,9 @@ public sealed class MonteCarloEnrollmentModel
         {
             if (IsExcludedValidationGrid(grid)) continue;
 
-            var existingHomes = homes.Count(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase));
+            var existingHomes = homes.Count(home =>
+                home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase)
+                && home.IsActive(baselineYear));
             if (existingHomes == 0 && grades.Values.Sum() > 0)
             {
                 var expectedStudentsPerHome = Math.Max(0.25, ExpectedStudentsPerNewHousehold(parameters));
@@ -391,8 +479,10 @@ public sealed class MonteCarloEnrollmentModel
                 AddPlayedBackSyntheticHomes(homes, grid, baselineYear, syntheticHomes, parameters, random);
             }
 
-            ReconcileBaselineChildren(homes, grid, grades, random);
+            ReconcileBaselineChildren(homes, grid, baselineYear, grades, random);
         }
+
+        SeedBaselineKindergartenPipeline(homes, baselineYear, random);
 
         return homes;
     }
@@ -512,15 +602,18 @@ public sealed class MonteCarloEnrollmentModel
         }
     }
 
-    private void ReconcileBaselineChildren(List<SimHome> homes, string grid, Dictionary<string, double> grades, Random random)
+    private void ReconcileBaselineChildren(List<SimHome> homes, string grid, int baselineYear, Dictionary<string, double> grades, Random random)
     {
         var gridHomes = homes
             .Where(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase))
+            .Where(home => home.IsActive(baselineYear))
             .ToList();
         if (gridHomes.Count == 0) return;
 
         foreach (var (grade, value) in grades)
         {
+            if (grade.Equals("TK", StringComparison.OrdinalIgnoreCase)) continue;
+
             var target = (int)Math.Round(Math.Max(0, value));
             var current = gridHomes.Sum(home => home.Children.Count(child => ChildMatchesGrade(child, grade)));
             var difference = target - current;
@@ -567,6 +660,93 @@ public sealed class MonteCarloEnrollmentModel
             var childIndexes = home.Children
                 .Select((child, index) => (child, index))
                 .Where(item => ChildMatchesGrade(item.child, grade))
+                .Select(item => item.index)
+                .ToList();
+            home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);
+        }
+    }
+
+    private void SeedBaselineKindergartenPipeline(List<SimHome> homes, int baselineYear, Random random)
+    {
+        var kindergartenYear = baselineYear + 1;
+        var actualGrades = data.GradeRows.ToDictionary(
+            row => row.Name,
+            row => ActualSeriesValueOrNull(row.Name, kindergartenYear, data.GradeRows),
+            StringComparer.OrdinalIgnoreCase);
+        if (!actualGrades.GetValueOrDefault("K").HasValue)
+        {
+            return;
+        }
+
+        var actualGridTotals = data.GridRows.ToDictionary(
+            row => row.Name,
+            row => ActualGridValueOrNull(row.Name, kindergartenYear),
+            StringComparer.OrdinalIgnoreCase);
+        var adjustedGrades = BuildAdjustedActualGrades(kindergartenYear, actualGrades, actualGridTotals);
+        var kindergartenTarget = adjustedGrades.GetValueOrDefault("K");
+        if (kindergartenTarget <= 0)
+        {
+            return;
+        }
+
+        var includedGridTotals = actualGridTotals
+            .Where(kvp => !IsExcludedValidationGrid(kvp.Key))
+            .Select(kvp => (Grid: kvp.Key, Total: kvp.Value ?? ActualGridValue(kvp.Key, baselineYear)))
+            .Where(item => item.Total > 0)
+            .ToList();
+        var totalGridStudents = includedGridTotals.Sum(item => item.Total);
+        if (totalGridStudents <= 0)
+        {
+            return;
+        }
+
+        foreach (var (grid, gridTotal) in includedGridTotals)
+        {
+            var gridHomes = homes
+                .Where(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (gridHomes.Count == 0) continue;
+
+            var target = (int)Math.Round(kindergartenTarget * gridTotal / totalGridStudents);
+            var current = gridHomes.Sum(home => home.Children.Count(IsKindergartenReadyChild));
+            var difference = target - current;
+            if (difference > 0)
+            {
+                AddBaselineKindergartenReadyChildren(gridHomes, difference, random);
+            }
+            else if (difference < 0)
+            {
+                RemoveBaselineKindergartenReadyChildren(gridHomes, -difference, random);
+            }
+        }
+    }
+
+    private static bool IsKindergartenReadyChild(SimChild child)
+    {
+        return !child.IsSpecialEducation && child.GradeIndex == 0;
+    }
+
+    private static void AddBaselineKindergartenReadyChildren(List<SimHome> gridHomes, int count, Random random)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            gridHomes[random.Next(gridHomes.Count)].Children.Add(new SimChild(0, isSpecialEducation: false));
+        }
+    }
+
+    private static void RemoveBaselineKindergartenReadyChildren(List<SimHome> gridHomes, int count, Random random)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var candidates = gridHomes
+                .Where(home => home.Children.Any(IsKindergartenReadyChild))
+                .ToList();
+            if (candidates.Count == 0) return;
+
+            var home = candidates[random.Next(candidates.Count)];
+            var childIndexes = home.Children
+                .Select((child, index) => (child, index))
+                .Where(item => IsKindergartenReadyChild(item.child))
                 .Select(item => item.index)
                 .ToList();
             home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);
@@ -657,6 +837,8 @@ public sealed class MonteCarloEnrollmentModel
             .Sum(kvp => kvp.Value);
         var actualGradeTotal = GradeOrder.Sum(grade => adjustedActualGrades.GetValueOrDefault(grade));
         var modeledGradeTotal = GradeOrder.Sum(grade => modeledGrades.GetValueOrDefault(grade));
+        var actualHighSchoolTotal = HighSchoolGrades.Sum(grade => adjustedActualGrades.GetValueOrDefault(grade));
+        var modeledHighSchoolTotal = HighSchoolGrades.Sum(grade => modeledGrades.GetValueOrDefault(grade));
         var gridErrors = actualGridTotals
             .Where(kvp => !IsExcludedValidationGrid(kvp.Key))
             .Select(kvp =>
@@ -669,17 +851,32 @@ public sealed class MonteCarloEnrollmentModel
             .ToList();
         var gridLevelMae = gridErrors.Select(item => item.absoluteError).DefaultIfEmpty(0).Average();
         var gridLevelMape = gridErrors.Select(item => item.absoluteError / item.actual).DefaultIfEmpty(0).Average();
-        var gradeErrors = ValidationGrades
-            .Select(grade =>
-            {
-                var actual = SmoothedAdjustedActualGradeValue(year, grade, parameters.GradeSmoothingWindow);
-                var modeled = modeledGrades.GetValueOrDefault(grade);
-                return (actual, absoluteError: Math.Abs(modeled - actual));
-            })
-            .Where(item => item.actual > 0)
-            .ToList();
+        var gradeErrors = actualGradeTotal > 0
+            ? ValidationGrades
+                .Select(grade =>
+                {
+                    var actual = SmoothedAdjustedActualGradeValue(year, grade, parameters.GradeSmoothingWindow);
+                    var modeled = modeledGrades.GetValueOrDefault(grade);
+                    return (actual, absoluteError: Math.Abs(modeled - actual));
+                })
+                .Where(item => item.actual > 0)
+                .ToList()
+            : [];
         var gradeLevelMae = gradeErrors.Select(item => item.absoluteError).DefaultIfEmpty(0).Average();
         var gradeLevelMape = gradeErrors.Select(item => item.absoluteError / item.actual).DefaultIfEmpty(0).Average();
+        var highSchoolGradeErrors = actualGradeTotal > 0
+            ? HighSchoolGrades
+                .Select(grade =>
+                {
+                    var actual = SmoothedAdjustedActualGradeValue(year, grade, parameters.GradeSmoothingWindow);
+                    var modeled = modeledGrades.GetValueOrDefault(grade);
+                    return (actual, absoluteError: Math.Abs(modeled - actual));
+                })
+                .Where(item => item.actual > 0)
+                .ToList()
+            : [];
+        var highSchoolGradeMae = highSchoolGradeErrors.Select(item => item.absoluteError).DefaultIfEmpty(0).Average();
+        var highSchoolGradeMape = highSchoolGradeErrors.Select(item => item.absoluteError / item.actual).DefaultIfEmpty(0).Average();
 
         return new MonteCarloYearComparison(
             year,
@@ -699,7 +896,13 @@ public sealed class MonteCarloEnrollmentModel
             modeledGradeTotal - actualGradeTotal,
             actualGradeTotal > 0 ? Math.Abs(modeledGradeTotal - actualGradeTotal) / actualGradeTotal : 0,
             gradeLevelMae,
-            gradeLevelMape);
+            gradeLevelMape,
+            actualHighSchoolTotal,
+            modeledHighSchoolTotal,
+            modeledHighSchoolTotal - actualHighSchoolTotal,
+            actualHighSchoolTotal > 0 ? Math.Abs(modeledHighSchoolTotal - actualHighSchoolTotal) / actualHighSchoolTotal : 0,
+            highSchoolGradeMae,
+            highSchoolGradeMape);
     }
 
     private double ActualGridValue(string grid, int year)
@@ -914,6 +1117,11 @@ public sealed class MonteCarloEnrollmentModel
             ScoreTotalWeight = Math.Max(0, parameters.ScoreTotalWeight),
             ScoreGridWeight = Math.Max(0, parameters.ScoreGridWeight),
             ScoreGradeWeight = Math.Max(0, parameters.ScoreGradeWeight),
+            ScoreHighSchoolTotalWeight = Math.Max(0, parameters.ScoreHighSchoolTotalWeight),
+            ScoreHighSchoolGradeWeight = Math.Max(0, parameters.ScoreHighSchoolGradeWeight),
+            AnchorYearWeight = Math.Clamp(parameters.AnchorYearWeight, 0, 10),
+            YearWeightSlope = Math.Clamp(parameters.YearWeightSlope, 0, 10),
+            YearWeightCap = Math.Clamp(parameters.YearWeightCap, 0.01, 100),
             DensityLowMediumFactor = Math.Clamp(parameters.DensityLowMediumFactor, 0.2, 2.0),
             DensityMediumHighFactor = Math.Clamp(parameters.DensityMediumHighFactor, 0.1, 2.0),
             DensityHighFactor = Math.Clamp(parameters.DensityHighFactor, 0.0, 2.0),
@@ -931,18 +1139,56 @@ public sealed class MonteCarloEnrollmentModel
 
     private static double ClampProbability(double value) => Math.Clamp(value, 0, 1);
 
+    private static double ReferenceYearWeight(int year, int startYear, bool anchorStartYear, MonteCarloParameters parameters)
+    {
+        if (anchorStartYear && year == startYear)
+        {
+            return parameters.AnchorYearWeight;
+        }
+
+        var yearsAfterStart = Math.Max(0, year - startYear);
+        var weight = 1.0 + yearsAfterStart * parameters.YearWeightSlope;
+        return Math.Min(parameters.YearWeightCap, weight);
+    }
+
+    private static double WeightedAverage<T>(
+        IReadOnlyCollection<T> items,
+        Func<T, double> valueSelector,
+        Func<T, double> weightSelector)
+    {
+        var weightTotal = 0.0;
+        var weightedValueTotal = 0.0;
+        foreach (var item in items)
+        {
+            var weight = Math.Max(0, weightSelector(item));
+            if (weight <= 0)
+            {
+                continue;
+            }
+
+            weightTotal += weight;
+            weightedValueTotal += valueSelector(item) * weight;
+        }
+
+        return weightTotal > 0 ? weightedValueTotal / weightTotal : 0;
+    }
+
     private static bool IsExcludedValidationGrid(string grid)
     {
         return ExcludedValidationGrids.Contains(grid);
     }
 
-    private static (double Total, double Grid, double Grade) NormalizeScoreWeights(MonteCarloParameters parameters)
+    private static (double Total, double Grid, double Grade, double HighSchoolTotal, double HighSchoolGrade) NormalizeScoreWeights(MonteCarloParameters parameters)
     {
         var total = Math.Max(0, parameters.ScoreTotalWeight);
         var grid = Math.Max(0, parameters.ScoreGridWeight);
         var grade = Math.Max(0, parameters.ScoreGradeWeight);
-        var sum = total + grid + grade;
-        return sum > 0 ? (total / sum, grid / sum, grade / sum) : (0.3, 0.2, 0.5);
+        var highSchoolTotal = Math.Max(0, parameters.ScoreHighSchoolTotalWeight);
+        var highSchoolGrade = Math.Max(0, parameters.ScoreHighSchoolGradeWeight);
+        var sum = total + grid + grade + highSchoolTotal + highSchoolGrade;
+        return sum > 0
+            ? (total / sum, grid / sum, grade / sum, highSchoolTotal / sum, highSchoolGrade / sum)
+            : (0.25, 0.35, 0.15, 0.15, 0.10);
     }
 
     private static double NewChildProbability(SimHome home, MonteCarloParameters parameters)

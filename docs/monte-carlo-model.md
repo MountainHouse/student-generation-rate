@@ -24,7 +24,7 @@ move_in_zero_child_share
 move_in_one_child_share
 move_in_two_child_share
 move_in_three_child_share
-move_in_four_plus_child_share
+move_in_four_plus_child_share   # historical name; currently means exactly 4 children at move-in
 student_exit_probability
 move_in_preschool_weight
 move_in_tk_k_weight
@@ -323,7 +323,7 @@ P(0 children)  = 0.05
 P(1 child)     = 0.30
 P(2 children)  = 0.60
 P(3 children)  = 0.05
-P(4+ children) = 0.00
+P(4 children) = 0.00
 ```
 
 For each child, assign age using an initial child-age distribution:
@@ -369,19 +369,19 @@ RL/RM:
   1 child = 1.00x
   2 child = 1.00x
   3 child = 1.00x
-  4+ child = 1.00x
+  4 child = 1.00x
 
 RMH:
   1 child = 0.95x
   2 child = 0.70x
   3 child = 0.20x
-  4+ child = 0.05x
+  4 child = 0.05x
 
 RH:
   1 child = 0.90x
   2 child = 0.50x
   3 child = 0.05x
-  4+ child = 0.00x
+  4 child = 0.00x
 ```
 
 The zero-child share is not directly reduced. As larger-family shares are reduced and the distribution is normalized, the zero-child share rises naturally in denser zoning.

@@ -19,6 +19,7 @@
     <Copy SourceFiles="..\..\data\grid.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
     <Copy SourceFiles="..\..\data\grade.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
     <Copy SourceFiles="..\..\data\schools.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\..\data\monte-carlo-presets.json" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

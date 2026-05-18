@@ -1,0 +1,34 @@
+<section class="@CssClass" style="@Style">
+    <div class="tool-header">
+        <button type="button" class="tool-toggle" title="Collapse or expand" @onclick="() => OnToggle.InvokeAsync(Id)">
+            @(Collapsed ? "+" : "-")
+        </button>
+        <h2>@Title</h2>
+        <div class="tool-actions">
+            <button type="button" class="secondary tool-action" title="Move up" disabled="@(!CanMoveUp)" @onclick="() => OnMoveUp.InvokeAsync(Id)">Up</button>
+            <button type="button" class="secondary tool-action" title="Move down" disabled="@(!CanMoveDown)" @onclick="() => OnMoveDown.InvokeAsync(Id)">Down</button>
+            <button type="button" class="secondary tool-action" title="Remove tool" @onclick="() => OnRemove.InvokeAsync(Id)">Remove</button>
+        </div>
+    </div>
+    @if (!Collapsed)
+    {
+        <div class="tool-body">
+            @ChildContent
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string CssClass { get; set; } = "band tool-panel";
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public bool Collapsed { get; set; }
+    [Parameter] public bool CanMoveUp { get; set; }
+    [Parameter] public bool CanMoveDown { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback<string> OnToggle { get; set; }
+    [Parameter] public EventCallback<string> OnMoveUp { get; set; }
+    [Parameter] public EventCallback<string> OnMoveDown { get; set; }
+    [Parameter] public EventCallback<string> OnRemove { get; set; }
+}
