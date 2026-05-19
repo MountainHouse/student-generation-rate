@@ -96,11 +96,11 @@ window.schoolGrowthTables = (() => {
                     thead,
                     floating,
                     floatingTable,
-                    resizeObserver: new ResizeObserver(() => update(wrap))
+                    resizeObserver: new ResizeObserver(() => updateAll())
                 };
                 instances.set(wrap, instance);
 
-                wrap.addEventListener("scroll", () => update(wrap), { passive: true });
+                wrap.addEventListener("scroll", updateAll, { passive: true });
                 instance.resizeObserver.observe(wrap);
                 instance.resizeObserver.observe(table);
             } else {
@@ -110,7 +110,7 @@ window.schoolGrowthTables = (() => {
             }
 
             wireFloatingInputs(instance);
-            update(wrap);
+            updateAll();
         });
 
         if (!window.__schoolGrowthTableHeadersAttached) {
@@ -121,23 +121,36 @@ window.schoolGrowthTables = (() => {
     }
 
     function updateAll() {
-        for (const wrap of instances.keys()) {
-            update(wrap);
+        let active = null;
+        let activeTop = -Number.MAX_VALUE;
+        for (const [wrap, instance] of instances) {
+            const tableRect = instance.table.getBoundingClientRect();
+            const wrapRect = wrap.getBoundingClientRect();
+            const headerHeight = instance.thead.getBoundingClientRect().height || 0;
+            const visible = isFloatingHeaderVisible(tableRect, wrapRect, headerHeight);
+            if (visible && tableRect.top > activeTop) {
+                active = wrap;
+                activeTop = tableRect.top;
+            }
+        }
+
+        for (const [wrap, instance] of instances) {
+            if (wrap === active) {
+                update(wrap, true);
+            } else {
+                instance.floating.style.display = "none";
+            }
         }
     }
 
-    function update(wrap) {
+    function update(wrap, allowVisible = false) {
         const instance = instances.get(wrap);
         if (!instance || !document.body.contains(wrap)) return;
 
         const tableRect = instance.table.getBoundingClientRect();
         const wrapRect = wrap.getBoundingClientRect();
         const headerHeight = instance.thead.getBoundingClientRect().height || 0;
-        const visible = tableRect.top < 0
-            && tableRect.bottom > headerHeight
-            && wrapRect.bottom > headerHeight
-            && wrapRect.right > 0
-            && wrapRect.left < window.innerWidth;
+        const visible = allowVisible && isFloatingHeaderVisible(tableRect, wrapRect, headerHeight);
 
         if (!visible) {
             instance.floating.style.display = "none";
@@ -150,6 +163,14 @@ window.schoolGrowthTables = (() => {
         instance.floating.style.width = `${Math.min(wrapRect.width, window.innerWidth - Math.max(0, wrapRect.left))}px`;
         instance.floating.style.setProperty("--table-scroll-left", `${wrap.scrollLeft}px`);
         instance.floatingTable.style.transform = `translateX(${-wrap.scrollLeft}px)`;
+    }
+
+    function isFloatingHeaderVisible(tableRect, wrapRect, headerHeight) {
+        return tableRect.top < 0
+            && tableRect.bottom > headerHeight
+            && wrapRect.bottom > headerHeight
+            && wrapRect.right > 0
+            && wrapRect.left < window.innerWidth;
     }
 
     function syncWidths(instance) {
@@ -363,4 +384,95 @@ window.schoolGrowthTools = (() => {
     }
 
     return { scrollToTool, attachDraggable, setOpen };
+})();
+
+window.schoolGrowthStorage = (() => {
+    function getJson(key) {
+        try {
+            const value = window.localStorage.getItem(key);
+            return value ? JSON.parse(value) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function setJson(key, value) {
+        try {
+            window.localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+            // Local storage can be unavailable in private or restricted browser modes.
+        }
+    }
+
+    function remove(key) {
+        try {
+            window.localStorage.removeItem(key);
+        } catch {
+        }
+    }
+
+    function removePrefix(prefix) {
+        try {
+            const keys = [];
+            for (let index = 0; index < window.localStorage.length; index++) {
+                const key = window.localStorage.key(index);
+                if (key?.startsWith(prefix)) {
+                    keys.push(key);
+                }
+            }
+            for (const key of keys) {
+                window.localStorage.removeItem(key);
+            }
+        } catch {
+        }
+    }
+
+    return { getJson, setJson, remove, removePrefix };
+})();
+
+window.schoolGrowthValidationChart = (() => {
+    function attach(element, dotNet, pointCount) {
+        if (!element || !dotNet || !pointCount) return;
+
+        const state = element.__schoolGrowthValidationHover ?? {};
+        state.dotNet = dotNet;
+        state.pointCount = pointCount;
+        state.lastIndex = Number.isInteger(state.lastIndex) ? state.lastIndex : -2;
+
+        if (!state.attached) {
+            state.onPointerMove = event => {
+                const current = element.__schoolGrowthValidationHover;
+                if (!current?.dotNet || !current.pointCount) return;
+
+                const rect = element.getBoundingClientRect();
+                if (!rect.width) return;
+
+                const viewX = (event.clientX - rect.left) / rect.width * 920;
+                const clamped = Math.max(60, Math.min(860, viewX));
+                const index = current.pointCount <= 1
+                    ? 0
+                    : Math.round((clamped - 60) / 800 * (current.pointCount - 1));
+
+                if (index !== current.lastIndex) {
+                    current.lastIndex = index;
+                    current.dotNet.invokeMethodAsync("SetValidationHoverIndex", index);
+                }
+            };
+
+            state.onPointerLeave = () => {
+                const current = element.__schoolGrowthValidationHover;
+                if (!current?.dotNet || current.lastIndex === -1) return;
+                current.lastIndex = -1;
+                current.dotNet.invokeMethodAsync("SetValidationHoverIndex", -1);
+            };
+
+            element.addEventListener("pointermove", state.onPointerMove, { passive: true });
+            element.addEventListener("pointerleave", state.onPointerLeave, { passive: true });
+            state.attached = true;
+        }
+
+        element.__schoolGrowthValidationHover = state;
+    }
+
+    return { attach };
 })();

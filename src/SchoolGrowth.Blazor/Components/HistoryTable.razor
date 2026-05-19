@@ -1,3 +1,5 @@
+@inject IJSRuntime Js
+
 <section class="band">
     <div class="section-head">
         <h2>@Title</h2>
@@ -90,6 +92,8 @@
 
     private const string TotalLineName = "Total";
     private HashSet<string> SelectedLines { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private bool SavedChartStateLoaded { get; set; }
+    private string StorageKey => $"schoolgrowth:chart:history:{Uri.EscapeDataString(Title)}";
     private IReadOnlyList<string> ChartLines => Rows.Select(row => row.Name).Concat([TotalLineName]).ToList();
     private IReadOnlyList<string> ActiveChartLines => ChartLines.Where(SelectedLines.Contains).ToList();
     private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ActiveChartLines.SelectMany(ValuesForLine).DefaultIfEmpty(0).Max() * 1.08));
@@ -97,6 +101,28 @@
     protected override void OnParametersSet()
     {
         SelectedLines.RemoveWhere(line => !ChartLines.Contains(line, StringComparer.OrdinalIgnoreCase));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (SavedChartStateLoaded) return;
+
+        SavedChartStateLoaded = true;
+        try
+        {
+            var state = await Js.InvokeAsync<SavedChartState?>("schoolGrowthStorage.getJson", StorageKey);
+            if (state is null) return;
+
+            SelectedLines.Clear();
+            foreach (var line in state.SelectedLines.Where(line => ChartLines.Contains(line, StringComparer.OrdinalIgnoreCase)))
+            {
+                SelectedLines.Add(line);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
     }
 
     private void ToggleLine(string line, ChangeEventArgs eventArgs)
@@ -109,6 +135,7 @@
         {
             SelectedLines.Remove(line);
         }
+        _ = SaveChartStateAsync();
     }
 
     private bool AllLinesSelected => ChartLines.Count > 0 && ChartLines.All(line => SelectedLines.Contains(line));
@@ -125,6 +152,22 @@
         else
         {
             SelectedLines.Clear();
+        }
+        _ = SaveChartStateAsync();
+    }
+
+    private async Task SaveChartStateAsync()
+    {
+        if (!SavedChartStateLoaded) return;
+        try
+        {
+            await Js.InvokeVoidAsync(
+                "schoolGrowthStorage.setJson",
+                StorageKey,
+                new SavedChartState(SelectedLines.ToList()));
+        }
+        catch
+        {
         }
     }
 
@@ -191,4 +234,6 @@
     }
 
     private static string Format(double? value) => value.HasValue ? value.Value.ToString("N0") : "";
+
+    private sealed record SavedChartState(IReadOnlyList<string> SelectedLines);
 }

@@ -269,6 +269,13 @@ button.icon {
     min-width: 0;
 }
 
+.tool-nav-reset {
+    width: 100%;
+    min-height: 32px;
+    margin: 8px 0 4px;
+    font-size: 12px;
+}
+
 .tool-nav-row {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
@@ -500,9 +507,36 @@ input[type="checkbox"] {
 }
 
 .chart-controls {
-    display: grid;
-    grid-template-columns: 130px 190px;
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
+    justify-content: flex-end;
+}
+
+.chart-controls select {
+    min-width: 132px;
+    flex: 0 1 180px;
+}
+
+.chart-controls select:nth-child(2) {
+    flex-basis: 210px;
+}
+
+.validation-chart-controls {
+    display: grid;
+    grid-template-columns:
+        minmax(130px, 170px)
+        minmax(150px, 210px)
+        minmax(150px, 190px)
+        minmax(130px, 180px)
+        minmax(120px, 170px)
+        34px;
+    align-items: center;
+}
+
+.validation-chart-controls select {
+    width: 100%;
+    min-width: 0;
 }
 
 .panel, .chart-box {
@@ -516,6 +550,18 @@ input[type="checkbox"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
+}
+
+.chart-title-editor {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.chart-title-editor label {
+    display: grid;
+    gap: 4px;
+    width: min(320px, 100%);
 }
 
 svg {
@@ -635,6 +681,7 @@ dd {
     top: 0;
     left: 0;
     z-index: 80;
+    pointer-events: none;
     display: none;
     overflow: hidden;
     background: #ffffff;
@@ -876,6 +923,7 @@ dd {
 
 .inline-legend {
     display: flex;
+    flex-wrap: wrap;
     gap: 18px;
     margin-top: 8px;
     color: var(--muted);
@@ -891,9 +939,60 @@ dd {
     vertical-align: middle;
 }
 
-.chart-hover-zone {
+.validation-legend {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.validation-legend-group {
+    display: grid;
+    grid-template-columns: 20px minmax(220px, 1fr) repeat(2, max-content);
+    align-items: center;
+    gap: 6px 10px;
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+.validation-legend-group strong {
+    color: var(--ink);
+}
+
+.legend-remove {
+    border: 0;
+    border-radius: 999px;
+    background: #eef7f7;
+    color: #006b68;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.legend-remove-spacer {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+}
+
+.compact-icon-button {
+    min-width: 34px;
+    flex: 0 0 34px;
+    padding: 8px 0;
+}
+
+.chart-hover-zone,
+.chart-pointer-capture {
     fill: transparent;
     cursor: crosshair;
+}
+
+.chart-pointer-capture {
+    pointer-events: all;
 }
 
 .chart-hover-line {
@@ -1024,6 +1123,14 @@ th {
     }
 
     .chart-controls {
+        justify-content: stretch;
+    }
+
+    .chart-controls select {
+        flex: 1 1 100%;
+    }
+
+    .validation-chart-controls {
         grid-template-columns: 1fr;
     }
 }

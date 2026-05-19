@@ -1,5 +1,6 @@
 @page "/simulation"
 @page "/"
+@implements IAsyncDisposable
 @inject HttpClient Http
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
@@ -69,6 +70,7 @@ else
                         }
                     </select>
                 </label>
+                <button type="button" class="secondary tool-nav-reset" @onclick="ResetSavedLayoutAsync">Reset layout</button>
                 <div class="tool-nav-title">Visible tools</div>
                 @foreach (var tool in ActiveTools)
                 {
@@ -378,7 +380,7 @@ else
     </ToolPanel>
     }
 
-    @if (Result is null && ActiveTools.Any(tool => ResultToolIds.Contains(tool.Id)))
+    @if (Result is null && ActiveToolIds.Any(IsResultToolId))
     {
         <section class="band">Choose parameters or wait for the first validation run.</section>
     }
@@ -391,9 +393,46 @@ else
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <div class="charts">
         <div class="chart-box">
-            <h2>Actual vs Simulation Grid Total</h2>
-            <svg viewBox="0 0 920 300" role="img" @onmouseleave="() => TotalChartHoverIndex = null">
-                @foreach (var tick in YTicks)
+            <div class="chart-head">
+                <h2>Validation Trend</h2>
+                <div class="chart-controls validation-chart-controls">
+                    <select value="@ValidationMeasure" @onchange="OnValidationMeasureChanged">
+                        <option value="students">Students</option>
+                        <option value="cohort">Student Cohort</option>
+                        <option value="homes">Homes</option>
+                        <option value="generation">Student Generation</option>
+                        <option value="family">Family Profile</option>
+                        <option value="turnover">Turnover</option>
+                    </select>
+                    <select value="@ValidationNeighborhood" @onchange="OnValidationNeighborhoodChanged">
+                        @foreach (var neighborhood in ValidationNeighborhoodOptions)
+                        {
+                            <option value="@neighborhood">@FormatValidationNeighborhood(neighborhood)</option>
+                        }
+                    </select>
+                    <select value="@ValidationDensity" @onchange="OnValidationDensityChanged">
+                        @foreach (var density in ValidationDensityOptions)
+                        {
+                            <option value="@density">@density</option>
+                        }
+                    </select>
+                    <select value="@ValidationBreakdown" @onchange="OnValidationBreakdownChanged">
+                        @foreach (var breakdown in ValidationBreakdownOptions)
+                        {
+                            <option value="@breakdown">@FormatValidationBreakdown(breakdown)</option>
+                        }
+                    </select>
+                    <select value="@ValidationValueMode" @onchange="OnValidationValueModeChanged">
+                        @foreach (var mode in ValidationValueModeOptions)
+                        {
+                            <option value="@mode.Key">@mode.Label</option>
+                        }
+                    </select>
+                    <button type="button" class="icon-button compact-icon-button" title="Pin current graph" @onclick="PinValidationChartSelection">+</button>
+                </div>
+            </div>
+            <svg @ref="ValidationChartSvg" viewBox="0 0 920 300" role="img">
+                @foreach (var tick in ValidationYTicks)
                 {
                     <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
                     <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
@@ -405,8 +444,11 @@ else
                     <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
                     <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
                 }
-                <polyline points="@ActualChartPoints" fill="none" stroke="#0f766e" stroke-width="4" />
-                <polyline points="@ModeledChartPoints" fill="none" stroke="#b45309" stroke-width="4" />
+                @foreach (var series in ValidationChartSeries)
+                {
+                    <polyline points="@ValidationChartPoints(series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
+                }
+                <rect x="60" y="40" width="800" height="220" class="chart-pointer-capture" />
                 @if (TotalChartHoverIndex.HasValue)
                 {
                     <line x1="@TotalHoverX" y1="40" x2="@TotalHoverX" y2="260" class="chart-hover-line" />
@@ -416,23 +458,33 @@ else
                     {
                         <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
                     }
-                    <rect x="@TotalHoverPanelX" y="@TotalHoverPanelY" width="180" height="48" rx="5" class="chart-hover-label-bg" />
+                    <rect x="@TotalHoverPanelX" y="@TotalHoverPanelY" width="@TotalHoverPanelWidth" height="@TotalHoverPanelHeight" rx="5" class="chart-hover-label-bg" />
                     @foreach (var item in TotalHoverMarkers.Select((marker, index) => new { marker, index }))
                     {
                         <circle cx="@(TotalHoverPanelX + 10)" cy="@(TotalHoverPanelY + 17 + item.index * 17)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
                         <SvgText X="@(TotalHoverPanelX + 18)" Y="@(TotalHoverPanelY + 21 + item.index * 17)" Anchor="start" Label="@item.marker.Label" />
                     }
                 }
-                @foreach (var zone in TotalHoverZones)
-                {
-                    <rect x="@zone.X" y="40" width="@zone.Width" height="220" fill="transparent" class="chart-hover-zone"
-                          @onmouseover="() => TotalChartHoverIndex = zone.Index"
-                          @onfocus="() => TotalChartHoverIndex = zone.Index" />
-                }
             </svg>
-            <div class="inline-legend">
-                <span><i style="background:#0f766e"></i>Actual</span>
-                <span><i style="background:#b45309"></i>Simulation mean</span>
+            <div class="inline-legend validation-legend">
+                @foreach (var group in ValidationLegendGroups)
+                {
+                    <span class="validation-legend-group">
+                        @if (group.PinnedId.HasValue)
+                        {
+                            <button type="button" class="legend-remove" title="Remove line" @onclick="() => RemoveValidationChartSelection(group.PinnedId.Value)">x</button>
+                        }
+                        else
+                        {
+                            <span class="legend-remove-spacer" aria-hidden="true"></span>
+                        }
+                        <strong>@group.Label</strong>
+                        @foreach (var series in group.Series)
+                        {
+                            <span><i style="@($"background:{series.Color}")"></i>@series.Label</span>
+                        }
+                    </span>
+                }
             </div>
         </div>
         <div class="chart-box">
@@ -465,6 +517,120 @@ else
             </dl>
         </div>
     </div>
+    </ToolPanel>
+    }
+
+    @foreach (var chartTool in ChartTools.Where(tool => IsToolActive(tool.Id)))
+    {
+    <ToolPanel Id="@chartTool.Id" Title="@chartTool.Title" CssClass="band tool-panel charts-tool" Style="@ToolStyle(chartTool.Id)"
+               Collapsed="@IsToolCollapsed(chartTool.Id)" CanMoveUp="@CanMoveToolUp(chartTool.Id)" CanMoveDown="@CanMoveToolDown(chartTool.Id)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <div class="chart-title-editor">
+            <label>
+                <span>Chart name</span>
+                <input value="@chartTool.Title" @oninput="args => chartTool.Title = args.Value?.ToString() ?? chartTool.Title" />
+            </label>
+        </div>
+        <div class="chart-box">
+            <div class="chart-head">
+                <h2>Trend</h2>
+                <div class="chart-controls validation-chart-controls">
+                    <select value="@chartTool.Measure" @onchange="args => OnChartMeasureChanged(chartTool, args)">
+                        <option value="students">Students</option>
+                        <option value="cohort">Student Cohort</option>
+                        <option value="homes">Homes</option>
+                        <option value="generation">Student Generation</option>
+                        <option value="family">Family Profile</option>
+                        <option value="turnover">Turnover</option>
+                    </select>
+                    <select value="@chartTool.Neighborhood" @onchange="args => OnChartNeighborhoodChanged(chartTool, args)">
+                        @foreach (var neighborhood in ChartNeighborhoodOptions(chartTool))
+                        {
+                            <option value="@neighborhood">@FormatValidationNeighborhood(neighborhood)</option>
+                        }
+                    </select>
+                    <select value="@chartTool.Density" @onchange="args => OnChartDensityChanged(chartTool, args)">
+                        @foreach (var density in ValidationDensityOptions)
+                        {
+                            <option value="@density">@density</option>
+                        }
+                    </select>
+                    <select value="@chartTool.Breakdown" @onchange="args => OnChartBreakdownChanged(chartTool, args)">
+                        @foreach (var breakdown in ChartBreakdownOptions(chartTool))
+                        {
+                            <option value="@breakdown">@FormatChartBreakdown(chartTool, breakdown)</option>
+                        }
+                    </select>
+                    <select value="@chartTool.ValueMode" @onchange="args => OnChartValueModeChanged(chartTool, args)">
+                        @foreach (var mode in ChartValueModeOptions(chartTool))
+                        {
+                            <option value="@mode.Key">@mode.Label</option>
+                        }
+                    </select>
+                    <button type="button" class="icon-button compact-icon-button" title="Pin current graph" @onclick="() => PinChartSelection(chartTool)">+</button>
+                </div>
+            </div>
+            <svg viewBox="0 0 920 300" role="img" @onmouseleave="() => chartTool.HoverIndex = null">
+                @foreach (var tick in ChartYTicks(chartTool))
+                {
+                    <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
+                    <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
+                }
+                <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
+                <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                @foreach (var tick in XTicks)
+                {
+                    <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                }
+                @foreach (var series in ChartSeries(chartTool))
+                {
+                    <polyline points="@ChartPoints(chartTool, series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
+                }
+                @foreach (var zone in ChartHoverZones)
+                {
+                    <rect x="@zone.X" y="40" width="@zone.Width" height="220" fill="transparent" class="chart-hover-zone"
+                          @onmouseover="() => chartTool.HoverIndex = zone.Index"
+                          @onfocus="() => chartTool.HoverIndex = zone.Index" />
+                }
+                @if (chartTool.HoverIndex.HasValue)
+                {
+                    <line x1="@ChartHoverX(chartTool)" y1="40" x2="@ChartHoverX(chartTool)" y2="260" class="chart-hover-line" />
+                    <rect x="@ChartHoverYearLabelX(chartTool)" y="44" width="58" height="20" rx="4" class="chart-hover-label-bg" />
+                    <SvgText X="@(ChartHoverYearLabelX(chartTool) + 29)" Y="58" Anchor="middle" Label="@Result!.Comparisons[chartTool.HoverIndex.Value].Year.ToString()" />
+                    @foreach (var marker in ChartHoverMarkers(chartTool))
+                    {
+                        <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
+                    }
+                    <rect x="@ChartHoverPanelX(chartTool)" y="72" width="245" height="@(14 + ChartHoverMarkers(chartTool).Count * 17)" rx="5" class="chart-hover-label-bg" />
+                    @foreach (var item in ChartHoverMarkers(chartTool).Select((marker, index) => new { marker, index }))
+                    {
+                        <circle cx="@(ChartHoverPanelX(chartTool) + 10)" cy="@(89 + item.index * 17)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
+                        <SvgText X="@(ChartHoverPanelX(chartTool) + 18)" Y="@(93 + item.index * 17)" Anchor="start" Label="@item.marker.Label" />
+                    }
+                }
+            </svg>
+            <div class="inline-legend validation-legend">
+                @foreach (var group in ChartLegendGroups(chartTool))
+                {
+                    <span class="validation-legend-group">
+                        @if (group.PinnedId.HasValue)
+                        {
+                            <button type="button" class="legend-remove" title="Remove line" @onclick="() => RemoveChartSelection(chartTool, group.PinnedId.Value)">x</button>
+                        }
+                        else
+                        {
+                            <span class="legend-remove-spacer" aria-hidden="true"></span>
+                        }
+                        <strong>@group.Label</strong>
+                        @foreach (var series in group.Series)
+                        {
+                            <span><i style="@($"background:{series.Color}")"></i>@series.Label</span>
+                        }
+                    </span>
+                }
+            </div>
+        </div>
     </ToolPanel>
     }
 
@@ -974,12 +1140,20 @@ else
         GradeOrder.Where(grade => !grade.Equals("TK", StringComparison.OrdinalIgnoreCase)).ToList();
     private static readonly IReadOnlyList<string> VisibleCohortGrades =
         VisibleGradeOrder.Where(grade => !grade.Equals("Sp. Ed.", StringComparison.OrdinalIgnoreCase)).ToList();
+    private static readonly IReadOnlyList<string> K8Grades =
+    [
+        "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"
+    ];
+    private static readonly IReadOnlyList<string> HighSchoolGrades =
+    [
+        "9th", "10th", "11th", "12th"
+    ];
     private static readonly IReadOnlyList<ProjectionSubtotal> GradeSubtotals =
     [
         new("K-5", ["K", "1st", "2nd", "3rd", "4th", "5th"]),
         new("5-8", ["5th", "6th", "7th", "8th"]),
-        new("K-8", ["K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"]),
-        new("HS", ["9th", "10th", "11th", "12th"])
+        new("K-8", K8Grades),
+        new("HS", HighSchoolGrades)
     ];
     private static readonly HashSet<string> ExcludedValidationGrids = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -987,12 +1161,25 @@ else
         "Lammersville",
         "MHESD"
     };
+    private const string AllNeighborhood = "All";
+    private const string AllDensity = "All densities";
     private static readonly MonteCarloParameters DefaultParameters = new();
     private const string CustomPresetName = "Custom";
+    private const string LayoutStorageKey = "schoolgrowth:simulation:layout:v1";
+    private const string YearsStorageKey = "schoolgrowth:simulation:years:v1";
+    private const string ChartStoragePrefix = "schoolgrowth:chart:";
+    private static readonly IReadOnlyList<string> DefaultActiveToolIds =
+    [
+        ToolModelSettings,
+        ToolValidationSummary,
+        ToolSimulationInfo
+    ];
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
     private const string ToolModelScoring = "model-scoring";
     private const string ToolValidationSummary = "validation-summary";
+    private const string ToolChartPrototype = "chart";
+    private const string ToolChartPrefix = "chart-";
     private const string ToolSimulationInfo = "simulation-info";
     private const string ToolDataGaps = "data-gaps";
     private const string ToolTableDetails = "table-details";
@@ -1061,6 +1248,20 @@ else
     private int SearchRuns { get; set; } = 50;
     private int Seed { get; set; } = DefaultParameters.Seed;
     private int SelectedComparisonYear { get; set; } = 2024;
+    private string ValidationMeasure { get; set; } = "students";
+    private string ValidationNeighborhood { get; set; } = AllNeighborhood;
+    private string ValidationDensity { get; set; } = AllDensity;
+    private string ValidationBreakdown { get; set; } = "Total";
+    private string ValidationValueMode { get; set; } = "value";
+    private int ValidationResultVersion { get; set; }
+    private string? ValidationChartCacheKey { get; set; }
+    private ValidationChartCache? ValidationChartCacheValue { get; set; }
+    private readonly Dictionary<string, SegmentStats> ValidationSegmentStatsCache = new(StringComparer.OrdinalIgnoreCase);
+    private List<ValidationPinnedSelection> ValidationPinnedSelections { get; } = [];
+    private int NextValidationPinnedSelectionId { get; set; } = 1;
+    private ElementReference ValidationChartSvg { get; set; }
+    private DotNetObjectReference<Simulation>? ValidationHoverReference { get; set; }
+    private bool ValidationHoverRenderPending { get; set; }
     private string ComparisonChartMode { get; set; } = "total";
     private string ComparisonChartEntity { get; set; } = "Validation total";
     private int MaxDegreeOfParallelism { get; set; } = DefaultParameters.MaxDegreeOfParallelism;
@@ -1129,18 +1330,22 @@ else
     private string? ServerApiStatus { get; set; }
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
-    private List<string> ActiveToolIds { get; set; } = [ToolModelSettings, ToolValidationSummary, ToolSimulationInfo];
+    private List<string> ActiveToolIds { get; set; } = DefaultActiveToolIds.ToList();
+    private List<ChartToolState> ChartTools { get; } = [];
+    private int NextChartToolNumber { get; set; } = 1;
     private HashSet<string> CollapsedToolIds { get; set; } = [];
     private HashSet<string> SelectedSimulationInfoRows { get; } = new(StringComparer.OrdinalIgnoreCase);
     private string NewToolId { get; set; } = "";
     private bool ToolsPopupOpen { get; set; }
+    private bool SavedLayoutLoaded { get; set; }
     private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
-        .Select(id => ToolDefinitions.FirstOrDefault(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+        .Select(ToolDefinitionForId)
         .Where(tool => tool is not null)
         .Cast<MonteCarloToolDefinition>()
         .ToList();
     private IReadOnlyList<MonteCarloToolDefinition> InactiveTools => ToolDefinitions
         .Where(tool => !ActiveToolIds.Contains(tool.Id))
+        .Concat([new MonteCarloToolDefinition(ToolChartPrototype, "Chart")])
         .ToList();
     private int MinStartYear => Data is null
         ? 2003
@@ -1180,6 +1385,9 @@ else
             comparison.ActualGradeTotal))
         .ToList() ?? [];
     private IReadOnlyList<CohortDefinition> MonteCarloProgressingCohorts => BuildProgressingCohorts(MonteCarloModeledProjection);
+    private IReadOnlyList<string> CohortBreakdownOptions => MonteCarloProgressingCohorts
+        .Select(cohort => cohort.Label)
+        .ToList();
     private IReadOnlyList<double> MoveInChildCountNormalizers => NormalizeUiWeights(
         MoveInZeroChildShare,
         MoveInOneChildShare,
@@ -1262,6 +1470,21 @@ else
 
     private bool IsToolCollapsed(string id) => CollapsedToolIds.Contains(id);
 
+    private bool IsResultToolId(string id) =>
+        id.StartsWith(ToolChartPrefix, StringComparison.OrdinalIgnoreCase)
+        || ResultToolIds.Contains(id);
+
+    private MonteCarloToolDefinition? ToolDefinitionForId(string id)
+    {
+        var chart = ChartTools.FirstOrDefault(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (chart is not null)
+        {
+            return new MonteCarloToolDefinition(chart.Id, chart.Title);
+        }
+
+        return ToolDefinitions.FirstOrDefault(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+    }
+
     private string ToolStyle(string id) => $"order: {Math.Max(0, ActiveToolIds.IndexOf(id))};";
 
     private bool CanMoveToolUp(string id) => ActiveToolIds.IndexOf(id) > 0;
@@ -1300,9 +1523,15 @@ else
     {
         ActiveToolIds.Remove(id);
         CollapsedToolIds.Remove(id);
+        if (id.StartsWith(ToolChartPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            ChartTools.RemoveAll(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        }
         if (string.IsNullOrWhiteSpace(NewToolId))
         {
-            NewToolId = id;
+            NewToolId = id.StartsWith(ToolChartPrefix, StringComparison.OrdinalIgnoreCase)
+                ? ToolChartPrototype
+                : id;
         }
     }
 
@@ -1311,7 +1540,16 @@ else
         var id = !string.IsNullOrWhiteSpace(NewToolId) && InactiveTools.Any(tool => tool.Id == NewToolId)
             ? NewToolId
             : InactiveTools.FirstOrDefault()?.Id;
-        if (string.IsNullOrWhiteSpace(id) || ActiveToolIds.Contains(id)) return;
+        if (string.IsNullOrWhiteSpace(id)) return;
+
+        if (id.Equals(ToolChartPrototype, StringComparison.OrdinalIgnoreCase))
+        {
+            CreateChartTool();
+            NewToolId = "";
+            return;
+        }
+
+        if (ActiveToolIds.Contains(id)) return;
 
         ActiveToolIds.Add(id);
         CollapsedToolIds.Remove(id);
@@ -1322,13 +1560,83 @@ else
     {
         var id = args.Value?.ToString();
         NewToolId = "";
-        if (string.IsNullOrWhiteSpace(id) || ActiveToolIds.Contains(id)) return;
+        if (string.IsNullOrWhiteSpace(id)) return;
+
+        if (id.Equals(ToolChartPrototype, StringComparison.OrdinalIgnoreCase))
+        {
+            var chart = CreateChartTool();
+            ToolsPopupOpen = false;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToToolAsync(chart.Id);
+            return;
+        }
+
+        if (ActiveToolIds.Contains(id)) return;
 
         ActiveToolIds.Add(id);
         CollapsedToolIds.Remove(id);
         ToolsPopupOpen = false;
         await InvokeAsync(StateHasChanged);
         await ScrollToToolAsync(id);
+    }
+
+    private ChartToolState CreateChartTool(SavedChartTool? saved = null, bool activate = true)
+    {
+        var id = saved?.Id;
+        if (string.IsNullOrWhiteSpace(id) || ChartTools.Any(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+        {
+            var number = NextChartToolNumber++;
+            id = $"{ToolChartPrefix}{number}";
+            saved ??= new SavedChartTool(id, $"Chart {number}", "students", AllNeighborhood, AllDensity, "Total", "value", []);
+        }
+
+        var title = string.IsNullOrWhiteSpace(saved?.Title) ? $"Chart {NextChartToolNumber}" : saved!.Title;
+        var chart = new ChartToolState(id, title)
+        {
+            Measure = string.IsNullOrWhiteSpace(saved?.Measure) ? "students" : saved!.Measure,
+            Neighborhood = string.IsNullOrWhiteSpace(saved?.Neighborhood) ? AllNeighborhood : saved!.Neighborhood,
+            Density = string.IsNullOrWhiteSpace(saved?.Density) ? AllDensity : saved!.Density,
+            Breakdown = string.IsNullOrWhiteSpace(saved?.Breakdown) ? "Total" : saved!.Breakdown,
+            ValueMode = string.IsNullOrWhiteSpace(saved?.ValueMode) ? "value" : saved!.ValueMode
+        };
+
+        if (saved?.PinnedSelections is not null)
+        {
+            foreach (var pin in saved.PinnedSelections)
+            {
+                chart.PinnedSelections.Add(new ChartPinnedSelection(
+                    pin.Id,
+                    new ChartSelection(pin.Measure, pin.Neighborhood, pin.Density, pin.Breakdown, pin.ValueMode)));
+            }
+        }
+
+        chart.NextPinnedSelectionId = Math.Max(
+            1,
+            chart.PinnedSelections.Select(selection => selection.Id).DefaultIfEmpty(0).Max() + 1);
+        ChartTools.Add(chart);
+        if (activate)
+        {
+            ActiveToolIds.Add(chart.Id);
+            CollapsedToolIds.Remove(chart.Id);
+        }
+        UpdateNextChartToolNumber();
+        if (Result is not null)
+        {
+            NormalizeChartSelections(chart, resetNeighborhood: false, resetBreakdown: false, resetValueMode: false);
+        }
+        return chart;
+    }
+
+    private void UpdateNextChartToolNumber()
+    {
+        var max = ChartTools
+            .Select(tool => tool.Id.StartsWith(ToolChartPrefix, StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(tool.Id[ToolChartPrefix.Length..], out var number)
+                    ? number
+                    : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+        NextChartToolNumber = Math.Max(NextChartToolNumber, max + 1);
     }
 
     private async Task NavigateToToolAsync(string id)
@@ -1373,6 +1681,7 @@ else
             StartYear = Math.Max(MinStartYear, LatestReferenceYear - 5);
             EndYear = LatestReferenceYear;
             SelectedComparisonYear = EndYear;
+            await LoadSavedLayoutAsync();
             await DetectServerApiAsync();
             _ = RunValidationAsync();
         }
@@ -1386,14 +1695,33 @@ else
     {
         if (Data is not null)
         {
+            if (ValidationHoverRenderPending)
+            {
+                ValidationHoverRenderPending = false;
+                return;
+            }
+
             if (TrackCustomPreset())
             {
                 await InvokeAsync(StateHasChanged);
+            }
+            if (SavedLayoutLoaded)
+            {
+                await SaveLayoutAsync();
             }
             await Js.InvokeVoidAsync("schoolGrowthMasonry.attach", ".settings-stack");
             await Js.InvokeVoidAsync("schoolGrowthTables.attach", ".table-wrap");
             await Js.InvokeVoidAsync("schoolGrowthTools.attachDraggable", ".tool-nav-float");
             await Js.InvokeVoidAsync("schoolGrowthTools.setOpen", ".tool-nav-float", ToolsPopupOpen);
+            if (Result is not null && IsToolActive(ToolValidationSummary))
+            {
+                ValidationHoverReference ??= DotNetObjectReference.Create(this);
+                await Js.InvokeVoidAsync(
+                    "schoolGrowthValidationChart.attach",
+                    ValidationChartSvg,
+                    ValidationHoverReference,
+                    Result.Comparisons.Count);
+            }
         }
     }
 
@@ -1429,6 +1757,124 @@ else
         ApplyParameters(preset.Parameters);
         SearchResult = null;
         await RunValidationAsync();
+    }
+
+    private async Task LoadSavedLayoutAsync()
+    {
+        try
+        {
+            var years = await Js.InvokeAsync<SavedYearsState?>("schoolGrowthStorage.getJson", YearsStorageKey);
+            if (years is not null)
+            {
+                StartYear = Math.Clamp(years.StartYear, MinStartYear, MaxSimulationEndYear);
+                EndYear = Math.Clamp(years.EndYear, StartYear, MaxSimulationEndYear);
+                SelectedComparisonYear = EndYear;
+            }
+
+            var layout = await Js.InvokeAsync<SavedSimulationLayout?>("schoolGrowthStorage.getJson", LayoutStorageKey);
+            if (layout is not null)
+            {
+                ChartTools.Clear();
+                NextChartToolNumber = 1;
+                foreach (var savedChart in layout.ChartTools ?? [])
+                {
+                    CreateChartTool(savedChart, activate: false);
+                }
+
+                var validToolIds = ToolDefinitions
+                    .Select(tool => tool.Id)
+                    .Concat(ChartTools.Select(tool => tool.Id))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var activeIds = layout.ActiveToolIds
+                    .Where(validToolIds.Contains)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                ActiveToolIds = activeIds.Count > 0 ? activeIds : DefaultActiveToolIds.ToList();
+
+                CollapsedToolIds = layout.CollapsedToolIds
+                    .Where(ActiveToolIds.Contains)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                ShowIncreaseFromStart = layout.ShowIncreaseFromStart;
+                ShowIncreaseFromStartPercent = layout.ShowIncreaseFromStartPercent;
+                ShowIncreaseFromPrevious = layout.ShowIncreaseFromPrevious;
+                ShowIncreaseFromPreviousPercent = layout.ShowIncreaseFromPreviousPercent;
+                ValidationMeasure = string.IsNullOrWhiteSpace(layout.ValidationMeasure) ? "students" : layout.ValidationMeasure;
+                ValidationNeighborhood = string.IsNullOrWhiteSpace(layout.ValidationNeighborhood) ? AllNeighborhood : layout.ValidationNeighborhood;
+                ValidationDensity = string.IsNullOrWhiteSpace(layout.ValidationDensity) ? AllDensity : layout.ValidationDensity;
+                ValidationBreakdown = string.IsNullOrWhiteSpace(layout.ValidationBreakdown) ? "Total" : layout.ValidationBreakdown;
+                ValidationValueMode = string.IsNullOrWhiteSpace(layout.ValidationValueMode) ? "value" : layout.ValidationValueMode;
+
+                SelectedSimulationInfoRows.Clear();
+                foreach (var key in layout.SelectedSimulationInfoRows)
+                {
+                    SelectedSimulationInfoRows.Add(key);
+                }
+            }
+        }
+        catch
+        {
+            // Saved browser state is a convenience; ignore corrupt or unavailable storage.
+        }
+        finally
+        {
+            SavedLayoutLoaded = true;
+        }
+    }
+
+    private async Task SaveLayoutAsync()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync(
+                "schoolGrowthStorage.setJson",
+                LayoutStorageKey,
+                new SavedSimulationLayout(
+                    ActiveToolIds,
+                    CollapsedToolIds.ToList(),
+                    SelectedSimulationInfoRows.ToList(),
+                    ShowIncreaseFromStart,
+                    ShowIncreaseFromStartPercent,
+                    ShowIncreaseFromPrevious,
+                    ShowIncreaseFromPreviousPercent,
+                    ValidationMeasure,
+                    ValidationNeighborhood,
+                    ValidationDensity,
+                    ValidationBreakdown,
+                    ValidationValueMode,
+                    ChartTools.Select(SavedChartTool.From).ToList()));
+
+            await Js.InvokeVoidAsync(
+                "schoolGrowthStorage.setJson",
+                YearsStorageKey,
+                new SavedYearsState(StartYear, EndYear));
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task ResetSavedLayoutAsync()
+    {
+        ActiveToolIds = DefaultActiveToolIds.ToList();
+        CollapsedToolIds.Clear();
+        SelectedSimulationInfoRows.Clear();
+        ShowIncreaseFromStart = false;
+        ShowIncreaseFromStartPercent = false;
+        ShowIncreaseFromPrevious = false;
+        ShowIncreaseFromPreviousPercent = false;
+        ValidationMeasure = "students";
+        ValidationNeighborhood = AllNeighborhood;
+        ValidationDensity = AllDensity;
+        ValidationBreakdown = "Total";
+        ValidationValueMode = "value";
+        ChartTools.Clear();
+        NextChartToolNumber = 1;
+        ToolsPopupOpen = false;
+
+        await Js.InvokeVoidAsync("schoolGrowthStorage.remove", LayoutStorageKey);
+        await Js.InvokeVoidAsync("schoolGrowthStorage.removePrefix", ChartStoragePrefix);
+        await InvokeAsync(StateHasChanged);
     }
 
     private bool TrackCustomPreset()
@@ -1557,6 +2003,15 @@ else
             return false;
         }
 
+        ValidationResultVersion++;
+        InvalidateValidationChartCache();
+        ValidationPinnedSelections.Clear();
+        foreach (var chart in ChartTools)
+        {
+            InvalidateChart(chart);
+            NormalizeChartSelections(chart);
+        }
+
         if (!Result.Comparisons.Any(item => item.Year == SelectedComparisonYear))
         {
             SelectedComparisonYear = Result.Comparisons.LastOrDefault()?.Year ?? EndYear;
@@ -1566,6 +2021,8 @@ else
         {
             ComparisonChartEntity = ComparisonChartEntities.FirstOrDefault() ?? "Validation total";
         }
+
+        NormalizeValidationChartSelections();
 
         return true;
     }
@@ -1878,6 +2335,18 @@ else
             .ToList();
     }
 
+    private CohortDefinition? CohortForLabel(string label)
+    {
+        return MonteCarloProgressingCohorts
+            .FirstOrDefault(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? GradeForCohort(CohortDefinition cohort, int year)
+    {
+        var index = year - cohort.StartYear;
+        return index >= 0 && index < VisibleCohortGrades.Count ? VisibleCohortGrades[index] : null;
+    }
+
     private static IReadOnlyList<double> ParseCandidates(string text)
     {
         return text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -2043,6 +2512,11 @@ else
         var normalizedDensity = NormalizeDensity(density);
         return densityGroup switch
         {
+            "low" => normalizedDensity is "RL",
+            "medium" => normalizedDensity is "RM",
+            "medium-high" => normalizedDensity is "RMH",
+            "high" => normalizedDensity is "RH",
+            "other" => normalizedDensity is "EXISTING" or "OTHER",
             "low-medium" => normalizedDensity is "RL" or "RM",
             "medium-high-high" => normalizedDensity is "RMH" or "RH",
             _ => false
@@ -2080,9 +2554,1454 @@ else
                     SelectedComparison.ModeledGrades.GetValueOrDefault(grade)))
                 .ToList();
 
-    private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, Result?.Comparisons.SelectMany(item => new[] { item.ActualGridTotal, item.ModeledGridTotal }).DefaultIfEmpty(0).Max() * 1.08 ?? 1));
-    private string ActualChartPoints => ChartPoints(item => HasReferenceData(item) ? item.ActualGridTotal : null);
-    private string ModeledChartPoints => ChartPoints(item => item.ModeledGridTotal);
+    private IReadOnlyList<string> ValidationNeighborhoodOptions => ValidationMeasure is "family" or "turnover"
+        ? [AllNeighborhood, .. Result?.SimulationInfo.FirstOrDefault()?.Segments
+            .Select(segment => segment.Grid)
+            .Where(grid => !ExcludedValidationGrids.Contains(grid))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(grid => grid, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? []]
+        : [AllNeighborhood, .. Result?.Comparisons.FirstOrDefault()?.ModeledGridTotals.Keys
+            .Where(grid => !ExcludedValidationGrids.Contains(grid))
+            .Order()
+            .ToList() ?? []];
+
+    private static readonly IReadOnlyList<string> ValidationDensityOptions =
+    [
+        AllDensity,
+        "Low",
+        "Medium",
+        "Medium-high",
+        "High",
+        "Other/existing",
+        "Low/medium",
+        "Medium-high/high"
+    ];
+
+    private IReadOnlyList<string> ValidationBreakdownOptions => ValidationMeasure switch
+    {
+        "homes" => ["Total"],
+        "cohort" => CohortBreakdownOptions,
+        "generation" => ["K-12", "K-8", "HS"],
+        "family" => ["0 kids", "1 kid", "2 kids", "3 kids", "4+ kids"],
+        "turnover" => ["Turnover events", "Turnover factor", "Average longevity"],
+        _ => ["Total", "K-8", "HS", .. VisibleGradeOrder]
+    };
+
+    private IReadOnlyList<ValidationValueModeOption> ValidationValueModeOptions
+    {
+        get
+        {
+            var options = new List<ValidationValueModeOption>
+            {
+                new("value", ValidationMeasure is "generation" ? "Value" : "Count")
+            };
+
+            if (ValidationSupportsShare)
+            {
+                options.Add(new("share", "Percent"));
+            }
+
+            options.AddRange(
+            [
+                new("previous-change", "Change previous"),
+                new("previous-percent", "Change previous %"),
+                new("start-change", "Change cumulative"),
+                new("start-percent", "Change cumulative %")
+            ]);
+
+            if (ValidationHasReference)
+            {
+                options.Add(new("absolute-error", "Absolute error"));
+                options.Add(new("percent-error", "Percentage error"));
+            }
+
+            return options;
+        }
+    }
+
+    private string EffectiveValidationNeighborhood =>
+        ValidationNeighborhoodOptions.Contains(ValidationNeighborhood)
+            ? ValidationNeighborhood
+            : AllNeighborhood;
+
+    private string EffectiveValidationDensity =>
+        ValidationDensityOptions.Contains(ValidationDensity)
+            ? ValidationDensity
+            : AllDensity;
+
+    private string EffectiveValidationBreakdown =>
+        ValidationBreakdownOptions.Contains(ValidationBreakdown)
+            ? ValidationBreakdown
+            : ValidationBreakdownOptions.FirstOrDefault() ?? "Total";
+
+    private string EffectiveValidationValueMode =>
+        ValidationValueModeOptions.Any(option => option.Key.Equals(ValidationValueMode, StringComparison.OrdinalIgnoreCase))
+            ? ValidationValueMode
+            : "value";
+
+    private string ValidationChartSelectionLabel =>
+        $"{ValidationMeasureLabel}: {FormatValidationNeighborhood(EffectiveValidationNeighborhood)} / {EffectiveValidationDensity} / {FormatValidationBreakdown(EffectiveValidationBreakdown)} / {ValidationValueModeLabel}";
+
+    private string ValidationMeasureLabel => ValidationMeasure switch
+    {
+        "cohort" => "Student Cohort",
+        "homes" => "Homes",
+        "generation" => "Student Generation",
+        "family" => "Family Profile",
+        "turnover" => "Turnover",
+        _ => "Students"
+    };
+
+    private string ValidationValueModeLabel =>
+        ValidationValueModeOptions.FirstOrDefault(option => option.Key.Equals(EffectiveValidationValueMode, StringComparison.OrdinalIgnoreCase))?.Label ?? "Count";
+
+    private string FormatValidationNeighborhood(string neighborhood)
+    {
+        return neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+            ? "All villages"
+            : neighborhood;
+    }
+
+    private string FormatValidationBreakdown(string breakdown)
+    {
+        return ValidationMeasure is "students" or "generation"
+            && breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                ? "All grades"
+                : breakdown;
+    }
+
+    private bool ValidationHasReference => ValidationReferenceBaseValues.Any(value => value.HasValue);
+
+    private bool ValidationSupportsShare => ValidationMeasure switch
+    {
+        "students" or "cohort" => !EffectiveValidationBreakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            || !EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+            || !EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase),
+        "homes" => !EffectiveValidationBreakdown.Equals("Total", StringComparison.OrdinalIgnoreCase),
+        "family" => true,
+        _ => false
+    };
+
+    private Func<double, string> ValidationFormatter => EffectiveValidationValueMode switch
+    {
+        "share" or "previous-percent" or "start-percent" or "percent-error" => FormatPercent,
+        "value" when ValidationMeasure is "generation" => FormatGeneration,
+        "value" when ValidationMeasure is "turnover" && EffectiveValidationBreakdown.Equals("Turnover factor", StringComparison.OrdinalIgnoreCase) => FormatPercent,
+        "value" when ValidationMeasure is "turnover" && EffectiveValidationBreakdown.Equals("Average longevity", StringComparison.OrdinalIgnoreCase) => value => $"{value:0.0} yrs",
+        _ => FormatCount
+    };
+
+    private IReadOnlyList<double?> ValidationModeledBaseValues => Result?.Comparisons
+        .Select(ValidationModeledBaseValue)
+        .ToList() ?? [];
+
+    private IReadOnlyList<double?> ValidationReferenceBaseValues => Result?.Comparisons
+        .Select(ValidationReferenceBaseValue)
+        .ToList() ?? [];
+
+    private IReadOnlyList<double?> ValidationModeledValues => CurrentValidationChart.ModeledValues;
+
+    private IReadOnlyList<double?> ValidationReferenceValues => CurrentValidationChart.ReferenceValues;
+
+    private IReadOnlyList<double?> ValidationAbsoluteErrorValues => CurrentValidationChart.AbsoluteErrorValues;
+
+    private IReadOnlyList<double?> ValidationPercentErrorValues => CurrentValidationChart.PercentErrorValues;
+
+    private IReadOnlyList<ValidationLegendGroup> ValidationLegendGroups
+    {
+        get
+        {
+            var groups = ValidationPinnedSelections
+                .Select(selection => new ValidationLegendGroup(selection.Id, selection.Label, selection.Series))
+                .ToList();
+
+            if (!ValidationPinnedSelections.Any(selection => selection.Key.Equals(CurrentValidationSelectionKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                groups.Add(new ValidationLegendGroup(null, ValidationChartSelectionLabel, CurrentValidationChart.Series));
+            }
+
+            return groups;
+        }
+    }
+
+    private IReadOnlyList<ValidationChartLine> ValidationChartSeries => ValidationLegendGroups
+        .SelectMany(group => group.Series.Select(series => series with { HoverLabel = $"{group.Label} {series.Label}" }))
+        .ToList();
+
+    private string CurrentValidationSelectionKey =>
+        $"{ValidationMeasure}|{EffectiveValidationNeighborhood}|{EffectiveValidationDensity}|{EffectiveValidationBreakdown}|{EffectiveValidationValueMode}";
+
+    private string ValidationModeledSeriesLabel => ValidationMeasure switch
+    {
+        "homes" => "Homes",
+        _ => "Simulation mean"
+    };
+
+    private static string ValidationColorForIndex(int index)
+    {
+        string[] colors =
+        [
+            "#b45309",
+            "#0f766e",
+            "#2563eb",
+            "#7c3aed",
+            "#be123c",
+            "#15803d",
+            "#c2410c",
+            "#475569"
+        ];
+
+        return colors[Math.Abs(index) % colors.Length];
+    }
+
+    private void PinValidationChartSelection()
+    {
+        if (ValidationPinnedSelections.Any(selection => selection.Key.Equals(CurrentValidationSelectionKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var cache = CurrentValidationChart;
+        var color = ValidationColorForIndex(ValidationPinnedSelections.Count);
+        var series = cache.Series
+            .Select(line => line with { Color = color })
+            .ToList();
+        ValidationPinnedSelections.Add(new ValidationPinnedSelection(
+            NextValidationPinnedSelectionId++,
+            CurrentValidationSelectionKey,
+            ValidationChartSelectionLabel,
+            series));
+        InvalidateValidationChartCache();
+    }
+
+    private void RemoveValidationChartSelection(int id)
+    {
+        ValidationPinnedSelections.RemoveAll(selection => selection.Id == id);
+        InvalidateValidationChartCache();
+    }
+
+    private IReadOnlyList<double> ValidationChartNumbers => ValidationChartSeries
+        .SelectMany(series => series.Values)
+        .Where(value => value.HasValue)
+        .Select(value => value!.Value)
+        .ToList();
+
+    private double ValidationChartMax
+    {
+        get
+        {
+            var values = ValidationChartNumbers;
+            if (values.Count == 0)
+            {
+                return 1;
+            }
+
+            var max = values.Max();
+            var min = values.Min();
+            if (min < 0)
+            {
+                return ChartAxis.NiceMaximum(Math.Max(Math.Abs(min), Math.Abs(max)) * 1.08);
+            }
+
+            return ChartAxis.NiceMaximum(Math.Max(1, max * 1.08));
+        }
+    }
+
+    private double ValidationChartMin => ValidationChartNumbers.DefaultIfEmpty(0).Min() < 0 ? -ValidationChartMax : 0;
+
+    private double ValidationChartSpan => Math.Max(1, ValidationChartMax - ValidationChartMin);
+
+    private ValidationChartCache CurrentValidationChart
+    {
+        get
+        {
+            var key = $"{ValidationResultVersion}|{CurrentValidationSelectionKey}";
+            if (ValidationChartCacheValue is not null && ValidationChartCacheKey == key)
+            {
+                return ValidationChartCacheValue;
+            }
+
+            var modeledBase = ValidationModeledBaseValues;
+            var referenceBase = ValidationReferenceBaseValues;
+            var modeledValues = TransformValidationValues(modeledBase, reference: false);
+            var referenceValues = TransformValidationValues(referenceBase, reference: true);
+            var absoluteErrors = referenceBase
+                .Zip(modeledBase, (reference, modeled) => reference.HasValue && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) : (double?)null)
+                .ToList();
+            var percentErrors = referenceBase
+                .Zip(modeledBase, (reference, modeled) => reference is > 0 && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) / reference.Value : (double?)null)
+                .ToList();
+            var hasReference = referenceBase.Any(value => value.HasValue);
+            var color = ValidationColorForIndex(ValidationPinnedSelections.Count);
+            var series = EffectiveValidationValueMode switch
+            {
+                "absolute-error" => new List<ValidationChartLine> { new("Absolute error", color, absoluteErrors, FormatCount, "") },
+                "percent-error" => new List<ValidationChartLine> { new("Percentage error", color, percentErrors, FormatPercent, "") },
+                _ => hasReference
+                    ?
+                    [
+                        new("Reference", color, referenceValues, ValidationFormatter, "7 5"),
+                        new(ValidationModeledSeriesLabel, color, modeledValues, ValidationFormatter, "")
+                    ]
+                    :
+                    [
+                        new(ValidationModeledSeriesLabel, color, modeledValues, ValidationFormatter, "")
+                    ]
+            };
+            var numbers = series
+                .SelectMany(item => item.Values)
+                .Where(value => value.HasValue)
+                .Select(value => value!.Value)
+                .ToList();
+            var max = 1.0;
+            var min = 0.0;
+            if (numbers.Count > 0)
+            {
+                var rawMax = numbers.Max();
+                var rawMin = numbers.Min();
+                if (rawMin < 0)
+                {
+                    max = ChartAxis.NiceMaximum(Math.Max(Math.Abs(rawMin), Math.Abs(rawMax)) * 1.08);
+                    min = -max;
+                }
+                else
+                {
+                    max = ChartAxis.NiceMaximum(Math.Max(1, rawMax * 1.08));
+                }
+            }
+
+            ValidationChartCacheValue = new ValidationChartCache(
+                modeledValues,
+                referenceValues,
+                absoluteErrors,
+                percentErrors,
+                series,
+                numbers,
+                max,
+                min,
+                Math.Max(1, max - min));
+            ValidationChartCacheKey = key;
+            return ValidationChartCacheValue;
+        }
+    }
+
+    private double? ValidationModeledBaseValue(MonteCarloYearComparison comparison)
+    {
+        var segment = SegmentStatsForYear(comparison.Year);
+
+        return ValidationMeasure switch
+        {
+            "homes" => HomesValue(comparison.Year, EffectiveValidationNeighborhood, EffectiveValidationDensity, EffectiveValidationBreakdown),
+            "cohort" => CohortValue(comparison, modeled: true),
+            "generation" => StudentGenerationValue(comparison, modeled: true),
+            "family" => FamilyValue(segment),
+            "turnover" => TurnoverValue(segment),
+            _ => StudentValue(comparison, modeled: true)
+        };
+    }
+
+    private double? ValidationReferenceBaseValue(MonteCarloYearComparison comparison)
+    {
+        return ValidationMeasure switch
+        {
+            "cohort" => CohortValue(comparison, modeled: false),
+            "generation" => StudentGenerationReferenceValue(comparison),
+            "students" => StudentValue(comparison, modeled: false),
+            _ => null
+        };
+    }
+
+    private double? StudentValue(MonteCarloYearComparison comparison, bool modeled)
+    {
+        return StudentValue(comparison, modeled, EffectiveValidationBreakdown);
+    }
+
+    private double? StudentValue(MonteCarloYearComparison comparison, bool modeled, string breakdown)
+    {
+        var neighborhood = EffectiveValidationNeighborhood;
+        var density = EffectiveValidationDensity;
+
+        if (!modeled && !HasReferenceData(comparison))
+        {
+            return null;
+        }
+
+        if (!modeled && !density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase) || !density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!modeled)
+            {
+                return breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                    && neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase) == false
+                    ? comparison.ActualGridTotals.GetValueOrDefault(neighborhood)
+                    : null;
+            }
+
+            return SegmentStudentValue(comparison.Year, breakdown);
+        }
+
+        return modeled
+            ? ModeledStudentBreakdown(comparison, breakdown)
+            : ReferenceStudentBreakdown(comparison, breakdown);
+    }
+
+    private double? StudentGenerationValue(MonteCarloYearComparison comparison, bool modeled)
+    {
+        var students = StudentValueForGeneration(comparison, modeled);
+        var homes = HomesValue(comparison.Year, EffectiveValidationNeighborhood, EffectiveValidationDensity, "Total");
+        return students.HasValue && homes is > 0 ? students.Value / homes.Value : null;
+    }
+
+    private double? StudentGenerationReferenceValue(MonteCarloYearComparison comparison)
+    {
+        var students = StudentValueForGeneration(comparison, modeled: false);
+        var homes = HomesValue(comparison.Year, EffectiveValidationNeighborhood, EffectiveValidationDensity, "Total");
+        return students.HasValue && homes is > 0 ? students.Value / homes.Value : null;
+    }
+
+    private double? CohortValue(MonteCarloYearComparison comparison, bool modeled)
+    {
+        var cohort = CohortForLabel(EffectiveValidationBreakdown);
+        var grade = cohort is null ? null : GradeForCohort(cohort, comparison.Year);
+        if (grade is null)
+        {
+            return null;
+        }
+
+        if (!modeled && !HasReferenceData(comparison))
+        {
+            return null;
+        }
+
+        if (!modeled
+            && (!EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)
+                || !EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        if (modeled
+            && (!EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || !EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)))
+        {
+            return SegmentStatsForYear(comparison.Year).Grades.GetValueOrDefault(grade);
+        }
+
+        return modeled
+            ? comparison.ModeledGrades.GetValueOrDefault(grade)
+            : comparison.AdjustedActualGrades.GetValueOrDefault(grade);
+    }
+
+    private double? StudentValueForGeneration(MonteCarloYearComparison comparison, bool modeled)
+    {
+        var breakdown = EffectiveValidationBreakdown;
+
+        if ((!EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || !EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+            && !breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            && !modeled)
+        {
+            return null;
+        }
+
+        return StudentValue(comparison, modeled, breakdown);
+    }
+
+    private IReadOnlyList<double?> TransformValidationValues(IReadOnlyList<double?> values, bool reference)
+    {
+        return EffectiveValidationValueMode switch
+        {
+            "share" => Result?.Comparisons.Select((comparison, index) =>
+            {
+                var value = values.ElementAtOrDefault(index);
+                var denominator = ValidationShareDenominator(comparison, reference);
+                return value.HasValue && denominator is > 0 ? value.Value / denominator.Value : (double?)null;
+            }).ToList() ?? [],
+            "previous-change" => TransformAgainstPrevious(values, percent: false),
+            "previous-percent" => TransformAgainstPrevious(values, percent: true),
+            "start-change" => TransformAgainstStart(values, percent: false),
+            "start-percent" => TransformAgainstStart(values, percent: true),
+            _ => values
+        };
+    }
+
+    private static IReadOnlyList<double?> TransformAgainstPrevious(IReadOnlyList<double?> values, bool percent)
+    {
+        return values.Select((value, index) =>
+        {
+            if (index == 0 || !value.HasValue || !values[index - 1].HasValue)
+            {
+                return (double?)null;
+            }
+
+            var previous = values[index - 1]!.Value;
+            var change = value.Value - previous;
+            return percent
+                ? previous != 0 ? change / previous : (double?)null
+                : change;
+        }).ToList();
+    }
+
+    private static IReadOnlyList<double?> TransformAgainstStart(IReadOnlyList<double?> values, bool percent)
+    {
+        var start = values.FirstOrDefault(value => value.HasValue);
+        return values.Select(value =>
+        {
+            if (!value.HasValue || !start.HasValue)
+            {
+                return (double?)null;
+            }
+
+            var change = value.Value - start.Value;
+            return percent
+                ? start.Value != 0 ? change / start.Value : (double?)null
+                : change;
+        }).ToList();
+    }
+
+    private double? ValidationShareDenominator(MonteCarloYearComparison comparison, bool reference)
+    {
+        return ValidationMeasure switch
+        {
+            "students" or "cohort" => EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                    && EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)
+                ? StudentValue(comparison, modeled: !reference, "Total")
+                : EffectiveValidationBreakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                    ? StudentValue(comparison, modeled: !reference, "Total")
+                    : StudentValue(comparison, modeled: true, "Total"),
+            "homes" => HomesValue(comparison.Year, EffectiveValidationNeighborhood, EffectiveValidationDensity, "Total"),
+            "family" => SegmentStatsForYear(comparison.Year).TotalHomes,
+            _ => null
+        };
+    }
+
+    private MonteCarloSimulationYearInfo? SimulationInfoForYear(int year)
+    {
+        return Result?.SimulationInfo.FirstOrDefault(item => item.Year == year);
+    }
+
+    private double ModeledStudentBreakdown(MonteCarloYearComparison comparison, string breakdown)
+    {
+        return breakdown switch
+        {
+            "Total" or "K-12" => ModeledK12Total(comparison),
+            "K-8" => SumGrades(comparison.ModeledGrades, K8Grades),
+            "HS" => comparison.HighSchoolModeledTotal,
+            _ => comparison.ModeledGrades.GetValueOrDefault(breakdown)
+        };
+    }
+
+    private double? ReferenceStudentBreakdown(MonteCarloYearComparison comparison, string breakdown)
+    {
+        if (!HasReferenceData(comparison))
+        {
+            return null;
+        }
+
+        return breakdown switch
+        {
+            "Total" or "K-12" => ReferenceK12Total(comparison),
+            "K-8" => SumGrades(comparison.AdjustedActualGrades, K8Grades),
+            "HS" => comparison.HighSchoolActualTotal,
+            _ => comparison.AdjustedActualGrades.GetValueOrDefault(breakdown)
+        };
+    }
+
+    private static double ModeledK12Total(MonteCarloYearComparison comparison)
+    {
+        return SumGrades(comparison.ModeledGrades, K8Grades.Concat(HighSchoolGrades).Append("Sp. Ed."));
+    }
+
+    private static double ReferenceK12Total(MonteCarloYearComparison comparison)
+    {
+        return SumGrades(comparison.AdjustedActualGrades, K8Grades.Concat(HighSchoolGrades).Append("Sp. Ed."));
+    }
+
+    private SegmentStats SegmentStatsForYear(int year)
+    {
+        var key = $"{ValidationResultVersion}|{year}|{EffectiveValidationNeighborhood}|{EffectiveValidationDensity}";
+        if (ValidationSegmentStatsCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var segments = SimulationInfoForYear(year)?.Segments ?? [];
+        var selected = segments
+            .Where(segment => EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || segment.Grid.Equals(EffectiveValidationNeighborhood, StringComparison.OrdinalIgnoreCase))
+            .Where(segment => DensityMatchesSelection(segment.Density, EffectiveValidationDensity))
+            .ToList();
+
+        var grades = GradeOrder.ToDictionary(
+            grade => grade,
+            grade => selected.Sum(segment => segment.Grades.GetValueOrDefault(grade)),
+            StringComparer.OrdinalIgnoreCase);
+        var turnoverEvents = selected.Sum(segment => segment.TurnoverEvents);
+
+        var result = new SegmentStats(
+            selected.Sum(segment => segment.TotalHomes),
+            grades,
+            selected.Sum(segment => segment.FamiliesWithZeroChildren),
+            selected.Sum(segment => segment.FamiliesWithOneChild),
+            selected.Sum(segment => segment.FamiliesWithTwoChildren),
+            selected.Sum(segment => segment.FamiliesWithThreeChildren),
+            selected.Sum(segment => segment.FamiliesWithFourPlusChildren),
+            turnoverEvents,
+            turnoverEvents > 0
+                ? selected.Sum(segment => segment.AverageLongevityBeforeTurnover * segment.TurnoverEvents) / turnoverEvents
+                : 0);
+        ValidationSegmentStatsCache[key] = result;
+        return result;
+    }
+
+    private double SegmentStudentValue(int year, string breakdown)
+    {
+        var grades = SegmentStatsForYear(year).Grades;
+        return breakdown switch
+        {
+            "Total" or "K-12" => SumGrades(grades, K8Grades.Concat(HighSchoolGrades).Append("Sp. Ed.")),
+            "K-8" => SumGrades(grades, K8Grades),
+            "HS" => SumGrades(grades, HighSchoolGrades),
+            _ => grades.GetValueOrDefault(breakdown)
+        };
+    }
+
+    private double? HomesValue(int year, string neighborhood, string density, string breakdown)
+    {
+        var stats = SegmentStatsForYear(year);
+        return breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            ? stats.TotalHomes
+            : HomesValueForDensityBreakdown(year, neighborhood, breakdown);
+    }
+
+    private double? HomesValueForDensityBreakdown(int year, string neighborhood, string breakdown)
+    {
+        var segments = SimulationInfoForYear(year)?.Segments ?? [];
+        return segments
+            .Where(segment => neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || segment.Grid.Equals(neighborhood, StringComparison.OrdinalIgnoreCase))
+            .Where(segment => DensityMatchesSelection(segment.Density, breakdown))
+            .Sum(segment => segment.TotalHomes);
+    }
+
+    private double? FamilyValue(SegmentStats year)
+    {
+        return EffectiveValidationBreakdown switch
+        {
+            "0 kids" => year.FamiliesWithZeroChildren,
+            "1 kid" => year.FamiliesWithOneChild,
+            "2 kids" => year.FamiliesWithTwoChildren,
+            "3 kids" => year.FamiliesWithThreeChildren,
+            "4+ kids" => year.FamiliesWithFourPlusChildren,
+            _ => null
+        };
+    }
+
+    private double? TurnoverValue(SegmentStats year)
+    {
+        return EffectiveValidationBreakdown switch
+        {
+            "Turnover factor" => year.TotalHomes > 0 ? year.TurnoverEvents / year.TotalHomes : 0,
+            "Average longevity" => year.AverageLongevityBeforeTurnover,
+            _ => year.TurnoverEvents
+        };
+    }
+
+    private static bool DensityMatchesSelection(string density, string selection)
+    {
+        return selection switch
+        {
+            AllDensity => true,
+            "Low/medium" => density is "Low" or "Medium" or "Other/existing",
+            "Medium-high/high" => density is "Medium-high" or "High",
+            _ => density.Equals(selection, StringComparison.OrdinalIgnoreCase)
+        };
+    }
+
+    private static string DensityBreakdownKey(string breakdown)
+    {
+        return breakdown switch
+        {
+            "Low" => "low",
+            "Medium" => "medium",
+            "Medium-high" => "medium-high",
+            "High" => "high",
+            "Other/existing" => "other",
+            "Low/medium" => "low-medium",
+            "Medium-high/high" => "medium-high-high",
+            _ => "all"
+        };
+    }
+
+    private static double SumGrades(IReadOnlyDictionary<string, double> grades, IEnumerable<string> selectedGrades)
+    {
+        return selectedGrades.Sum(grade => grades.GetValueOrDefault(grade));
+    }
+
+    private void OnValidationMeasureChanged(ChangeEventArgs args)
+    {
+        ValidationMeasure = args.Value?.ToString() ?? "students";
+        NormalizeValidationChartSelections(resetNeighborhood: true, resetBreakdown: true, resetValueMode: true);
+    }
+
+    private void OnValidationNeighborhoodChanged(ChangeEventArgs args)
+    {
+        ValidationNeighborhood = args.Value?.ToString() ?? AllNeighborhood;
+        NormalizeValidationChartSelections(resetBreakdown: false, resetValueMode: true);
+    }
+
+    private void OnValidationDensityChanged(ChangeEventArgs args)
+    {
+        ValidationDensity = args.Value?.ToString() ?? AllDensity;
+        NormalizeValidationChartSelections(resetBreakdown: false, resetValueMode: true);
+    }
+
+    private void OnValidationBreakdownChanged(ChangeEventArgs args)
+    {
+        ValidationBreakdown = args.Value?.ToString() ?? "Total";
+        NormalizeValidationChartSelections(resetValueMode: true);
+    }
+
+    private void OnValidationValueModeChanged(ChangeEventArgs args)
+    {
+        ValidationValueMode = args.Value?.ToString() ?? "value";
+        NormalizeValidationChartSelections();
+    }
+
+    private void NormalizeValidationChartSelections(
+        bool resetNeighborhood = false,
+        bool resetBreakdown = false,
+        bool resetValueMode = false)
+    {
+        if (!new[] { "students", "cohort", "homes", "generation", "family", "turnover" }.Contains(ValidationMeasure))
+        {
+            ValidationMeasure = "students";
+        }
+
+        if (resetNeighborhood || !ValidationNeighborhoodOptions.Contains(ValidationNeighborhood))
+        {
+            ValidationNeighborhood = ValidationNeighborhoodOptions.FirstOrDefault() ?? AllNeighborhood;
+        }
+
+        if (!ValidationDensityOptions.Contains(ValidationDensity))
+        {
+            ValidationDensity = AllDensity;
+        }
+
+        if (resetBreakdown || !ValidationBreakdownOptions.Contains(ValidationBreakdown))
+        {
+            ValidationBreakdown = ValidationBreakdownOptions.FirstOrDefault() ?? "Total";
+        }
+
+        if (resetValueMode || !ValidationValueModeOptions.Any(option => option.Key.Equals(ValidationValueMode, StringComparison.OrdinalIgnoreCase)))
+        {
+            ValidationValueMode = "value";
+        }
+
+        TotalChartHoverIndex = null;
+        InvalidateValidationChartCache();
+    }
+
+    private void InvalidateValidationChartCache()
+    {
+        ValidationChartCacheValue = null;
+        ValidationChartCacheKey = null;
+        ValidationSegmentStatsCache.Clear();
+    }
+
+    private IReadOnlyList<string> ChartNeighborhoodOptions(ChartToolState chart) => chart.Measure is "family" or "turnover"
+        ? [AllNeighborhood, .. Result?.SimulationInfo.FirstOrDefault()?.Segments
+            .Select(segment => segment.Grid)
+            .Where(grid => !ExcludedValidationGrids.Contains(grid))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(grid => grid, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? []]
+        : [AllNeighborhood, .. Result?.Comparisons.FirstOrDefault()?.ModeledGridTotals.Keys
+            .Where(grid => !ExcludedValidationGrids.Contains(grid))
+            .Order()
+            .ToList() ?? []];
+
+    private IReadOnlyList<string> ChartBreakdownOptions(ChartToolState chart) => chart.Measure switch
+    {
+        "homes" => ["Total"],
+        "cohort" => CohortBreakdownOptions,
+        "generation" => ["K-12", "K-8", "HS"],
+        "family" => ["0 kids", "1 kid", "2 kids", "3 kids", "4+ kids"],
+        "turnover" => ["Turnover events", "Turnover factor", "Average longevity"],
+        _ => ["Total", "K-8", "HS", .. VisibleGradeOrder]
+    };
+
+    private IReadOnlyList<ValidationValueModeOption> ChartValueModeOptions(ChartToolState chart)
+    {
+        var selection = new ChartSelection(
+            chart.Measure is "students" or "cohort" or "homes" or "generation" or "family" or "turnover" ? chart.Measure : "students",
+            EffectiveChartNeighborhood(chart),
+            EffectiveChartDensity(chart),
+            EffectiveChartBreakdown(chart),
+            chart.ValueMode);
+        return ChartValueModeOptions(selection);
+    }
+
+    private IReadOnlyList<ValidationValueModeOption> ChartValueModeOptions(ChartSelection selection)
+    {
+        var options = new List<ValidationValueModeOption>
+        {
+            new("value", selection.Measure is "generation" ? "Value" : "Count")
+        };
+
+        if (ChartSupportsShare(selection))
+        {
+            options.Add(new("share", "Percent"));
+        }
+
+        options.AddRange(
+        [
+            new("previous-change", "Change previous"),
+            new("previous-percent", "Change previous %"),
+            new("start-change", "Change cumulative"),
+            new("start-percent", "Change cumulative %")
+        ]);
+
+        if (ChartHasReference(selection))
+        {
+            options.Add(new("absolute-error", "Absolute error"));
+            options.Add(new("percent-error", "Percentage error"));
+        }
+
+        return options;
+    }
+
+    private string EffectiveChartNeighborhood(ChartToolState chart)
+    {
+        var options = ChartNeighborhoodOptions(chart);
+        return options.Contains(chart.Neighborhood)
+            ? chart.Neighborhood
+            : AllNeighborhood;
+    }
+
+    private string EffectiveChartDensity(ChartToolState chart) =>
+        ValidationDensityOptions.Contains(chart.Density)
+            ? chart.Density
+            : AllDensity;
+
+    private string EffectiveChartBreakdown(ChartToolState chart)
+    {
+        var options = ChartBreakdownOptions(chart);
+        return options.Contains(chart.Breakdown)
+            ? chart.Breakdown
+            : options.FirstOrDefault() ?? "Total";
+    }
+
+    private string EffectiveChartValueMode(ChartToolState chart)
+    {
+        var selection = new ChartSelection(
+            chart.Measure is "students" or "cohort" or "homes" or "generation" or "family" or "turnover" ? chart.Measure : "students",
+            EffectiveChartNeighborhood(chart),
+            EffectiveChartDensity(chart),
+            EffectiveChartBreakdown(chart),
+            chart.ValueMode);
+        var options = ChartValueModeOptions(selection);
+        return options.Any(option => option.Key.Equals(chart.ValueMode, StringComparison.OrdinalIgnoreCase))
+            ? chart.ValueMode
+            : "value";
+    }
+
+    private ChartSelection CurrentChartSelection(ChartToolState chart) =>
+        new(
+            chart.Measure is "students" or "cohort" or "homes" or "generation" or "family" or "turnover" ? chart.Measure : "students",
+            EffectiveChartNeighborhood(chart),
+            EffectiveChartDensity(chart),
+            EffectiveChartBreakdown(chart),
+            EffectiveChartValueMode(chart));
+
+    private static string ChartSelectionKey(ChartSelection selection) =>
+        $"{selection.Measure}|{selection.Neighborhood}|{selection.Density}|{selection.Breakdown}|{selection.ValueMode}";
+
+    private string ChartSelectionLabel(ChartSelection selection) =>
+        $"{ChartMeasureLabel(selection.Measure)}: {FormatValidationNeighborhood(selection.Neighborhood)} / {selection.Density} / {FormatChartBreakdown(selection.Measure, selection.Breakdown)} / {ChartValueModeLabel(selection)}";
+
+    private string ChartValueModeLabel(ChartSelection selection) =>
+        ChartValueModeOptions(selection).FirstOrDefault(option => option.Key.Equals(selection.ValueMode, StringComparison.OrdinalIgnoreCase))?.Label ?? "Count";
+
+    private static string ChartMeasureLabel(string measure) => measure switch
+    {
+        "cohort" => "Student Cohort",
+        "homes" => "Homes",
+        "generation" => "Student Generation",
+        "family" => "Family Profile",
+        "turnover" => "Turnover",
+        _ => "Students"
+    };
+
+    private string FormatChartBreakdown(ChartToolState chart, string breakdown) => FormatChartBreakdown(chart.Measure, breakdown);
+
+    private static string FormatChartBreakdown(string measure, string breakdown)
+    {
+        return measure is "students" or "generation"
+            && breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                ? "All grades"
+                : breakdown;
+    }
+
+    private bool ChartSupportsShare(ChartSelection selection) => selection.Measure switch
+    {
+        "students" or "cohort" => !selection.Breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            || !selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+            || !selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase),
+        "homes" => !selection.Breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase),
+        "family" => true,
+        _ => false
+    };
+
+    private bool ChartHasReference(ChartSelection selection) =>
+        Result?.Comparisons.Select(comparison => ChartReferenceBaseValue(selection, comparison)).Any(value => value.HasValue) == true;
+
+    private Func<double, string> ChartFormatter(ChartSelection selection) => selection.ValueMode switch
+    {
+        "share" or "previous-percent" or "start-percent" or "percent-error" => FormatPercent,
+        "value" when selection.Measure is "generation" => FormatGeneration,
+        "value" when selection.Measure is "turnover" && selection.Breakdown.Equals("Turnover factor", StringComparison.OrdinalIgnoreCase) => FormatPercent,
+        "value" when selection.Measure is "turnover" && selection.Breakdown.Equals("Average longevity", StringComparison.OrdinalIgnoreCase) => value => $"{value:0.0} yrs",
+        _ => FormatCount
+    };
+
+    private ValidationChartCache CurrentChart(ChartToolState chart)
+    {
+        var selection = CurrentChartSelection(chart);
+        var key = $"{ValidationResultVersion}|{ChartSelectionKey(selection)}";
+        if (chart.CacheValue is not null && chart.CacheKey == key)
+        {
+            return chart.CacheValue;
+        }
+
+        chart.CacheValue = BuildChartCache(chart, selection, chart.PinnedSelections.Count);
+        chart.CacheKey = key;
+        return chart.CacheValue;
+    }
+
+    private ValidationChartCache BuildChartCache(ChartToolState chart, ChartSelection selection, int colorIndex)
+    {
+        var modeledBase = Result?.Comparisons.Select(comparison => ChartModeledBaseValue(chart, selection, comparison)).ToList() ?? [];
+        var referenceBase = Result?.Comparisons.Select(comparison => ChartReferenceBaseValue(selection, comparison)).ToList() ?? [];
+        var modeledValues = TransformChartValues(chart, selection, modeledBase, reference: false);
+        var referenceValues = TransformChartValues(chart, selection, referenceBase, reference: true);
+        var absoluteErrors = referenceBase
+            .Zip(modeledBase, (reference, modeled) => reference.HasValue && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) : (double?)null)
+            .ToList();
+        var percentErrors = referenceBase
+            .Zip(modeledBase, (reference, modeled) => reference is > 0 && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) / reference.Value : (double?)null)
+            .ToList();
+        var color = ValidationColorForIndex(colorIndex);
+        var hasReference = referenceBase.Any(value => value.HasValue);
+        var series = selection.ValueMode switch
+        {
+            "absolute-error" => new List<ValidationChartLine> { new("Absolute error", color, absoluteErrors, FormatCount, "") },
+            "percent-error" => new List<ValidationChartLine> { new("Percentage error", color, percentErrors, FormatPercent, "") },
+            _ => hasReference
+                ?
+                [
+                    new("Reference", color, referenceValues, ChartFormatter(selection), "7 5"),
+                    new(ChartModeledSeriesLabel(selection), color, modeledValues, ChartFormatter(selection), "")
+                ]
+                :
+                [
+                    new(ChartModeledSeriesLabel(selection), color, modeledValues, ChartFormatter(selection), "")
+                ]
+        };
+        var numbers = series
+            .SelectMany(item => item.Values)
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToList();
+        var max = 1.0;
+        var min = 0.0;
+        if (numbers.Count > 0)
+        {
+            var rawMax = numbers.Max();
+            var rawMin = numbers.Min();
+            if (rawMin < 0)
+            {
+                max = ChartAxis.NiceMaximum(Math.Max(Math.Abs(rawMin), Math.Abs(rawMax)) * 1.08);
+                min = -max;
+            }
+            else
+            {
+                max = ChartAxis.NiceMaximum(Math.Max(1, rawMax * 1.08));
+            }
+        }
+
+        return new ValidationChartCache(
+            modeledValues,
+            referenceValues,
+            absoluteErrors,
+            percentErrors,
+            series,
+            numbers,
+            max,
+            min,
+            Math.Max(1, max - min));
+    }
+
+    private static string ChartModeledSeriesLabel(ChartSelection selection) => selection.Measure switch
+    {
+        "homes" => "Homes",
+        _ => "Simulation mean"
+    };
+
+    private double? ChartModeledBaseValue(ChartToolState chart, ChartSelection selection, MonteCarloYearComparison comparison)
+    {
+        var segment = SegmentStatsForYear(chart, selection, comparison.Year);
+        return selection.Measure switch
+        {
+            "homes" => HomesValue(chart, selection, comparison.Year, selection.Neighborhood, selection.Density, selection.Breakdown),
+            "cohort" => CohortValue(chart, selection, comparison, modeled: true),
+            "generation" => StudentGenerationValue(chart, selection, comparison, modeled: true),
+            "family" => FamilyValue(selection, segment),
+            "turnover" => TurnoverValue(selection, segment),
+            _ => StudentValue(chart, selection, comparison, modeled: true)
+        };
+    }
+
+    private double? ChartReferenceBaseValue(ChartSelection selection, MonteCarloYearComparison comparison)
+    {
+        return selection.Measure switch
+        {
+            "cohort" => CohortValue(null, selection, comparison, modeled: false),
+            "generation" => StudentGenerationReferenceValue(selection, comparison),
+            "students" => StudentValue(null, selection, comparison, modeled: false),
+            _ => null
+        };
+    }
+
+    private double? StudentValue(ChartToolState? chart, ChartSelection selection, MonteCarloYearComparison comparison, bool modeled)
+    {
+        return StudentValue(chart, selection, comparison, modeled, selection.Breakdown);
+    }
+
+    private double? StudentValue(ChartToolState? chart, ChartSelection selection, MonteCarloYearComparison comparison, bool modeled, string breakdown)
+    {
+        if (!modeled && !HasReferenceData(comparison))
+        {
+            return null;
+        }
+
+        if (!modeled && !selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+            || !selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!modeled)
+            {
+                return breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                    && !selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                        ? comparison.ActualGridTotals.GetValueOrDefault(selection.Neighborhood)
+                        : null;
+            }
+
+            return chart is null ? null : SegmentStudentValue(chart, selection, comparison.Year, breakdown);
+        }
+
+        return modeled
+            ? ModeledStudentBreakdown(comparison, breakdown)
+            : ReferenceStudentBreakdown(comparison, breakdown);
+    }
+
+    private double? StudentGenerationValue(ChartToolState chart, ChartSelection selection, MonteCarloYearComparison comparison, bool modeled)
+    {
+        var students = StudentValueForGeneration(chart, selection, comparison, modeled);
+        var homes = HomesValue(chart, selection, comparison.Year, selection.Neighborhood, selection.Density, "Total");
+        return students.HasValue && homes is > 0 ? students.Value / homes.Value : null;
+    }
+
+    private double? StudentGenerationReferenceValue(ChartSelection selection, MonteCarloYearComparison comparison)
+    {
+        var students = StudentValueForGeneration(null, selection, comparison, modeled: false);
+        var homes = HomesValueForSelection(comparison.Year, selection.Neighborhood, selection.Density);
+        return students.HasValue && homes is > 0 ? students.Value / homes.Value : null;
+    }
+
+    private double? CohortValue(ChartToolState? chart, ChartSelection selection, MonteCarloYearComparison comparison, bool modeled)
+    {
+        var cohort = CohortForLabel(selection.Breakdown);
+        var grade = cohort is null ? null : GradeForCohort(cohort, comparison.Year);
+        if (grade is null)
+        {
+            return null;
+        }
+
+        if (!modeled && !HasReferenceData(comparison))
+        {
+            return null;
+        }
+
+        if (!modeled
+            && (!selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)
+                || !selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        if (modeled
+            && (!selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || !selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)))
+        {
+            return chart is null ? null : SegmentStatsForYear(chart, selection, comparison.Year).Grades.GetValueOrDefault(grade);
+        }
+
+        return modeled
+            ? comparison.ModeledGrades.GetValueOrDefault(grade)
+            : comparison.AdjustedActualGrades.GetValueOrDefault(grade);
+    }
+
+    private double? StudentValueForGeneration(ChartToolState? chart, ChartSelection selection, MonteCarloYearComparison comparison, bool modeled)
+    {
+        if ((!selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || !selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+            && !selection.Breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            && !modeled)
+        {
+            return null;
+        }
+
+        return StudentValue(chart, selection, comparison, modeled, selection.Breakdown);
+    }
+
+    private IReadOnlyList<double?> TransformChartValues(ChartToolState chart, ChartSelection selection, IReadOnlyList<double?> values, bool reference)
+    {
+        return selection.ValueMode switch
+        {
+            "share" => Result?.Comparisons.Select((comparison, index) =>
+            {
+                var value = values.ElementAtOrDefault(index);
+                var denominator = ChartShareDenominator(chart, selection, comparison, reference);
+                return value.HasValue && denominator is > 0 ? value.Value / denominator.Value : (double?)null;
+            }).ToList() ?? [],
+            "previous-change" => TransformAgainstPrevious(values, percent: false),
+            "previous-percent" => TransformAgainstPrevious(values, percent: true),
+            "start-change" => TransformAgainstStart(values, percent: false),
+            "start-percent" => TransformAgainstStart(values, percent: true),
+            _ => values
+        };
+    }
+
+    private double? ChartShareDenominator(ChartToolState chart, ChartSelection selection, MonteCarloYearComparison comparison, bool reference)
+    {
+        return selection.Measure switch
+        {
+            "students" or "cohort" => selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                    && selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)
+                ? StudentValue(chart, selection, comparison, modeled: !reference, "Total")
+                : selection.Breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                    ? StudentValue(chart, selection, comparison, modeled: !reference, "Total")
+                    : StudentValue(chart, selection, comparison, modeled: true, "Total"),
+            "homes" => HomesValue(chart, selection, comparison.Year, selection.Neighborhood, selection.Density, "Total"),
+            "family" => SegmentStatsForYear(chart, selection, comparison.Year).TotalHomes,
+            _ => null
+        };
+    }
+
+    private SegmentStats SegmentStatsForYear(ChartToolState chart, ChartSelection selection, int year)
+    {
+        var key = $"{ValidationResultVersion}|{year}|{selection.Neighborhood}|{selection.Density}";
+        if (chart.SegmentStatsCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var segments = SimulationInfoForYear(year)?.Segments ?? [];
+        var selected = segments
+            .Where(segment => selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || segment.Grid.Equals(selection.Neighborhood, StringComparison.OrdinalIgnoreCase))
+            .Where(segment => DensityMatchesSelection(segment.Density, selection.Density))
+            .ToList();
+
+        var grades = GradeOrder.ToDictionary(
+            grade => grade,
+            grade => selected.Sum(segment => segment.Grades.GetValueOrDefault(grade)),
+            StringComparer.OrdinalIgnoreCase);
+        var turnoverEvents = selected.Sum(segment => segment.TurnoverEvents);
+        var result = new SegmentStats(
+            selected.Sum(segment => segment.TotalHomes),
+            grades,
+            selected.Sum(segment => segment.FamiliesWithZeroChildren),
+            selected.Sum(segment => segment.FamiliesWithOneChild),
+            selected.Sum(segment => segment.FamiliesWithTwoChildren),
+            selected.Sum(segment => segment.FamiliesWithThreeChildren),
+            selected.Sum(segment => segment.FamiliesWithFourPlusChildren),
+            turnoverEvents,
+            turnoverEvents > 0
+                ? selected.Sum(segment => segment.AverageLongevityBeforeTurnover * segment.TurnoverEvents) / turnoverEvents
+                : 0);
+        chart.SegmentStatsCache[key] = result;
+        return result;
+    }
+
+    private double SegmentStudentValue(ChartToolState chart, ChartSelection selection, int year, string breakdown)
+    {
+        var grades = SegmentStatsForYear(chart, selection, year).Grades;
+        return breakdown switch
+        {
+            "Total" or "K-12" => SumGrades(grades, K8Grades.Concat(HighSchoolGrades).Append("Sp. Ed.")),
+            "K-8" => SumGrades(grades, K8Grades),
+            "HS" => SumGrades(grades, HighSchoolGrades),
+            _ => grades.GetValueOrDefault(breakdown)
+        };
+    }
+
+    private double? HomesValue(ChartToolState chart, ChartSelection selection, int year, string neighborhood, string density, string breakdown)
+    {
+        return breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+            ? SegmentStatsForYear(chart, selection with { Neighborhood = neighborhood, Density = density }, year).TotalHomes
+            : HomesValueForSelection(year, neighborhood, breakdown);
+    }
+
+    private double? HomesValueForSelection(int year, string neighborhood, string breakdown)
+    {
+        var segments = SimulationInfoForYear(year)?.Segments ?? [];
+        return segments
+            .Where(segment => neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                || segment.Grid.Equals(neighborhood, StringComparison.OrdinalIgnoreCase))
+            .Where(segment => DensityMatchesSelection(segment.Density, breakdown))
+            .Sum(segment => segment.TotalHomes);
+    }
+
+    private static double? FamilyValue(ChartSelection selection, SegmentStats year)
+    {
+        return selection.Breakdown switch
+        {
+            "0 kids" => year.FamiliesWithZeroChildren,
+            "1 kid" => year.FamiliesWithOneChild,
+            "2 kids" => year.FamiliesWithTwoChildren,
+            "3 kids" => year.FamiliesWithThreeChildren,
+            "4+ kids" => year.FamiliesWithFourPlusChildren,
+            _ => null
+        };
+    }
+
+    private static double? TurnoverValue(ChartSelection selection, SegmentStats year)
+    {
+        return selection.Breakdown switch
+        {
+            "Turnover factor" => year.TotalHomes > 0 ? year.TurnoverEvents / year.TotalHomes : 0,
+            "Average longevity" => year.AverageLongevityBeforeTurnover,
+            _ => year.TurnoverEvents
+        };
+    }
+
+    private IReadOnlyList<ValidationLegendGroup> ChartLegendGroups(ChartToolState chart)
+    {
+        var groups = chart.PinnedSelections
+            .Select((selection, index) => new ValidationLegendGroup(
+                selection.Id,
+                ChartSelectionLabel(selection.Selection),
+                BuildChartCache(chart, selection.Selection, index).Series))
+            .ToList();
+        var current = CurrentChartSelection(chart);
+        if (!chart.PinnedSelections.Any(selection => ChartSelectionKey(selection.Selection).Equals(ChartSelectionKey(current), StringComparison.OrdinalIgnoreCase)))
+        {
+            groups.Add(new ValidationLegendGroup(null, ChartSelectionLabel(current), CurrentChart(chart).Series));
+        }
+
+        return groups;
+    }
+
+    private IReadOnlyList<ValidationChartLine> ChartSeries(ChartToolState chart) => ChartLegendGroups(chart)
+        .SelectMany(group => group.Series.Select(series => series with { HoverLabel = $"{group.Label} {series.Label}" }))
+        .ToList();
+
+    private void PinChartSelection(ChartToolState chart)
+    {
+        var selection = CurrentChartSelection(chart);
+        var key = ChartSelectionKey(selection);
+        if (chart.PinnedSelections.Any(pin => ChartSelectionKey(pin.Selection).Equals(key, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        chart.PinnedSelections.Add(new ChartPinnedSelection(chart.NextPinnedSelectionId++, selection));
+        InvalidateChart(chart);
+    }
+
+    private static void RemoveChartSelection(ChartToolState chart, int id)
+    {
+        chart.PinnedSelections.RemoveAll(selection => selection.Id == id);
+        InvalidateChart(chart);
+    }
+
+    private static void InvalidateChart(ChartToolState chart)
+    {
+        chart.CacheKey = null;
+        chart.CacheValue = null;
+        chart.SegmentStatsCache.Clear();
+    }
+
+    private IReadOnlyList<(double Y, string Label)> ChartYTicks(ChartToolState chart)
+    {
+        var cache = CurrentChart(chart);
+        return Enumerable.Range(0, 5)
+            .Select(index =>
+            {
+                var value = cache.Max - ((cache.Max - cache.Min) * index / 4);
+                var y = ChartYForValue(chart, value);
+                return (y, ChartFormatter(CurrentChartSelection(chart))(value));
+            })
+            .ToList();
+    }
+
+    private string ChartPoints(ChartToolState chart, IReadOnlyList<double?> values)
+    {
+        if (values.Count == 0) return "";
+        return string.Join(" ", values.Select((value, index) =>
+        {
+            if (!value.HasValue) return null;
+            var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
+            var y = ChartYForValue(chart, value.Value);
+            return $"{x:0.##},{y:0.##}";
+        }).Where(point => point is not null));
+    }
+
+    private double ChartXForIndex(int index)
+    {
+        var points = Result?.Comparisons ?? [];
+        return points.Count == 1 ? 60 : 60 + (index * 800.0 / Math.Max(1, points.Count - 1));
+    }
+
+    private double ChartYForValue(ChartToolState chart, double value)
+    {
+        var cache = CurrentChart(chart);
+        return 260 - ((value - cache.Min) / cache.Span * 220);
+    }
+
+    private double ChartHoverX(ChartToolState chart) => chart.HoverIndex.HasValue ? ChartXForIndex(chart.HoverIndex.Value) : 60;
+
+    private double ChartHoverYearLabelX(ChartToolState chart) => Math.Clamp(ChartHoverX(chart) - 29, 62, 802);
+
+    private double ChartHoverPanelX(ChartToolState chart) => ChartHoverX(chart) > 650 ? 405 : 650;
+
+    private IReadOnlyList<(int Index, double X, double Width)> ChartHoverZones
+    {
+        get
+        {
+            var points = Result?.Comparisons ?? [];
+            if (points.Count == 0) return [];
+            if (points.Count == 1) return [(0, 60, 800)];
+
+            var zones = new List<(int Index, double X, double Width)>();
+            for (var index = 0; index < points.Count; index++)
+            {
+                var previousMid = index == 0 ? 60 : (ChartXForIndex(index - 1) + ChartXForIndex(index)) / 2;
+                var nextMid = index == points.Count - 1 ? 860 : (ChartXForIndex(index) + ChartXForIndex(index + 1)) / 2;
+                zones.Add((index, previousMid, nextMid - previousMid));
+            }
+
+            return zones;
+        }
+    }
+
+    private IReadOnlyList<(double X, double Y, string Label, string Color)> ChartHoverMarkers(ChartToolState chart)
+    {
+        var points = Result?.Comparisons ?? [];
+        if (!chart.HoverIndex.HasValue || chart.HoverIndex.Value < 0 || chart.HoverIndex.Value >= points.Count) return [];
+
+        var index = chart.HoverIndex.Value;
+        var x = ChartXForIndex(index);
+        return ChartSeries(chart)
+            .Select(series => new { series, Value = series.Values.ElementAtOrDefault(index) })
+            .Where(item => item.Value.HasValue)
+            .Select(item => (
+                x,
+                ChartYForValue(chart, item.Value!.Value),
+                $"{item.series.HoverLabel}: {item.series.Formatter(item.Value.Value)}",
+                item.series.Color))
+            .ToList();
+    }
+
+    private void OnChartMeasureChanged(ChartToolState chart, ChangeEventArgs args)
+    {
+        chart.Measure = args.Value?.ToString() ?? "students";
+        NormalizeChartSelections(chart, resetNeighborhood: true, resetBreakdown: true, resetValueMode: true);
+    }
+
+    private void OnChartNeighborhoodChanged(ChartToolState chart, ChangeEventArgs args)
+    {
+        chart.Neighborhood = args.Value?.ToString() ?? AllNeighborhood;
+        NormalizeChartSelections(chart, resetBreakdown: false, resetValueMode: true);
+    }
+
+    private void OnChartDensityChanged(ChartToolState chart, ChangeEventArgs args)
+    {
+        chart.Density = args.Value?.ToString() ?? AllDensity;
+        NormalizeChartSelections(chart, resetBreakdown: false, resetValueMode: true);
+    }
+
+    private void OnChartBreakdownChanged(ChartToolState chart, ChangeEventArgs args)
+    {
+        chart.Breakdown = args.Value?.ToString() ?? "Total";
+        NormalizeChartSelections(chart, resetValueMode: true);
+    }
+
+    private void OnChartValueModeChanged(ChartToolState chart, ChangeEventArgs args)
+    {
+        chart.ValueMode = args.Value?.ToString() ?? "value";
+        NormalizeChartSelections(chart);
+    }
+
+    private void NormalizeChartSelections(
+        ChartToolState chart,
+        bool resetNeighborhood = false,
+        bool resetBreakdown = false,
+        bool resetValueMode = false)
+    {
+        if (!new[] { "students", "cohort", "homes", "generation", "family", "turnover" }.Contains(chart.Measure))
+        {
+            chart.Measure = "students";
+        }
+
+        if (resetNeighborhood || !ChartNeighborhoodOptions(chart).Contains(chart.Neighborhood))
+        {
+            chart.Neighborhood = ChartNeighborhoodOptions(chart).FirstOrDefault() ?? AllNeighborhood;
+        }
+
+        if (!ValidationDensityOptions.Contains(chart.Density))
+        {
+            chart.Density = AllDensity;
+        }
+
+        if (resetBreakdown || !ChartBreakdownOptions(chart).Contains(chart.Breakdown))
+        {
+            chart.Breakdown = ChartBreakdownOptions(chart).FirstOrDefault() ?? "Total";
+        }
+
+        if (resetValueMode || !ChartValueModeOptions(chart).Any(option => option.Key.Equals(chart.ValueMode, StringComparison.OrdinalIgnoreCase)))
+        {
+            chart.ValueMode = "value";
+        }
+
+        chart.HoverIndex = null;
+        InvalidateChart(chart);
+    }
+
+    [JSInvokable]
+    public async Task SetValidationHoverIndex(int index)
+    {
+        int? next = index < 0 ? null : index;
+        if (TotalChartHoverIndex == next)
+        {
+            return;
+        }
+
+        TotalChartHoverIndex = next;
+        ValidationHoverRenderPending = true;
+        await InvokeAsync(StateHasChanged);
+    }
 
     private IReadOnlyList<string> ComparisonChartEntities => ComparisonChartMode switch
     {
@@ -2126,20 +4045,6 @@ else
         return comparison.ActualGridTotal > 0 || comparison.ActualGradeTotal > 0;
     }
 
-    private string ChartPoints(Func<MonteCarloYearComparison, double?> selector)
-    {
-        var points = Result?.Comparisons ?? [];
-        if (points.Count == 0) return "";
-        return string.Join(" ", points.Select((point, index) =>
-        {
-            var value = selector(point);
-            if (!value.HasValue) return null;
-            var x = points.Count == 1 ? 60 : 60 + (index * 800.0 / (points.Count - 1));
-            var y = 260 - (value.Value / ChartMax * 220);
-            return $"{x:0.##},{y:0.##}";
-        }).Where(point => point is not null));
-    }
-
     private double TotalXForIndex(int index)
     {
         var points = Result?.Comparisons ?? [];
@@ -2148,14 +4053,18 @@ else
 
     private double TotalYForValue(double value)
     {
-        return 260 - (value / ChartMax * 220);
+        return 260 - ((value - ValidationChartMin) / ValidationChartSpan * 220);
     }
 
     private double TotalHoverX => TotalChartHoverIndex.HasValue ? TotalXForIndex(TotalChartHoverIndex.Value) : 60;
 
     private double TotalHoverYearLabelX => Math.Clamp(TotalHoverX - 29, 62, 802);
 
-    private double TotalHoverPanelX => TotalHoverX > 650 ? 650 - 180 : 650;
+    private double TotalHoverPanelWidth => 245;
+
+    private double TotalHoverPanelHeight => 14 + TotalHoverMarkers.Count * 17;
+
+    private double TotalHoverPanelX => TotalHoverX > 650 ? 650 - TotalHoverPanelWidth : 650;
 
     private double TotalHoverPanelY => 72;
 
@@ -2187,20 +4096,30 @@ else
             if (!TotalChartHoverIndex.HasValue || TotalChartHoverIndex.Value < 0 || TotalChartHoverIndex.Value >= points.Count) return [];
 
             var index = TotalChartHoverIndex.Value;
-            var point = points[index];
             var x = TotalXForIndex(index);
-            var markers = new List<(double X, double Y, string Label, string Color)>
-            {
-                (x, TotalYForValue(point.ModeledGridTotal), $"Modeled: {point.ModeledGridTotal:N0}", "#b45309")
-            };
 
-            if (HasReferenceData(point))
-            {
-                markers.Insert(0, (x, TotalYForValue(point.ActualGridTotal), $"Actual: {point.ActualGridTotal:N0}", "#0f766e"));
-            }
-
-            return markers;
+            return ValidationChartSeries
+                .Select(series => new { series, Value = series.Values.ElementAtOrDefault(index) })
+                .Where(item => item.Value.HasValue)
+                .Select(item => (
+                    x,
+                    TotalYForValue(item.Value!.Value),
+                    $"{item.series.HoverLabel}: {item.series.Formatter(item.Value.Value)}",
+                    item.series.Color))
+                .ToList();
         }
+    }
+
+    private string ValidationChartPoints(IReadOnlyList<double?> values)
+    {
+        if (values.Count == 0) return "";
+        return string.Join(" ", values.Select((value, index) =>
+        {
+            if (!value.HasValue) return null;
+            var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
+            var y = TotalYForValue(value.Value);
+            return $"{x:0.##},{y:0.##}";
+        }).Where(point => point is not null));
     }
 
     private string ComparisonChartPoints(IReadOnlyList<double?> values)
@@ -2216,7 +4135,21 @@ else
         }).Where(point => point is not null));
     }
 
-    private IReadOnlyList<(double Y, string Label)> YTicks => ChartAxis.YTicks(ChartMax, 40, 260);
+    private IReadOnlyList<(double Y, string Label)> ValidationYTicks
+    {
+        get
+        {
+            const int tickCount = 5;
+            return Enumerable.Range(0, tickCount)
+                .Select(index =>
+                {
+                    var value = ValidationChartMax - ((ValidationChartMax - ValidationChartMin) * index / Math.Max(1, tickCount - 1));
+                    var y = TotalYForValue(value);
+                    return (y, ValidationFormatter(value));
+                })
+                .ToList();
+        }
+    }
 
     private IReadOnlyList<(double X, string Label)> XTicks
     {
@@ -2443,6 +4376,11 @@ else
         return value.ToString("N0");
     }
 
+    private static string FormatPercent(double value)
+    {
+        return value.ToString("P1");
+    }
+
     private static string FormatGeneration(double value)
     {
         return value.ToString("0.000");
@@ -2608,6 +4546,140 @@ else
     }
 
     private sealed record MonteCarloToolDefinition(string Id, string Title);
+
+    private sealed record SavedSimulationLayout(
+        IReadOnlyList<string> ActiveToolIds,
+        IReadOnlyList<string> CollapsedToolIds,
+        IReadOnlyList<string> SelectedSimulationInfoRows,
+        bool ShowIncreaseFromStart,
+        bool ShowIncreaseFromStartPercent,
+        bool ShowIncreaseFromPrevious,
+        bool ShowIncreaseFromPreviousPercent,
+        string ValidationMeasure,
+        string ValidationNeighborhood,
+        string ValidationDensity,
+        string ValidationBreakdown,
+        string ValidationValueMode,
+        IReadOnlyList<SavedChartTool>? ChartTools = null);
+
+    private sealed record SavedChartTool(
+        string Id,
+        string Title,
+        string Measure,
+        string Neighborhood,
+        string Density,
+        string Breakdown,
+        string ValueMode,
+        IReadOnlyList<SavedChartSelection> PinnedSelections)
+    {
+        public static SavedChartTool From(ChartToolState chart) =>
+            new(
+                chart.Id,
+                chart.Title,
+                chart.Measure,
+                chart.Neighborhood,
+                chart.Density,
+                chart.Breakdown,
+                chart.ValueMode,
+                chart.PinnedSelections.Select(SavedChartSelection.From).ToList());
+    }
+
+    private sealed record SavedChartSelection(
+        int Id,
+        string Measure,
+        string Neighborhood,
+        string Density,
+        string Breakdown,
+        string ValueMode)
+    {
+        public static SavedChartSelection From(ChartPinnedSelection selection) =>
+            new(
+                selection.Id,
+                selection.Selection.Measure,
+                selection.Selection.Neighborhood,
+                selection.Selection.Density,
+                selection.Selection.Breakdown,
+                selection.Selection.ValueMode);
+    }
+
+    private sealed record SavedYearsState(int StartYear, int EndYear);
+
+    private sealed record ChartSelection(
+        string Measure,
+        string Neighborhood,
+        string Density,
+        string Breakdown,
+        string ValueMode);
+
+    private sealed record ChartPinnedSelection(int Id, ChartSelection Selection);
+
+    private sealed class ChartToolState(string id, string title)
+    {
+        public string Id { get; } = id;
+        public string Title { get; set; } = title;
+        public string Measure { get; set; } = "students";
+        public string Neighborhood { get; set; } = AllNeighborhood;
+        public string Density { get; set; } = AllDensity;
+        public string Breakdown { get; set; } = "Total";
+        public string ValueMode { get; set; } = "value";
+        public List<ChartPinnedSelection> PinnedSelections { get; } = [];
+        public int NextPinnedSelectionId { get; set; } = 1;
+        public string? CacheKey { get; set; }
+        public ValidationChartCache? CacheValue { get; set; }
+        public Dictionary<string, SegmentStats> SegmentStatsCache { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public int? HoverIndex { get; set; }
+    }
+
+    private sealed record ValidationChartLine(
+        string Label,
+        string Color,
+        IReadOnlyList<double?> Values,
+        Func<double, string> Formatter,
+        string DashArray,
+        string HoverLabel = "");
+
+    private sealed record ValidationPinnedSelection(
+        int Id,
+        string Key,
+        string Label,
+        IReadOnlyList<ValidationChartLine> Series);
+
+    private sealed record ValidationLegendGroup(
+        int? PinnedId,
+        string Label,
+        IReadOnlyList<ValidationChartLine> Series);
+
+    private sealed record ValidationChartCache(
+        IReadOnlyList<double?> ModeledValues,
+        IReadOnlyList<double?> ReferenceValues,
+        IReadOnlyList<double?> AbsoluteErrorValues,
+        IReadOnlyList<double?> PercentErrorValues,
+        IReadOnlyList<ValidationChartLine> Series,
+        IReadOnlyList<double> Numbers,
+        double Max,
+        double Min,
+        double Span);
+
+    private sealed record ValidationValueModeOption(string Key, string Label);
+
+    private sealed record SegmentStats(
+        double TotalHomes,
+        Dictionary<string, double> Grades,
+        double FamiliesWithZeroChildren,
+        double FamiliesWithOneChild,
+        double FamiliesWithTwoChildren,
+        double FamiliesWithThreeChildren,
+        double FamiliesWithFourPlusChildren,
+        double TurnoverEvents,
+        double AverageLongevityBeforeTurnover);
+
+    public async ValueTask DisposeAsync()
+    {
+        ValidationHoverReference?.Dispose();
+        ValidationDebounce?.Cancel();
+        ValidationDebounce?.Dispose();
+        await ValueTask.CompletedTask;
+    }
 
     private sealed record SimulationInfoRow(
         string Group,

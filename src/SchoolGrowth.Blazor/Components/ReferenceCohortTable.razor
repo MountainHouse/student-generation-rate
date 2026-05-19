@@ -1,3 +1,5 @@
+@inject IJSRuntime Js
+
 <section class="band">
     <div class="section-head">
         <h2>@Title</h2>
@@ -92,6 +94,8 @@
     public required IReadOnlyList<int> AugustYears { get; set; }
 
     private HashSet<string> SelectedCohorts { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private bool SavedChartStateLoaded { get; set; }
+    private string StorageKey => $"schoolgrowth:chart:reference-cohort:{Uri.EscapeDataString(Title)}";
     private IReadOnlyList<CohortDefinition> Cohorts => BuildCohorts();
     private IReadOnlyList<CohortDefinition> ActiveCohorts => Cohorts.Where(cohort => SelectedCohorts.Contains(cohort.Label)).ToList();
     private double ChartMax => ChartAxis.NiceMaximum(Math.Max(1, ActiveCohorts.SelectMany(ValuesForCohort).DefaultIfEmpty(0).Max() * 1.08));
@@ -99,6 +103,28 @@
     protected override void OnParametersSet()
     {
         SelectedCohorts.RemoveWhere(label => !Cohorts.Any(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (SavedChartStateLoaded) return;
+
+        SavedChartStateLoaded = true;
+        try
+        {
+            var state = await Js.InvokeAsync<SavedChartState?>("schoolGrowthStorage.getJson", StorageKey);
+            if (state is null) return;
+
+            SelectedCohorts.Clear();
+            foreach (var label in state.SelectedLines.Where(label => Cohorts.Any(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase))))
+            {
+                SelectedCohorts.Add(label);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
     }
 
     private IReadOnlyList<CohortDefinition> BuildCohorts()
@@ -121,6 +147,7 @@
         {
             SelectedCohorts.Remove(label);
         }
+        _ = SaveChartStateAsync();
     }
 
     private bool AllCohortsSelected => Cohorts.Count > 0 && Cohorts.All(cohort => SelectedCohorts.Contains(cohort.Label));
@@ -137,6 +164,22 @@
         else
         {
             SelectedCohorts.Clear();
+        }
+        _ = SaveChartStateAsync();
+    }
+
+    private async Task SaveChartStateAsync()
+    {
+        if (!SavedChartStateLoaded) return;
+        try
+        {
+            await Js.InvokeVoidAsync(
+                "schoolGrowthStorage.setJson",
+                StorageKey,
+                new SavedChartState(SelectedCohorts.ToList()));
+        }
+        catch
+        {
         }
     }
 
@@ -213,4 +256,6 @@
         var index = Cohorts.ToList().FindIndex(item => item.Label.Equals(cohort.Label, StringComparison.OrdinalIgnoreCase));
         return ColorFor(Math.Max(0, index));
     }
+
+    private sealed record SavedChartState(IReadOnlyList<string> SelectedLines);
 }

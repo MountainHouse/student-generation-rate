@@ -62,6 +62,7 @@ public sealed record MonteCarloYearComparison(
     int Year,
     Dictionary<string, double?> ActualGridTotals,
     Dictionary<string, double> ModeledGridTotals,
+    Dictionary<string, Dictionary<string, double>> ModeledGridGrades,
     Dictionary<string, double?> ActualGrades,
     Dictionary<string, double> AdjustedActualGrades,
     Dictionary<string, double> ModeledGrades,
@@ -117,6 +118,20 @@ public sealed record MonteCarloSimulationYearInfo(
     double FamiliesWithFourPlusChildrenShare,
     double TurnoverEvents,
     double TurnoverFactor,
+    double AverageLongevityBeforeTurnover,
+    IReadOnlyList<MonteCarloSimulationSegmentInfo> Segments);
+
+public sealed record MonteCarloSimulationSegmentInfo(
+    string Grid,
+    string Density,
+    double TotalHomes,
+    Dictionary<string, double> Grades,
+    double FamiliesWithZeroChildren,
+    double FamiliesWithOneChild,
+    double FamiliesWithTwoChildren,
+    double FamiliesWithThreeChildren,
+    double FamiliesWithFourPlusChildren,
+    double TurnoverEvents,
     double AverageLongevityBeforeTurnover);
 
 public sealed record MonteCarloSyntheticHomeDiagnostic(
@@ -286,7 +301,7 @@ public sealed class MonteCarloEnrollmentModel
                         year,
                         parameters,
                         random,
-                        turnoverLongevityObserver: localAccumulators[year].AddTurnover,
+                        segmentTurnoverObserver: (home, longevity) => localAccumulators[year].AddTurnover(home, longevity),
                         turnoverObserver: () => { });
                     localAccumulators[year].Add(homes, year);
                 }
@@ -505,7 +520,7 @@ public sealed class MonteCarloEnrollmentModel
                         random,
                         turnoverDistribution.Add,
                         completedFamilyLongevity.Add,
-                        turnoverByYear[year].AddTurnover);
+                        turnoverObserver: turnoverByYear[year].AddTurnover);
                 }
             }
 
@@ -647,6 +662,7 @@ public sealed class MonteCarloEnrollmentModel
         Random random,
         Action<int>? turnoverChildCountObserver = null,
         Action<int>? turnoverLongevityObserver = null,
+        Action<SimHome, int>? segmentTurnoverObserver = null,
         Action? turnoverObserver = null)
     {
         foreach (var home in homes)
@@ -656,7 +672,9 @@ public sealed class MonteCarloEnrollmentModel
             if (random.NextDouble() < OwnershipChangeProbabilityForHome(home, parameters))
             {
                 turnoverObserver?.Invoke();
-                turnoverLongevityObserver?.Invoke(Math.Max(0, home.CurrentYear - home.OwnershipStartYear));
+                var longevity = Math.Max(0, home.CurrentYear - home.OwnershipStartYear);
+                turnoverLongevityObserver?.Invoke(longevity);
+                segmentTurnoverObserver?.Invoke(home, longevity);
                 home.Children.Clear();
                 home.Children.AddRange(GenerateHouseholdChildren(home.Grid, home.Density, parameters, random));
                 turnoverChildCountObserver?.Invoke(home.Children.Count);
@@ -909,6 +927,13 @@ public sealed class MonteCarloEnrollmentModel
             kvp => kvp.Key,
             kvp => kvp.Value / parameters.Runs,
             StringComparer.OrdinalIgnoreCase);
+        var modeledGridGrades = accumulator.GridGrades.ToDictionary(
+            grid => grid.Key,
+            grid => grid.Value.ToDictionary(
+                grade => grade.Key,
+                grade => grade.Value / parameters.Runs,
+                StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
         var modeledGrades = accumulator.GradeTotals.ToDictionary(
             kvp => kvp.Key,
             kvp => kvp.Value / parameters.Runs,
@@ -976,6 +1001,7 @@ public sealed class MonteCarloEnrollmentModel
             year,
             actualGridTotals,
             modeledGridTotals,
+            modeledGridGrades,
             actualGrades,
             adjustedActualGrades,
             modeledGrades,
@@ -1048,7 +1074,12 @@ public sealed class MonteCarloEnrollmentModel
             Ratio(accumulator.ChildCountBuckets[4], accumulator.TotalHomes),
             turnoverEvents,
             Ratio(accumulator.TurnoverEvents, accumulator.TotalHomes),
-            Ratio(accumulator.TurnoverLongevityTotal, accumulator.TurnoverEvents));
+            Ratio(accumulator.TurnoverLongevityTotal, accumulator.TurnoverEvents),
+            accumulator.Segments.Values
+                .Select(segment => segment.ToInfo(runs))
+                .OrderBy(segment => segment.Grid, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(segment => segment.Density, StringComparer.OrdinalIgnoreCase)
+                .ToList());
     }
 
     private double ActualGridValue(string grid, int year)
@@ -1509,6 +1540,18 @@ public sealed class MonteCarloEnrollmentModel
         return (density ?? "").Trim().ToUpperInvariant();
     }
 
+    private static string DensityLabel(string? density)
+    {
+        return NormalizeDensity(density) switch
+        {
+            "RL" => "Low",
+            "RM" => "Medium",
+            "RMH" => "Medium-high",
+            "RH" => "High",
+            _ => "Other/existing"
+        };
+    }
+
     private sealed class SimHome(string grid, string density, int builtYear, int activeSchoolYear, int ownershipStartYear)
     {
         public string Grid { get; } = grid;
@@ -1542,12 +1585,19 @@ public sealed class MonteCarloEnrollmentModel
     {
         public YearAccumulator(IEnumerable<string> grids, IEnumerable<string> grades)
         {
+            var gradeList = grades.ToList();
             GridTotals = grids.ToDictionary(grid => grid, _ => 0.0, StringComparer.OrdinalIgnoreCase);
-            GradeTotals = grades.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+            GridGrades = grids.ToDictionary(
+                grid => grid,
+                _ => gradeList.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+            GradeTotals = gradeList.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
         }
 
         public Dictionary<string, double> GridTotals { get; }
+        public Dictionary<string, Dictionary<string, double>> GridGrades { get; }
         public Dictionary<string, double> GradeTotals { get; }
+        public Dictionary<string, SegmentAccumulator> Segments { get; } = new(StringComparer.OrdinalIgnoreCase);
         public double TotalHomes { get; private set; }
         public double LowDensityHomes { get; private set; }
         public double MediumDensityHomes { get; private set; }
@@ -1575,14 +1625,29 @@ public sealed class MonteCarloEnrollmentModel
                 if (!home.IsActive(year)) continue;
 
                 AddHome(home);
+                var segment = SegmentFor(home);
+                segment.AddHome(home);
                 foreach (var child in home.Children)
                 {
                     if (!child.IsStudent) continue;
                     GridTotals[home.Grid] = GridTotals.GetValueOrDefault(home.Grid) + 1;
+                    if (!GridGrades.TryGetValue(home.Grid, out var gridGrades))
+                    {
+                        gridGrades = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+                        GridGrades[home.Grid] = gridGrades;
+                    }
+                    gridGrades[child.Grade] = gridGrades.GetValueOrDefault(child.Grade) + 1;
                     GradeTotals[child.Grade] = GradeTotals.GetValueOrDefault(child.Grade) + 1;
+                    segment.AddStudent(child);
                     AddStudent(home, child);
                 }
             }
+        }
+
+        public void AddTurnover(SimHome home, int longevity)
+        {
+            AddTurnover(longevity);
+            SegmentFor(home).AddTurnover(longevity);
         }
 
         public void AddTurnover(int longevity)
@@ -1596,6 +1661,31 @@ public sealed class MonteCarloEnrollmentModel
             foreach (var (grid, total) in other.GridTotals)
             {
                 GridTotals[grid] = GridTotals.GetValueOrDefault(grid) + total;
+            }
+
+            foreach (var (grid, grades) in other.GridGrades)
+            {
+                if (!GridGrades.TryGetValue(grid, out var targetGrades))
+                {
+                    targetGrades = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+                    GridGrades[grid] = targetGrades;
+                }
+
+                foreach (var (grade, total) in grades)
+                {
+                    targetGrades[grade] = targetGrades.GetValueOrDefault(grade) + total;
+                }
+            }
+
+            foreach (var (key, segment) in other.Segments)
+            {
+                if (!Segments.TryGetValue(key, out var targetSegment))
+                {
+                    targetSegment = new SegmentAccumulator(segment.Grid, segment.Density);
+                    Segments[key] = targetSegment;
+                }
+
+                targetSegment.Merge(segment);
             }
 
             foreach (var (grade, total) in other.GradeTotals)
@@ -1625,6 +1715,19 @@ public sealed class MonteCarloEnrollmentModel
             {
                 ChildCountBuckets[i] += other.ChildCountBuckets[i];
             }
+        }
+
+        private SegmentAccumulator SegmentFor(SimHome home)
+        {
+            var density = DensityLabel(home.Density);
+            var key = $"{home.Grid}|{density}";
+            if (!Segments.TryGetValue(key, out var segment))
+            {
+                segment = new SegmentAccumulator(home.Grid, density);
+                Segments[key] = segment;
+            }
+
+            return segment;
         }
 
         private void AddHome(SimHome home)
@@ -1678,6 +1781,68 @@ public sealed class MonteCarloEnrollmentModel
                 if (isK8) LowMediumK8Students++;
                 if (isHighSchool) LowMediumHighSchoolStudents++;
             }
+        }
+    }
+
+    private sealed class SegmentAccumulator(string grid, string density)
+    {
+        public string Grid { get; } = grid;
+        public string Density { get; } = density;
+        public double TotalHomes { get; private set; }
+        public Dictionary<string, double> Grades { get; } = GradeOrder.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+        public double[] ChildCountBuckets { get; } = new double[5];
+        public double TurnoverEvents { get; private set; }
+        public double TurnoverLongevityTotal { get; private set; }
+
+        public void AddHome(SimHome home)
+        {
+            TotalHomes++;
+            ChildCountBuckets[Math.Min(Math.Max(0, home.Children.Count), 4)]++;
+        }
+
+        public void AddStudent(SimChild child)
+        {
+            Grades[child.Grade] = Grades.GetValueOrDefault(child.Grade) + 1;
+        }
+
+        public void AddTurnover(int longevity)
+        {
+            TurnoverEvents++;
+            TurnoverLongevityTotal += Math.Max(0, longevity);
+        }
+
+        public void Merge(SegmentAccumulator other)
+        {
+            TotalHomes += other.TotalHomes;
+            foreach (var (grade, total) in other.Grades)
+            {
+                Grades[grade] = Grades.GetValueOrDefault(grade) + total;
+            }
+
+            for (var i = 0; i < ChildCountBuckets.Length; i++)
+            {
+                ChildCountBuckets[i] += other.ChildCountBuckets[i];
+            }
+
+            TurnoverEvents += other.TurnoverEvents;
+            TurnoverLongevityTotal += other.TurnoverLongevityTotal;
+        }
+
+        public MonteCarloSimulationSegmentInfo ToInfo(double runs)
+        {
+            var denominator = Math.Max(1, runs);
+            return new MonteCarloSimulationSegmentInfo(
+                Grid,
+                Density,
+                TotalHomes / denominator,
+                Grades.ToDictionary(kvp => kvp.Key, kvp => kvp.Value / denominator, StringComparer.OrdinalIgnoreCase),
+                ChildCountBuckets[0] / denominator,
+                ChildCountBuckets[1] / denominator,
+                ChildCountBuckets[2] / denominator,
+                ChildCountBuckets[3] / denominator,
+                ChildCountBuckets[4] / denominator,
+                TurnoverEvents / denominator,
+                Ratio(TurnoverLongevityTotal, TurnoverEvents));
         }
     }
 

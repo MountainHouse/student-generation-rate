@@ -1,3 +1,5 @@
+@inject IJSRuntime Js
+
 <section class="band">
     <div class="section-head">
         <h2>@Title</h2>
@@ -5,11 +7,11 @@
         {
             <div class="chart-controls">
                 <label class="inline-check">
-                    <input type="checkbox" @bind="ShowModeledLines" />
+                    <input type="checkbox" checked="@ShowModeledLines" @onchange="ToggleModeledLines" />
                     <span>Modeled</span>
                 </label>
                 <label class="inline-check">
-                    <input type="checkbox" @bind="ShowReferenceLines" />
+                    <input type="checkbox" checked="@ShowReferenceLines" @onchange="ToggleReferenceLines" />
                     <span>Reference</span>
                 </label>
             </div>
@@ -167,7 +169,9 @@
     private HashSet<string> SelectedCohorts { get; } = new(StringComparer.OrdinalIgnoreCase);
     private bool ShowModeledLines { get; set; } = true;
     private bool ShowReferenceLines { get; set; } = true;
+    private bool SavedChartStateLoaded { get; set; }
     private int? HoverIndex { get; set; }
+    private string StorageKey => $"schoolgrowth:chart:cohort:{Uri.EscapeDataString(Title)}";
     private IReadOnlyList<string> ActiveProgressionGrades => ProgressionGrades is { Count: > 0 }
         ? ProgressionGrades
         : DefaultCohortGrades;
@@ -186,6 +190,30 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (SavedChartStateLoaded) return;
+
+        SavedChartStateLoaded = true;
+        try
+        {
+            var state = await Js.InvokeAsync<SavedChartState?>("schoolGrowthStorage.getJson", StorageKey);
+            if (state is null) return;
+
+            ShowModeledLines = state.ShowModeledLines;
+            ShowReferenceLines = state.ShowReferenceLines;
+            SelectedCohorts.Clear();
+            foreach (var label in state.SelectedLines.Where(label => Cohorts.Any(cohort => cohort.Label.Equals(label, StringComparison.OrdinalIgnoreCase))))
+            {
+                SelectedCohorts.Add(label);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
+    }
+
     private void ToggleLine(string label, ChangeEventArgs eventArgs)
     {
         if (eventArgs.Value is bool isChecked && isChecked)
@@ -196,6 +224,7 @@
         {
             SelectedCohorts.Remove(label);
         }
+        _ = SaveChartStateAsync();
     }
 
     private bool AllCohortsSelected => Cohorts.Count > 0 && Cohorts.All(cohort => SelectedCohorts.Contains(cohort.Label));
@@ -212,6 +241,34 @@
         else
         {
             SelectedCohorts.Clear();
+        }
+        _ = SaveChartStateAsync();
+    }
+
+    private void ToggleModeledLines(ChangeEventArgs eventArgs)
+    {
+        ShowModeledLines = eventArgs.Value is bool isChecked && isChecked;
+        _ = SaveChartStateAsync();
+    }
+
+    private void ToggleReferenceLines(ChangeEventArgs eventArgs)
+    {
+        ShowReferenceLines = eventArgs.Value is bool isChecked && isChecked;
+        _ = SaveChartStateAsync();
+    }
+
+    private async Task SaveChartStateAsync()
+    {
+        if (!SavedChartStateLoaded) return;
+        try
+        {
+            await Js.InvokeVoidAsync(
+                "schoolGrowthStorage.setJson",
+                StorageKey,
+                new SavedChartState(SelectedCohorts.ToList(), ShowModeledLines, ShowReferenceLines));
+        }
+        catch
+        {
         }
     }
 
@@ -451,4 +508,9 @@
         if (baseline == 0) return "n/a";
         return ((value - baseline) / baseline).ToString("+0.0%;-0.0%;0.0%");
     }
+
+    private sealed record SavedChartState(
+        IReadOnlyList<string> SelectedLines,
+        bool ShowModeledLines,
+        bool ShowReferenceLines);
 }
