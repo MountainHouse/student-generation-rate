@@ -272,41 +272,21 @@ window.schoolGrowthTools = (() => {
 
     function setOpen(selector, open) {
         document.querySelectorAll(selector).forEach(element => {
-            const state = dragState.get(element);
             if (!open) {
                 element.classList.remove("tool-nav-open-above");
+                element.classList.remove("tool-nav-open-right");
                 const popup = element.querySelector(".tool-nav-popup");
-                if (popup) popup.style.maxHeight = "";
-                restoreCollapsedPosition(element, state);
+                if (popup) {
+                    popup.style.maxHeight = "";
+                }
                 return;
             }
 
             window.requestAnimationFrame(() => {
-                rememberCollapsedPosition(element, state);
                 chooseOpenDirection(element);
-                clampIntoViewport(element);
+                clampVerticallyIntoViewport(element);
             });
         });
-    }
-
-    function rememberCollapsedPosition(element, state) {
-        if (!state || state.collapsedPosition) return;
-
-        const rect = element.getBoundingClientRect();
-        state.collapsedPosition = {
-            left: rect.left,
-            top: rect.top
-        };
-    }
-
-    function restoreCollapsedPosition(element, state) {
-        if (!state?.collapsedPosition) return;
-
-        element.style.left = `${state.collapsedPosition.left}px`;
-        element.style.top = `${state.collapsedPosition.top}px`;
-        element.style.right = "auto";
-        element.style.bottom = "auto";
-        state.collapsedPosition = null;
     }
 
     function chooseOpenDirection(element) {
@@ -315,18 +295,27 @@ window.schoolGrowthTools = (() => {
         if (!header || !popup) return;
 
         element.classList.remove("tool-nav-open-above");
+        element.classList.remove("tool-nav-open-right");
         const headerRect = header.getBoundingClientRect();
-        const popupHeight = popup.getBoundingClientRect().height;
+        const popupRect = popup.getBoundingClientRect();
+        const popupHeight = popupRect.height;
+        const popupWidth = popupRect.width;
         const margin = 8;
         const spaceBelow = window.innerHeight - headerRect.bottom - margin;
         const spaceAbove = headerRect.top - margin;
+        const spaceLeft = headerRect.right - margin;
+        const spaceRight = window.innerWidth - headerRect.left - margin;
 
         if (spaceBelow < popupHeight && spaceAbove > spaceBelow) {
             element.classList.add("tool-nav-open-above");
         }
+
+        if (spaceLeft < popupWidth && spaceRight > spaceLeft) {
+            element.classList.add("tool-nav-open-right");
+        }
     }
 
-    function clampIntoViewport(element) {
+    function clampVerticallyIntoViewport(element) {
         const panel = element.querySelector(".tool-nav-panel");
         if (!panel) return;
 
@@ -336,19 +325,12 @@ window.schoolGrowthTools = (() => {
 
         const headerRect = header.getBoundingClientRect();
         const popupRect = popup?.getBoundingClientRect();
-        const rect = combinedRect([header, popup]) ?? headerRect;
 
         let left = element.style.left ? parseFloat(element.style.left) : element.getBoundingClientRect().left;
         let top = element.style.top ? parseFloat(element.style.top) : element.getBoundingClientRect().top;
         const margin = 8;
         const opensAbove = element.classList.contains("tool-nav-open-above");
 
-        if (rect.left < margin) {
-            left += margin - rect.left;
-        }
-        if (rect.right > window.innerWidth - margin) {
-            left -= rect.right - (window.innerWidth - margin);
-        }
         if (opensAbove) {
             if (headerRect.bottom > window.innerHeight - margin) {
                 top -= headerRect.bottom - (window.innerHeight - margin);
@@ -364,8 +346,8 @@ window.schoolGrowthTools = (() => {
             if (headerRect.top < margin) {
                 top += margin - headerRect.top;
             }
-            if (rect.bottom > window.innerHeight - margin) {
-                top -= rect.bottom - (window.innerHeight - margin);
+            if (popupRect && popupRect.bottom > window.innerHeight - margin) {
+                top -= popupRect.bottom - (window.innerHeight - margin);
             }
         }
 
@@ -378,26 +360,6 @@ window.schoolGrowthTools = (() => {
         element.style.top = `${top}px`;
         element.style.right = "auto";
         element.style.bottom = "auto";
-    }
-
-    function combinedRect(elements) {
-        const rects = elements
-            .filter(Boolean)
-            .map(element => element.getBoundingClientRect());
-        if (rects.length === 0) return null;
-
-        const left = Math.min(...rects.map(rect => rect.left));
-        const top = Math.min(...rects.map(rect => rect.top));
-        const right = Math.max(...rects.map(rect => rect.right));
-        const bottom = Math.max(...rects.map(rect => rect.bottom));
-        return {
-            left,
-            top,
-            right,
-            bottom,
-            width: right - left,
-            height: bottom - top
-        };
     }
 
     return { scrollToTool, attachDraggable, setOpen };

@@ -43,17 +43,22 @@ else
     <div class="tool-nav-float">
         <div class="tool-nav-panel @(ToolsPopupOpen ? "tool-nav-panel-open" : "")" @onclick:stopPropagation="true">
             <div class="tool-nav-header">
-                <button type="button" class="secondary tool-nav-toggle" @onclick="() => ToolsPopupOpen = !ToolsPopupOpen">
-                    Tools
+                <button type="button" class="secondary tool-nav-toggle" title="Tools" aria-label="Tools" @onclick="() => ToolsPopupOpen = !ToolsPopupOpen">
+                    ☰
                 </button>
-                @if (ToolsPopupOpen)
-                {
-                    <button type="button" class="secondary tool-nav-close" title="Close tools" @onclick="() => ToolsPopupOpen = false">x</button>
-                }
             </div>
             @if (ToolsPopupOpen)
             {
             <div class="tool-nav-popup">
+                <label class="tool-nav-add">
+                    <span>Preset</span>
+                    <select value="@SelectedPresetName" @onchange="LoadPresetAsync">
+                        @foreach (var preset in PresetOptions)
+                        {
+                            <option value="@preset.Name">@preset.Name</option>
+                        }
+                    </select>
+                </label>
                 <label class="tool-nav-add">
                     <span>Add</span>
                     <select value="@NewToolId" disabled="@(!InactiveTools.Any())" @onchange="AddToolFromSelectionAsync">
@@ -91,7 +96,7 @@ else
             <label>
                 <span>Parameter preset</span>
                 <select value="@SelectedPresetName" @onchange="LoadPresetAsync">
-                    @foreach (var preset in ParameterPresets)
+                    @foreach (var preset in PresetOptions)
                     {
                         <option value="@preset.Name">@preset.Name</option>
                     }
@@ -983,6 +988,7 @@ else
         "MHESD"
     };
     private static readonly MonteCarloParameters DefaultParameters = new();
+    private const string CustomPresetName = "Custom";
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
     private const string ToolModelScoring = "model-scoring";
@@ -1040,8 +1046,13 @@ else
     [
         new("default", "Current hand-tuned baseline parameters.", DefaultParameters)
     ];
+    private MonteCarloParameters CustomParameters { get; set; } = DefaultParameters;
     private string SelectedPresetName { get; set; } = "default";
-    private MonteCarloParameterPreset? SelectedPreset => ParameterPresets
+    private IReadOnlyList<MonteCarloParameterPreset> PresetOptions =>
+        new[] { new MonteCarloParameterPreset(CustomPresetName, "Last hand-edited parameter values.", CustomParameters) }
+            .Concat(ParameterPresets)
+            .ToList();
+    private MonteCarloParameterPreset? SelectedPreset => PresetOptions
         .FirstOrDefault(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
     private string? LoadError { get; set; }
     private int StartYear { get; set; } = 2020;
@@ -1118,7 +1129,7 @@ else
     private string? ServerApiStatus { get; set; }
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
-    private List<string> ActiveToolIds { get; set; } = [ToolRunEnvironment, ToolModelSettings, ToolModelScoring, ToolValidationSummary, ToolSimulationInfo, ToolDataGaps];
+    private List<string> ActiveToolIds { get; set; } = [ToolModelSettings, ToolValidationSummary, ToolSimulationInfo];
     private HashSet<string> CollapsedToolIds { get; set; } = [];
     private HashSet<string> SelectedSimulationInfoRows { get; } = new(StringComparer.OrdinalIgnoreCase);
     private string NewToolId { get; set; } = "";
@@ -1375,6 +1386,10 @@ else
     {
         if (Data is not null)
         {
+            if (TrackCustomPreset())
+            {
+                await InvokeAsync(StateHasChanged);
+            }
             await Js.InvokeVoidAsync("schoolGrowthMasonry.attach", ".settings-stack");
             await Js.InvokeVoidAsync("schoolGrowthTables.attach", ".table-wrap");
             await Js.InvokeVoidAsync("schoolGrowthTools.attachDraggable", ".tool-nav-float");
@@ -1407,7 +1422,7 @@ else
         var name = args.Value?.ToString();
         if (string.IsNullOrWhiteSpace(name)) return;
 
-        var preset = ParameterPresets.FirstOrDefault(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var preset = PresetOptions.FirstOrDefault(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (preset is null) return;
 
         SelectedPresetName = preset.Name;
@@ -1415,6 +1430,29 @@ else
         SearchResult = null;
         await RunValidationAsync();
     }
+
+    private bool TrackCustomPreset()
+    {
+        var current = CurrentParameters();
+        if (SelectedPresetName.Equals(CustomPresetName, StringComparison.OrdinalIgnoreCase))
+        {
+            CustomParameters = current;
+            return false;
+        }
+
+        var selectedPreset = ParameterPresets
+            .FirstOrDefault(item => item.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
+        if (selectedPreset is null || ParametersMatch(current, selectedPreset.Parameters))
+        {
+            return false;
+        }
+
+        CustomParameters = current;
+        SelectedPresetName = CustomPresetName;
+        return true;
+    }
+
+    private static bool ParametersMatch(MonteCarloParameters left, MonteCarloParameters right) => left.Equals(right);
 
     private async Task RunValidationAsync()
     {
