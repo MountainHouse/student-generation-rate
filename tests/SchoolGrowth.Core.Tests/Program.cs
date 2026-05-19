@@ -64,6 +64,34 @@ foreach (var comparison in monteCarloResult.Comparisons)
     AssertClose(comparison.ModeledGridTotal, comparison.ModeledGradeTotal, $"Monte Carlo grid and grade totals reconcile in {comparison.Year}");
 }
 
+var futureGapParameters = new MonteCarloParameters(Runs: 20, Seed: 2468, MaxDegreeOfParallelism: 1);
+var fullHistoryBackmodel = monteCarlo.Validate(new MonteCarloValidationRequest(
+    StartYear: 2003,
+    EndYear: 2015,
+    Parameters: futureGapParameters));
+var directPreReferenceStart = monteCarlo.Validate(new MonteCarloValidationRequest(
+    StartYear: 2015,
+    EndYear: 2015,
+    Parameters: futureGapParameters));
+AssertRelativeClose(
+    fullHistoryBackmodel.Comparisons.Single(comparison => comparison.Year == 2015).ModeledGridTotal,
+    directPreReferenceStart.Comparisons.Single().ModeledGridTotal,
+    0.02,
+    "Monte Carlo pre-reference start preserves homes-only backmodel population");
+
+var futureFromBaseline = monteCarlo.Validate(new MonteCarloValidationRequest(
+    StartYear: 2026,
+    EndYear: 2027,
+    Parameters: futureGapParameters));
+var futureFromGapStart = monteCarlo.Validate(new MonteCarloValidationRequest(
+    StartYear: 2027,
+    EndYear: 2027,
+    Parameters: futureGapParameters));
+AssertClose(
+    futureFromBaseline.Comparisons.Single(comparison => comparison.Year == 2027).ModeledGridTotal,
+    futureFromGapStart.Comparisons.Single().ModeledGridTotal,
+    "Monte Carlo warm-up includes homes and aging between baseline and future start year");
+
 var search = monteCarlo.FindBest(new MonteCarloSearchRequest(
     StartYear: 2020,
     EndYear: 2021,
@@ -102,6 +130,15 @@ static void AssertPositiveTk8AndHighSchool(ProjectionYear year, string grid)
 static void AssertClose(double expected, double actual, string label)
 {
     if (Math.Abs(expected - actual) > 0.01)
+    {
+        throw new InvalidOperationException($"{label}: expected {expected:N2}, got {actual:N2}.");
+    }
+}
+
+static void AssertRelativeClose(double expected, double actual, double tolerance, string label)
+{
+    var denominator = Math.Max(1, Math.Abs(expected));
+    if (Math.Abs(expected - actual) / denominator > tolerance)
     {
         throw new InvalidOperationException($"{label}: expected {expected:N2}, got {actual:N2}.");
     }

@@ -353,6 +353,11 @@ public sealed class MonteCarloEnrollmentModel
             {
                 var random = new Random(parameters.Seed + run);
                 var homes = InitializeHomes(baselineYear, scenarioHomes, parameters, random);
+                for (var year = baselineYear + 1; year < startYear; year++)
+                {
+                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random);
+                    AdvanceHomes(homes, year, parameters, random);
+                }
 
                 for (var year = startYear; year <= endYear; year++)
                 {
@@ -643,6 +648,12 @@ public sealed class MonteCarloEnrollmentModel
             {
                 AdvanceHomes(homes, year, parameters, random);
             }
+        }
+
+        if (!HasActualGradeData(baselineYear) || !HasActualGridData(baselineYear))
+        {
+            AdvanceHomes(homes, baselineYear, parameters, random);
+            return homes;
         }
 
         foreach (var (grid, grades) in baselineGrades)
