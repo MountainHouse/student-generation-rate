@@ -47,6 +47,16 @@ The app supports both browser-side and backend Household Simulation computation.
 
 ## Build and Test Commands
 
+For normal hosted web development, prefer `dotnet watch` so rebuilds and restarts are coordinated and the running server does not lock build output:
+
+```powershell
+dotnet watch --project src\SchoolGrowth.Web run --urls http://localhost:5003
+```
+
+If `dotnet watch` behaves poorly, cannot apply a change, or creates confusing state, report the issue in the handoff and fall back to stopping the server plus running explicit build/test commands. Revisit this guideline if watch mode becomes a recurring source of trouble.
+
+The hosted project has explicit watch inputs for `src/SchoolGrowth.Blazor/**` and `data/**`. If Blazor UI/data changes are not reflected under watch mode, stop watch mode and run an explicit build before assuming the app code is wrong.
+
 Use relevant checks before handing work back:
 
 ```powershell

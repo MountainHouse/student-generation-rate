@@ -16,6 +16,16 @@ POST /api/simulation/search
 
 The hosted path is useful during development because Household Simulation validation/search can run on the server, where multithreading is much faster and simpler.
 
+For normal local hosted development, prefer `dotnet watch`:
+
+```powershell
+dotnet watch --project src\SchoolGrowth.Web run --urls http://localhost:5003
+```
+
+`dotnet watch` owns the rebuild/run loop, which avoids the common problem where a separately running web process locks build output. Some changes still require restart or browser refresh. If watch mode causes confusing behavior, stop it and use explicit `dotnet build` / `dotnet run` checks, then document what went wrong so the team can adjust this guidance.
+
+`SchoolGrowth.Web.csproj` explicitly includes the Blazor project tree and `data/` as watch inputs. That is intentional: the hosted app serves generated Blazor/static output, so client or data edits should trigger the hosted build loop. If a Blazor edit is still not reflected, stop watch mode and run a clean explicit build before debugging the app behavior.
+
 The ASP.NET host sends cross-origin isolation headers by default:
 
 ```text

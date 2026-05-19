@@ -9,4 +9,8 @@
     <ProjectReference Include="..\SchoolGrowth.Core\SchoolGrowth.Core.csproj" />
     <ProjectReference Include="..\SchoolGrowth.Blazor\SchoolGrowth.Blazor.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Watch Include="..\SchoolGrowth.Blazor\**\*.*" Exclude="..\SchoolGrowth.Blazor\bin\**;..\SchoolGrowth.Blazor\obj\**" />
+    <Watch Include="..\..\data\**\*.*" />
+  </ItemGroup>
 </Project>
