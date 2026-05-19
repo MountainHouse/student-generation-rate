@@ -451,6 +451,18 @@ move_in_postschool_weight  = 0.030
 
 This matters for calibration. The move-in child-count distribution represents children in the household, not only enrolled students. A household can therefore move in with two children while only one is currently enrolled in the district.
 
+The current model does not distinguish a vacant home from an occupied household with zero children. For current calibration this is acceptable because long-term vacancy is expected to be small, and ordinary vacancy is absorbed into the fitted move-in and birth/new-child parameters. Newly constructed homes also have a separate timing proxy through `same_school_year_probability`, which can cover delayed occupancy or delayed enrollment in the first school year.
+
+Future versions may add vacancy as a separate home state:
+
+```text
+home -> vacant
+home -> occupied household with 0 children
+home -> occupied household with children
+```
+
+That would allow student generation to be reported per dwelling unit and per occupied dwelling unit separately, and would avoid treating "no family in the home" as the same thing as "family with no children." It would also slightly change calibrated move-in child-count distributions and birth/new-child probabilities, because those would be conditional on occupancy rather than all homes.
+
 The simulation core consumes direct density profiles:
 
 ```text

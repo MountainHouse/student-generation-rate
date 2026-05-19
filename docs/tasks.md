@@ -21,6 +21,19 @@ Acceptance criteria:
 - The inferred high-school/post-school tail improves HS forecasts and family child-count diagnostics.
 - The method is documented as inference, not observed data.
 
+### Consider vacancy as a separate home state
+
+Current behavior: Household Simulation does not distinguish vacant homes from occupied zero-child households. This is acceptable for current calibration because long-term vacancy is expected to be small and new-construction timing is partly handled by `same_school_year_probability`.
+
+Goal: evaluate whether future versions should model vacancy explicitly, especially if we add occupancy data or need student generation per occupied dwelling unit.
+
+Acceptance criteria:
+
+- Vacant homes do not generate move-in children or births/new children until occupied.
+- Occupied zero-child households remain distinct from vacancy.
+- Student generation can be reported per DU and per occupied DU.
+- Calibration documentation explains whether child-count shares and birth/new-child rates are conditional on occupied homes or all homes.
+
 ### Evaluate deterministic model retirement or migration
 
 Current direction: Household Simulation is the primary product path. The deterministic projection and validation pages remain useful as a simple comparison/reference, but they may become maintenance cost.
