@@ -44,19 +44,17 @@ window.schoolGrowthMasonry = (() => {
         container.classList.add("masonry-ready");
 
         if (layouts.has(container)) {
-            schedule(container, true);
+            observeItems(container);
             return;
         }
 
-        const layout = { observer: null, timeoutId: 0 };
+        const layout = { observer: null, timeoutId: 0, observedItems: new WeakSet() };
         layouts.set(container, layout);
 
         const observer = new ResizeObserver(() => schedule(container));
         layout.observer = observer;
         observer.observe(container);
-        for (const item of container.querySelectorAll(".settings-subpanel")) {
-            observer.observe(item);
-        }
+        observeItems(container);
 
         container.addEventListener("toggle", event => {
             if (event.target?.classList?.contains("settings-subpanel")) {
@@ -67,7 +65,30 @@ window.schoolGrowthMasonry = (() => {
         schedule(container, true);
     }
 
-    return { attach };
+    function observeItems(container) {
+        const layout = layouts.get(container);
+        if (!layout?.observer) return;
+
+        let added = false;
+        for (const item of container.querySelectorAll(".settings-subpanel")) {
+            if (layout.observedItems.has(item)) continue;
+            layout.observedItems.add(item);
+            layout.observer.observe(item);
+            added = true;
+        }
+        if (added) {
+            schedule(container, true);
+        }
+    }
+
+    function refresh(selector) {
+        const container = document.querySelector(selector);
+        if (!container) return;
+        attach(selector);
+        schedule(container, true);
+    }
+
+    return { attach, refresh };
 })();
 
 window.schoolGrowthTables = (() => {
@@ -80,6 +101,7 @@ window.schoolGrowthTables = (() => {
             if (!table || !thead) return;
 
             let instance = instances.get(wrap);
+            let headerChanged = false;
             if (!instance) {
                 const floating = document.createElement("div");
                 floating.className = "floating-table-head";
@@ -102,15 +124,23 @@ window.schoolGrowthTables = (() => {
                 wrap.addEventListener("scroll", updateAll, { passive: true });
                 instance.resizeObserver.observe(wrap);
                 instance.resizeObserver.observe(table);
+                headerChanged = true;
             } else {
                 instance.table = table;
-                instance.thead = thead;
-                instance.floatingTable.replaceChildren(thead.cloneNode(true));
+                if (instance.thead !== thead) {
+                    instance.thead = thead;
+                    instance.floatingTable.replaceChildren(thead.cloneNode(true));
+                    headerChanged = true;
+                }
             }
 
-            wireFloatingInputs(instance);
-            updateAll();
+            if (headerChanged) {
+                wireFloatingInputs(instance);
+            }
         });
+
+        cleanupDetached();
+        updateAll();
 
         if (!window.__schoolGrowthTableHeadersAttached) {
             window.__schoolGrowthTableHeadersAttached = true;
@@ -119,10 +149,22 @@ window.schoolGrowthTables = (() => {
         }
     }
 
+    function cleanupDetached() {
+        for (const [wrap, instance] of Array.from(instances)) {
+            if (document.body.contains(wrap)) continue;
+
+            instance.resizeObserver?.disconnect();
+            instance.floating?.remove();
+            instances.delete(wrap);
+        }
+    }
+
     function updateAll() {
         let active = null;
         let activeTop = -Number.MAX_VALUE;
         for (const [wrap, instance] of instances) {
+            if (!document.body.contains(wrap)) continue;
+
             const tableRect = instance.table.getBoundingClientRect();
             const wrapRect = wrap.getBoundingClientRect();
             const headerHeight = instance.thead.getBoundingClientRect().height || 0;
@@ -134,6 +176,11 @@ window.schoolGrowthTables = (() => {
         }
 
         for (const [wrap, instance] of instances) {
+            if (!document.body.contains(wrap)) {
+                instance.floating.style.display = "none";
+                continue;
+            }
+
             if (wrap === active) {
                 update(wrap, true);
             } else {
@@ -209,6 +256,7 @@ window.schoolGrowthTables = (() => {
 
 window.schoolGrowthTools = (() => {
     const dragState = new WeakMap();
+    let outsidePointerListenerAttached = false;
 
     function scrollToTool(id) {
         const element = document.getElementById(`tool-${id}`);
@@ -281,32 +329,66 @@ window.schoolGrowthTools = (() => {
             });
 
             button.addEventListener("click", event => {
-                if (!state.moved) return;
-
                 event.preventDefault();
                 event.stopImmediatePropagation();
-                state.moved = false;
+                if (state.moved) {
+                    state.moved = false;
+                    return;
+                }
+
+                setOpenElement(element, !isOpen(element));
             }, true);
         });
+
+        attachOutsidePointerListener();
     }
 
     function setOpen(selector, open) {
         document.querySelectorAll(selector).forEach(element => {
-            if (!open) {
-                element.classList.remove("tool-nav-open-above");
-                element.classList.remove("tool-nav-open-right");
-                const popup = element.querySelector(".tool-nav-popup");
-                if (popup) {
-                    popup.style.maxHeight = "";
-                }
-                return;
-            }
-
-            window.requestAnimationFrame(() => {
-                chooseOpenDirection(element);
-                clampVerticallyIntoViewport(element);
-            });
+            setOpenElement(element, open);
         });
+    }
+
+    function close(selector) {
+        setOpen(selector, false);
+    }
+
+    function isOpen(element) {
+        return element.querySelector(".tool-nav-panel")?.classList.contains("tool-nav-panel-open") ?? false;
+    }
+
+    function setOpenElement(element, open) {
+        const panel = element.querySelector(".tool-nav-panel");
+        if (!panel) return;
+
+        if (!open) {
+            panel.classList.remove("tool-nav-panel-open");
+            element.classList.remove("tool-nav-open-above");
+            element.classList.remove("tool-nav-open-right");
+            const popup = element.querySelector(".tool-nav-popup");
+            if (popup) {
+                popup.style.maxHeight = "";
+            }
+            return;
+        }
+
+        panel.classList.add("tool-nav-panel-open");
+        window.requestAnimationFrame(() => {
+            chooseOpenDirection(element);
+            clampVerticallyIntoViewport(element);
+        });
+    }
+
+    function attachOutsidePointerListener() {
+        if (outsidePointerListenerAttached) return;
+        outsidePointerListenerAttached = true;
+
+        document.addEventListener("pointerdown", event => {
+            document.querySelectorAll(".tool-nav-float").forEach(element => {
+                if (!isOpen(element) || element.contains(event.target)) return;
+                setOpenElement(element, false);
+            });
+        }, true);
     }
 
     function chooseOpenDirection(element) {
@@ -382,7 +464,7 @@ window.schoolGrowthTools = (() => {
         element.style.bottom = "auto";
     }
 
-    return { scrollToTool, attachDraggable, setOpen };
+    return { scrollToTool, attachDraggable, setOpen, close };
 })();
 
 window.schoolGrowthStorage = (() => {
@@ -398,6 +480,14 @@ window.schoolGrowthStorage = (() => {
     function setJson(key, value) {
         try {
             window.localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+            // Local storage can be unavailable in private or restricted browser modes.
+        }
+    }
+
+    function setRawJson(key, value) {
+        try {
+            window.localStorage.setItem(key, value || "null");
         } catch {
             // Local storage can be unavailable in private or restricted browser modes.
         }
@@ -426,7 +516,7 @@ window.schoolGrowthStorage = (() => {
         }
     }
 
-    return { getJson, setJson, remove, removePrefix };
+    return { getJson, setJson, setRawJson, remove, removePrefix };
 })();
 
 window.schoolGrowthValidationChart = (() => {

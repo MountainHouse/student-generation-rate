@@ -1,0 +1,20 @@
+@ChildContent
+
+@code {
+    [Parameter] public object? Version { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private object? RenderedVersion { get; set; }
+    private bool ShouldRenderThisPass { get; set; } = true;
+
+    protected override void OnParametersSet()
+    {
+        ShouldRenderThisPass = !Equals(Version, RenderedVersion);
+        if (ShouldRenderThisPass)
+        {
+            RenderedVersion = Version;
+        }
+    }
+
+    protected override bool ShouldRender() => ShouldRenderThisPass;
+}

@@ -210,6 +210,7 @@ button.icon {
 
 .tool-nav-popup {
     position: absolute;
+    display: none;
     right: 0;
     top: calc(100% - 1px);
     width: min(300px, calc(100vw - 28px));
@@ -220,6 +221,10 @@ button.icon {
     background: #ffffff;
     box-shadow: 0 12px 36px rgba(23, 32, 38, 0.18);
     padding: 8px;
+}
+
+.tool-nav-panel-open .tool-nav-popup {
+    display: block;
 }
 
 .tool-nav-open-right .tool-nav-popup {

@@ -36,19 +36,13 @@ else
         </section>
     }
 
-    @if (ToolsPopupOpen)
-    {
-        <div class="tool-nav-backdrop" @onclick="() => ToolsPopupOpen = false"></div>
-    }
     <div class="tool-nav-float">
-        <div class="tool-nav-panel @(ToolsPopupOpen ? "tool-nav-panel-open" : "")" @onclick:stopPropagation="true">
+        <div class="tool-nav-panel">
             <div class="tool-nav-header">
-                <button type="button" class="secondary tool-nav-toggle" title="Tools" aria-label="Tools" @onclick="() => ToolsPopupOpen = !ToolsPopupOpen">
+                <button type="button" class="secondary tool-nav-toggle" title="Tools" aria-label="Tools">
                     ☰
                 </button>
             </div>
-            @if (ToolsPopupOpen)
-            {
             <div class="tool-nav-popup">
                 <label class="tool-nav-add">
                     <span>Preset</span>
@@ -83,7 +77,6 @@ else
                     </div>
                 }
             </div>
-            }
         </div>
     </div>
 
@@ -453,6 +446,7 @@ else
     <ToolPanel Id="@ToolValidationSummary" Title="Validation Summary" CssClass="band tool-panel charts-tool" Style="@ToolStyle(ToolValidationSummary)"
                Collapsed="@IsToolCollapsed(ToolValidationSummary)" CanMoveUp="@CanMoveToolUp(ToolValidationSummary)" CanMoveDown="@CanMoveToolDown(ToolValidationSummary)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+    <RenderGate Version="@ValidationSummaryRenderKey">
     <div class="charts">
         <div class="chart-box">
             <div class="chart-head">
@@ -584,6 +578,7 @@ else
             </dl>
         </div>
     </div>
+    </RenderGate>
     </ToolPanel>
     }
 
@@ -1369,6 +1364,7 @@ else
     private int NextValidationPinnedSelectionId { get; set; } = 1;
     private ElementReference ValidationChartSvg { get; set; }
     private DotNetObjectReference<Simulation>? ValidationHoverReference { get; set; }
+    private string? AttachedValidationSummaryRenderKey { get; set; }
     private bool ValidationHoverRenderPending { get; set; }
     private bool ChartHoverRenderPending { get; set; }
     private string ComparisonChartMode { get; set; } = "total";
@@ -1454,8 +1450,9 @@ else
     private HashSet<string> CollapsedToolIds { get; set; } = [];
     private HashSet<string> SelectedSimulationInfoRows { get; } = new(StringComparer.OrdinalIgnoreCase);
     private string NewToolId { get; set; } = "";
-    private bool ToolsPopupOpen { get; set; }
     private bool SavedLayoutLoaded { get; set; }
+    private string? LastSavedLayoutJson { get; set; }
+    private string? LastSavedYearsJson { get; set; }
     private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
         .Select(ToolDefinitionForId)
         .Where(tool => tool is not null)
@@ -1703,8 +1700,8 @@ else
         if (id.Equals(ToolChartPrototype, StringComparison.OrdinalIgnoreCase))
         {
             var chart = CreateChartTool();
-            ToolsPopupOpen = false;
             await InvokeAsync(StateHasChanged);
+            await CloseToolsPopupAsync();
             await ScrollToToolAsync(chart.Id);
             return;
         }
@@ -1713,8 +1710,8 @@ else
 
         ActiveToolIds.Add(id);
         CollapsedToolIds.Remove(id);
-        ToolsPopupOpen = false;
         await InvokeAsync(StateHasChanged);
+        await CloseToolsPopupAsync();
         await ScrollToToolAsync(id);
     }
 
@@ -1779,16 +1776,15 @@ else
 
     private async Task NavigateToToolAsync(string id)
     {
-        ToolsPopupOpen = false;
+        await CloseToolsPopupAsync();
         await ScrollToToolAsync(id);
     }
 
-    private async Task OnToolsPopupChangedAsync()
+    private async Task CloseToolsPopupAsync()
     {
         if (Data is not null)
         {
-            await Js.InvokeVoidAsync("schoolGrowthTools.attachDraggable", ".tool-nav-float");
-            await Js.InvokeVoidAsync("schoolGrowthTools.setOpen", ".tool-nav-float", ToolsPopupOpen);
+            await Js.InvokeVoidAsync("schoolGrowthTools.close", ".tool-nav-float");
         }
     }
 
@@ -1851,16 +1847,24 @@ else
             await Js.InvokeVoidAsync("schoolGrowthMasonry.attach", ".settings-stack");
             await Js.InvokeVoidAsync("schoolGrowthTables.attach", ".table-wrap");
             await Js.InvokeVoidAsync("schoolGrowthTools.attachDraggable", ".tool-nav-float");
-            await Js.InvokeVoidAsync("schoolGrowthTools.setOpen", ".tool-nav-float", ToolsPopupOpen);
-            if (Result is not null && IsToolActive(ToolValidationSummary))
+            if (Result is not null && IsToolActive(ToolValidationSummary) && !IsToolCollapsed(ToolValidationSummary))
             {
-                ValidationHoverReference ??= DotNetObjectReference.Create(this);
-                await Js.InvokeVoidAsync(
-                    "schoolGrowthValidationChart.attach",
-                    ValidationChartSvg,
-                    ValidationHoverReference,
-                    Result.Comparisons.Count,
-                    ToolValidationSummary);
+                var validationRenderKey = ValidationSummaryRenderKey;
+                if (!string.Equals(validationRenderKey, AttachedValidationSummaryRenderKey, StringComparison.Ordinal))
+                {
+                    ValidationHoverReference ??= DotNetObjectReference.Create(this);
+                    await Js.InvokeVoidAsync(
+                        "schoolGrowthValidationChart.attach",
+                        ValidationChartSvg,
+                        ValidationHoverReference,
+                        Result.Comparisons.Count,
+                        ToolValidationSummary);
+                    AttachedValidationSummaryRenderKey = validationRenderKey;
+                }
+            }
+            else
+            {
+                AttachedValidationSummaryRenderKey = null;
             }
             if (Result is not null)
             {
@@ -1984,29 +1988,35 @@ else
     {
         try
         {
-            await Js.InvokeVoidAsync(
-                "schoolGrowthStorage.setJson",
-                LayoutStorageKey,
-                new SavedSimulationLayout(
-                    ActiveToolIds,
-                    CollapsedToolIds.ToList(),
-                    SelectedSimulationInfoRows.ToList(),
-                    ShowIncreaseFromStart,
-                    ShowIncreaseFromStartPercent,
-                    ShowIncreaseFromPrevious,
-                    ShowIncreaseFromPreviousPercent,
-                    ValidationMeasure,
-                    ValidationNeighborhood,
-                    ValidationDensity,
-                    ValidationBreakdown,
-                    ValidationValueMode,
-                    ChartTools.Select(SavedChartTool.From).ToList(),
-                    ScenarioRows.Select(SavedScenarioHome.From).ToList()));
+            var layout = new SavedSimulationLayout(
+                ActiveToolIds,
+                CollapsedToolIds.ToList(),
+                SelectedSimulationInfoRows.ToList(),
+                ShowIncreaseFromStart,
+                ShowIncreaseFromStartPercent,
+                ShowIncreaseFromPrevious,
+                ShowIncreaseFromPreviousPercent,
+                ValidationMeasure,
+                ValidationNeighborhood,
+                ValidationDensity,
+                ValidationBreakdown,
+                ValidationValueMode,
+                ChartTools.Select(SavedChartTool.From).ToList(),
+                ScenarioRows.Select(SavedScenarioHome.From).ToList());
+            var layoutJson = JsonSerializer.Serialize(layout);
+            if (!string.Equals(layoutJson, LastSavedLayoutJson, StringComparison.Ordinal))
+            {
+                await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", LayoutStorageKey, layoutJson);
+                LastSavedLayoutJson = layoutJson;
+            }
 
-            await Js.InvokeVoidAsync(
-                "schoolGrowthStorage.setJson",
-                YearsStorageKey,
-                new SavedYearsState(StartYear, EndYear));
+            var years = new SavedYearsState(StartYear, EndYear);
+            var yearsJson = JsonSerializer.Serialize(years);
+            if (!string.Equals(yearsJson, LastSavedYearsJson, StringComparison.Ordinal))
+            {
+                await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", YearsStorageKey, yearsJson);
+                LastSavedYearsJson = yearsJson;
+            }
         }
         catch
         {
@@ -2030,10 +2040,12 @@ else
         ScenarioRows.Clear();
         ChartTools.Clear();
         NextChartToolNumber = 1;
-        ToolsPopupOpen = false;
+        await CloseToolsPopupAsync();
 
         await Js.InvokeVoidAsync("schoolGrowthStorage.remove", LayoutStorageKey);
         await Js.InvokeVoidAsync("schoolGrowthStorage.removePrefix", ChartStoragePrefix);
+        LastSavedLayoutJson = null;
+        LastSavedYearsJson = null;
         await InvokeAsync(StateHasChanged);
     }
 
@@ -3083,6 +3095,16 @@ else
         .Where(value => value.HasValue)
         .Select(value => value!.Value)
         .ToList();
+
+    private string ValidationSummaryRenderKey =>
+        string.Join('|',
+            ValidationResultVersion.ToString(CultureInfo.InvariantCulture),
+            ValidationMeasure,
+            EffectiveValidationNeighborhood,
+            EffectiveValidationDensity,
+            EffectiveValidationBreakdown,
+            EffectiveValidationValueMode,
+            string.Join(';', ValidationPinnedSelections.Select(selection => $"{selection.Id}:{selection.Key}")));
 
     private double ValidationChartMax
     {
