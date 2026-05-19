@@ -343,9 +343,11 @@ button.icon {
 }
 
 .tool-action {
+    width: 30px;
     min-height: 30px;
-    padding: 0 10px;
+    padding: 0;
     font-size: 12px;
+    line-height: 1;
 }
 
 .tool-action:disabled {

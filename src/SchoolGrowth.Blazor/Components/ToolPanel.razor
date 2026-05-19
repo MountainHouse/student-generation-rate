@@ -5,9 +5,9 @@
         </button>
         <h2>@Title</h2>
         <div class="tool-actions">
-            <button type="button" class="secondary tool-action" title="Move up" disabled="@(!CanMoveUp)" @onclick="() => OnMoveUp.InvokeAsync(Id)">Up</button>
-            <button type="button" class="secondary tool-action" title="Move down" disabled="@(!CanMoveDown)" @onclick="() => OnMoveDown.InvokeAsync(Id)">Down</button>
-            <button type="button" class="secondary tool-action" title="Remove tool" @onclick="() => OnRemove.InvokeAsync(Id)">Remove</button>
+            <button type="button" class="secondary tool-action" title="Move up" aria-label="Move up" disabled="@(!CanMoveUp)" @onclick="() => OnMoveUp.InvokeAsync(Id)">▲</button>
+            <button type="button" class="secondary tool-action" title="Move down" aria-label="Move down" disabled="@(!CanMoveDown)" @onclick="() => OnMoveDown.InvokeAsync(Id)">▼</button>
+            <button type="button" class="secondary tool-action" title="Remove tool" aria-label="Remove tool" @onclick="() => OnRemove.InvokeAsync(Id)">×</button>
         </div>
     </div>
     @if (!Collapsed)
