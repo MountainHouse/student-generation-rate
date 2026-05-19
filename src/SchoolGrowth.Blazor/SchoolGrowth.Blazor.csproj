@@ -13,13 +13,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.7" PrivateAssets="all" />
   </ItemGroup>
 
-  <Target Name="CopyCsvDataToWwwroot" BeforeTargets="Build">
-    <MakeDir Directories="wwwroot\data" />
-    <Copy SourceFiles="..\..\data\homes.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\data\grid.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\data\grade.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\data\schools.csv" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\data\simulation-presets.json" DestinationFolder="wwwroot\data" SkipUnchangedFiles="true" />
-  </Target>
+  <ItemGroup>
+    <Content Include="..\..\data\homes.csv" Link="wwwroot\data\homes.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\grid.csv" Link="wwwroot\data\grid.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\grade.csv" Link="wwwroot\data\grade.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\schools.csv" Link="wwwroot\data\schools.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\simulation-presets.json" Link="wwwroot\data\simulation-presets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

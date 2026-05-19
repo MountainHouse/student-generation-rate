@@ -20,6 +20,8 @@ schools.csv
 simulation-presets.json
 ```
 
+These are the source files. The Blazor project links them into build/publish output under `wwwroot/data/`; do not edit or commit duplicate data files under the Blazor source `wwwroot` tree.
+
 ## Compatibility Rules
 
 There is no standing backward-compatibility requirement for routes, API paths, file names, or UI labels. Do not keep extra aliases or harder code only for compatibility. If a future change appears to need compatibility support, ask the project owner before implementing it.

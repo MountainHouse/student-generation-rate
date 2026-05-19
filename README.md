@@ -38,6 +38,8 @@ schools.csv
 simulation-presets.json
 ```
 
+The Blazor project links these files into build/publish output under `wwwroot/data/`, so `data/` is the only source copy to edit. Do not add or edit duplicate data files under `src/SchoolGrowth.Blazor/wwwroot/data/`.
+
 Generated optimizer CSVs should go under `artifacts/search-results/`, not the repository root.
 
 ## Quick Start

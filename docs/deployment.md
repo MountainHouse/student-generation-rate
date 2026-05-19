@@ -38,7 +38,7 @@ The Blazor app can run without a backend. It loads CSVs from:
 wwwroot/data/
 ```
 
-Those files are copied from the repository `data/` folder by `SchoolGrowth.Blazor.csproj`.
+Those files are linked from the repository `data/` folder by `SchoolGrowth.Blazor.csproj` into build/publish output. The hosted ASP.NET app serves `/data` from its generated output `wwwroot/data/` folder, not from source `src/SchoolGrowth.Blazor/wwwroot/data/`.
 
 In static deployments, Household Simulation must run in browser mode. The UI `Auto` execution mode chooses browser mode for non-local/static hosts.
 

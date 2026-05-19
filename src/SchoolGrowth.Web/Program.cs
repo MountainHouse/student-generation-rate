@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.FileProviders;
 using SchoolGrowth.Core;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 var dataRoot = ResolveDataRoot(app.Environment.ContentRootPath);
+var generatedDataRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot", "data");
 var store = EnrollmentData.Load(dataRoot);
 var model = EnrollmentModel.Calibrate(store);
 var monteCarloModel = new MonteCarloEnrollmentModel(store);
@@ -39,6 +41,14 @@ if (enableCrossOriginIsolationHeaders)
 }
 app.UseBlazorFrameworkFiles();
 app.UseDefaultFiles();
+if (Directory.Exists(generatedDataRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(generatedDataRoot),
+        RequestPath = "/data"
+    });
+}
 app.UseStaticFiles();
 
 app.MapGet("/api/summary", () => Results.Ok(new
