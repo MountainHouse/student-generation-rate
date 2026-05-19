@@ -209,7 +209,10 @@ else
             StartYear = Math.Max(MinStartYear, MaxEndYear - 5);
             EndYear = MaxEndYear;
             SelectedComparisonYear = EndYear;
-            DensityMultipliers.AddRange(Data.Densities.Select(density => new DensityMultiplierInput(density, 1.0)));
+            DensityMultipliers.AddRange(Data.Densities
+                .OrderBy(DensityDisplay.SortKey)
+                .ThenBy(density => density, StringComparer.OrdinalIgnoreCase)
+                .Select(density => new DensityMultiplierInput(density, 1.0)));
             RunBacktest();
         }
         catch (Exception ex)

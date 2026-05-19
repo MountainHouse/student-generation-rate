@@ -9,7 +9,8 @@ The Household Simulation page is organized as a set of tools:
 - tools are collapsible, removable, and reorderable
 - custom Chart tools can be added more than once, renamed in the panel header, and grouped by the user
 - settings are grouped into subpanels
-- initially visible tools should focus on model settings and validation summary
+- initially visible tools should focus on model settings, scenario homes, and validation summary
+- tool panels can expose panel-specific header controls, such as `Add Row` in Scenario Homes
 - other details can be added through the tool menu
 
 ## Tables and Charts

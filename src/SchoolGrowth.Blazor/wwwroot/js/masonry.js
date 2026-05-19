@@ -10,15 +10,14 @@ window.schoolGrowthMasonry = (() => {
         const rowGap = parseFloat(styles.getPropertyValue("row-gap")) || 0;
         const items = Array.from(container.querySelectorAll(".settings-subpanel"));
 
-        for (const item of items) {
-            item.style.gridRowEnd = "auto";
-        }
-
         window.requestAnimationFrame(() => {
             for (const item of items) {
                 const height = item.getBoundingClientRect().height;
                 const span = Math.max(1, Math.ceil((height + rowGap) / (rowHeight + rowGap)));
-                item.style.gridRowEnd = `span ${span}`;
+                const next = `span ${span}`;
+                if (item.style.gridRowEnd !== next) {
+                    item.style.gridRowEnd = next;
+                }
             }
         });
     }
@@ -512,4 +511,26 @@ window.schoolGrowthValidationChart = (() => {
     }
 
     return { attach, attachById };
+})();
+
+window.schoolGrowthScroll = (() => {
+    function capture() {
+        return {
+            x: window.scrollX || 0,
+            y: window.scrollY || 0
+        };
+    }
+
+    function restore(position) {
+        if (!position) return;
+        const x = Number(position.x) || 0;
+        const y = Number(position.y) || 0;
+        window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+                window.scrollTo(x, y);
+            });
+        });
+    }
+
+    return { capture, restore };
 })();

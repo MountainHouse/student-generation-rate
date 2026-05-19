@@ -56,7 +56,8 @@ public sealed record MonteCarloParameterPreset(
 public sealed record MonteCarloValidationRequest(
     int StartYear,
     int EndYear,
-    MonteCarloParameters Parameters);
+    MonteCarloParameters Parameters,
+    IReadOnlyList<ScenarioHome>? ScenarioHomes = null);
 
 public sealed record MonteCarloYearComparison(
     int Year,
@@ -256,8 +257,13 @@ public sealed class MonteCarloEnrollmentModel
 
     public MonteCarloValidationResult Validate(MonteCarloValidationRequest request)
     {
+        var scenarioHomes = (request.ScenarioHomes ?? [])
+            .Where(home => home.Homes > 0 && !IsExcludedValidationGrid(home.Neighborhood))
+            .ToList();
         var minimumStartYear = FirstHomeBuildYear();
-        var maximumEndYear = Math.Max(data.AugustYears.Last(), LastHomeBuildYear()) + 50;
+        var maximumEndYear = Math.Max(
+            Math.Max(data.AugustYears.Last(), LastHomeBuildYear()),
+            scenarioHomes.Select(home => home.Year).DefaultIfEmpty(0).Max()) + 50;
         var startYear = Math.Clamp(request.StartYear, minimumStartYear, maximumEndYear);
         var endYear = Math.Clamp(request.EndYear, startYear, maximumEndYear);
         var anchorStartYear = HasActualGradeData(startYear) && HasActualGridData(startYear);
@@ -285,7 +291,7 @@ public sealed class MonteCarloEnrollmentModel
             (run, _, localAccumulators) =>
             {
                 var random = new Random(parameters.Seed + run);
-                var homes = InitializeHomes(baselineYear, parameters, random);
+                var homes = InitializeHomes(baselineYear, scenarioHomes, parameters, random);
 
                 for (var year = startYear; year <= endYear; year++)
                 {
@@ -295,7 +301,7 @@ public sealed class MonteCarloEnrollmentModel
                         continue;
                     }
 
-                    AddBuiltHomes(homes, year, parameters, random);
+                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random);
                     AdvanceHomes(
                         homes,
                         year,
@@ -548,7 +554,11 @@ public sealed class MonteCarloEnrollmentModel
             resultYears);
     }
 
-    private List<SimHome> InitializeHomes(int baselineYear, MonteCarloParameters parameters, Random random)
+    private List<SimHome> InitializeHomes(
+        int baselineYear,
+        IReadOnlyList<ScenarioHome> scenarioHomes,
+        MonteCarloParameters parameters,
+        Random random)
     {
         var homes = new List<SimHome>();
         var baselineGradeShares = BuildDistrictGradeShares(data, baselineYear);
@@ -567,7 +577,7 @@ public sealed class MonteCarloEnrollmentModel
 
         for (var year = firstBuildYear; year <= baselineYear; year++)
         {
-            AddBuiltHomes(homes, year, parameters, random);
+            AddBuiltHomes(homes, year, scenarioHomes, parameters, random);
             if (year < baselineYear)
             {
                 AdvanceHomes(homes, year, parameters, random);
@@ -615,7 +625,12 @@ public sealed class MonteCarloEnrollmentModel
         }
     }
 
-    private void AddBuiltHomes(List<SimHome> homes, int year, MonteCarloParameters parameters, Random random)
+    private void AddBuiltHomes(
+        List<SimHome> homes,
+        int year,
+        IReadOnlyList<ScenarioHome> scenarioHomes,
+        MonteCarloParameters parameters,
+        Random random)
     {
         foreach (var homeRow in data.HomeRows)
         {
@@ -623,6 +638,11 @@ public sealed class MonteCarloEnrollmentModel
 
             var count = homeRow.HomesByYear.GetValueOrDefault(year);
             AddHomes(homes, homeRow.Neighborhood, homeRow.Density, year, count, generateChildren: true, parameters, random);
+        }
+
+        foreach (var home in scenarioHomes.Where(home => home.Year == year))
+        {
+            AddHomes(homes, home.Neighborhood, home.Density, year, home.Homes, generateChildren: true, parameters, random);
         }
     }
 

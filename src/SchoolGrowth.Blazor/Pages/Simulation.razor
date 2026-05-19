@@ -334,6 +334,64 @@ else
     </ToolPanel>
     }
 
+    @if (IsToolActive(ToolScenarioHomes))
+    {
+    <ToolPanel Id="@ToolScenarioHomes" Title="Scenario Homes" Style="@ToolStyle(ToolScenarioHomes)"
+               Collapsed="@IsToolCollapsed(ToolScenarioHomes)" CanMoveUp="@CanMoveToolUp(ToolScenarioHomes)" CanMoveDown="@CanMoveToolDown(ToolScenarioHomes)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <HeaderContent>
+            <button type="button" class="secondary compact-header-button" @onclick="AddScenarioRow">Add Row</button>
+        </HeaderContent>
+        <ChildContent>
+        <div class="table-wrap scenario-homes-wrap">
+            <table class="scenario-homes-table">
+                <thead>
+                    <tr>
+                        <th>Neighborhood</th>
+                        <th>Density</th>
+                        <th>Built year</th>
+                        <th>Homes</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (ScenarioRows.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="empty-table-note">No scenario homes added.</td>
+                        </tr>
+                    }
+                    @foreach (var row in ScenarioRows)
+                    {
+                        <tr @key="row">
+                            <td>
+                                <select @bind="row.Neighborhood" @bind:after="RunScenarioValidationAsync">
+                                    @foreach (var neighborhood in ScenarioNeighborhoodOptions)
+                                    {
+                                        <option value="@neighborhood">@neighborhood</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <select @bind="row.Density" @bind:after="RunScenarioValidationAsync">
+                                    @foreach (var density in ScenarioDensityOptions)
+                                    {
+                                        <option value="@density">@DensityDisplay.Label(density)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="row.Year" @bind:after="RunScenarioValidationAsync" /></td>
+                            <td><input type="number" min="0" step="1" @bind="row.Homes" @bind:after="RunScenarioValidationAsync" /></td>
+                            <td><button type="button" class="icon" title="Remove row" @onclick="() => RemoveScenarioRow(row)">x</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        </ChildContent>
+    </ToolPanel>
+    }
+
     @if (IsToolActive(ToolModelScoring))
     {
     <ToolPanel Id="@ToolModelScoring" Title="Model Scoring" Style="@ToolStyle(ToolModelScoring)"
@@ -1174,10 +1232,12 @@ else
     private static readonly IReadOnlyList<string> DefaultActiveToolIds =
     [
         ToolModelSettings,
+        ToolScenarioHomes,
         ToolValidationSummary
     ];
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
+    private const string ToolScenarioHomes = "scenario-homes";
     private const string ToolModelScoring = "model-scoring";
     private const string ToolValidationSummary = "validation-summary";
     private const string ToolChartPrototype = "chart";
@@ -1197,6 +1257,7 @@ else
     [
         new(ToolRunEnvironment, "Run Environment"),
         new(ToolModelSettings, "Model Settings"),
+        new(ToolScenarioHomes, "Scenario Homes"),
         new(ToolModelScoring, "Model Scoring"),
         new(ToolValidationSummary, "Validation Summary"),
         new(ToolSimulationInfo, "Simulation Info"),
@@ -1214,6 +1275,7 @@ else
     private static readonly HashSet<string> ResultToolIds =
     [
         ToolValidationSummary,
+        ToolScenarioHomes,
         ToolSimulationInfo,
         ToolDataGaps,
         ToolTableDetails,
@@ -1334,6 +1396,7 @@ else
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
     private List<string> ActiveToolIds { get; set; } = DefaultActiveToolIds.ToList();
+    private List<ScenarioHomeInput> ScenarioRows { get; } = [];
     private List<ChartToolState> ChartTools { get; } = [];
     private int NextChartToolNumber { get; set; } = 1;
     private HashSet<string> CollapsedToolIds { get; set; } = [];
@@ -1361,12 +1424,22 @@ else
         ? LatestReferenceYear + 50
         : Math.Max(
             LatestReferenceYear,
-            Data.HomeRows.SelectMany(row => row.HomesByYear.Keys).DefaultIfEmpty(LatestReferenceYear).Max()) + 50;
+            Math.Max(
+                Data.HomeRows.SelectMany(row => row.HomesByYear.Keys).DefaultIfEmpty(LatestReferenceYear).Max(),
+                ScenarioRows.Select(row => row.Year).DefaultIfEmpty(LatestReferenceYear).Max())) + 50;
     private IReadOnlyList<string> MonteCarloGridNames => Result?.Comparisons
         .SelectMany(comparison => comparison.ModeledGridTotals.Keys.Concat(comparison.ActualGridTotals.Keys))
         .Where(grid => !ExcludedValidationGrids.Contains(grid))
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .Order(StringComparer.OrdinalIgnoreCase)
+        .ToList() ?? [];
+    private IReadOnlyList<string> ScenarioNeighborhoodOptions => Data?.Neighborhoods
+        .Where(neighborhood => !ExcludedValidationGrids.Contains(neighborhood))
+        .Order(StringComparer.OrdinalIgnoreCase)
+        .ToList() ?? [];
+    private IReadOnlyList<string> ScenarioDensityOptions => Data?.Densities
+        .OrderBy(DensityDisplay.SortKey)
+        .ThenBy(density => density, StringComparer.OrdinalIgnoreCase)
         .ToList() ?? [];
     private IReadOnlyList<ProjectionYear> MonteCarloModeledProjection => Result?.Comparisons
         .Select(comparison => ToProjectionYear(
@@ -1822,6 +1895,11 @@ else
                 ValidationDensity = string.IsNullOrWhiteSpace(layout.ValidationDensity) ? AllDensity : layout.ValidationDensity;
                 ValidationBreakdown = string.IsNullOrWhiteSpace(layout.ValidationBreakdown) ? "Total" : layout.ValidationBreakdown;
                 ValidationValueMode = string.IsNullOrWhiteSpace(layout.ValidationValueMode) ? "value" : layout.ValidationValueMode;
+                ScenarioRows.Clear();
+                foreach (var row in layout.ScenarioHomes ?? [])
+                {
+                    ScenarioRows.Add(new ScenarioHomeInput(row.Neighborhood, row.Density, row.Year, row.Homes));
+                }
 
                 SelectedSimulationInfoRows.Clear();
                 foreach (var key in layout.SelectedSimulationInfoRows)
@@ -1860,7 +1938,8 @@ else
                     ValidationDensity,
                     ValidationBreakdown,
                     ValidationValueMode,
-                    ChartTools.Select(SavedChartTool.From).ToList()));
+                    ChartTools.Select(SavedChartTool.From).ToList(),
+                    ScenarioRows.Select(SavedScenarioHome.From).ToList()));
 
             await Js.InvokeVoidAsync(
                 "schoolGrowthStorage.setJson",
@@ -1886,6 +1965,7 @@ else
         ValidationDensity = AllDensity;
         ValidationBreakdown = "Total";
         ValidationValueMode = "value";
+        ScenarioRows.Clear();
         ChartTools.Clear();
         NextChartToolNumber = 1;
         ToolsPopupOpen = false;
@@ -1920,18 +2000,31 @@ else
 
     private async Task RunValidationAsync()
     {
+        await RunValidationAsync(preserveScroll: false);
+    }
+
+    private async Task RunScenarioValidationAsync()
+    {
+        await RunValidationAsync(preserveScroll: false);
+    }
+
+    private async Task RunValidationAsync(bool preserveScroll)
+    {
         if (Model is null) return;
         ValidationDebounce?.Cancel();
         ValidationDebounce?.Dispose();
         var debounce = new CancellationTokenSource();
         ValidationDebounce = debounce;
+        var scrollPosition = preserveScroll
+            ? await CaptureScrollPositionAsync()
+            : null;
 
         try
         {
             await Task.Delay(600, debounce.Token);
             if (!debounce.IsCancellationRequested)
             {
-                await ExecuteValidationAsync();
+                await ExecuteValidationAsync(scrollPosition);
             }
         }
         catch (TaskCanceledException)
@@ -1940,7 +2033,7 @@ else
         }
     }
 
-    private async Task ExecuteValidationAsync()
+    private async Task ExecuteValidationAsync(ScrollPosition? scrollPosition = null)
     {
         if (Model is null) return;
         if (ValidationRunning)
@@ -1974,10 +2067,40 @@ else
                 StatusMessage = $"Validation failed after {FormatElapsed(stopwatch.Elapsed)}: {ex.Message}";
             }
             await InvokeAsync(StateHasChanged);
+            await RestoreScrollPositionAsync(scrollPosition);
         }
         while (PendingValidation);
 
         ValidationRunning = false;
+    }
+
+    private async Task<ScrollPosition?> CaptureScrollPositionAsync()
+    {
+        try
+        {
+            return await Js.InvokeAsync<ScrollPosition>("schoolGrowthScroll.capture");
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+    }
+
+    private async Task RestoreScrollPositionAsync(ScrollPosition? scrollPosition)
+    {
+        if (scrollPosition is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Js.InvokeVoidAsync("schoolGrowthScroll.restore", scrollPosition);
+        }
+        catch (JSException)
+        {
+            // Scroll preservation is a UI comfort only.
+        }
     }
 
     private async Task<bool> RunValidationCoreAsync()
@@ -1990,7 +2113,8 @@ else
         var request = new MonteCarloValidationRequest(
             StartYear,
             EndYear,
-            CurrentParameters());
+            CurrentParameters(),
+            BuildScenarioHomes());
 
         if (ShouldUseServer())
         {
@@ -2305,6 +2429,28 @@ else
             DensityHighThirdChildFactor: DensityHighThirdChildFactor);
     }
 
+    private IReadOnlyList<ScenarioHome> BuildScenarioHomes()
+    {
+        return ScenarioRows
+            .Where(row => row.Homes > 0)
+            .Where(row => !ExcludedValidationGrids.Contains(row.Neighborhood))
+            .Select(row => new ScenarioHome(row.Neighborhood, row.Density, row.Year, row.Homes))
+            .ToList();
+    }
+
+    private void AddScenarioRow()
+    {
+        var neighborhood = ScenarioNeighborhoodOptions.FirstOrDefault() ?? Data?.Neighborhoods.FirstOrDefault() ?? "";
+        var density = ScenarioDensityOptions.FirstOrDefault() ?? Data?.Densities.FirstOrDefault() ?? "";
+        ScenarioRows.Add(new ScenarioHomeInput(neighborhood, density, Math.Max(StartYear, LatestReferenceYear + 1), 0));
+    }
+
+    private async Task RemoveScenarioRow(ScenarioHomeInput row)
+    {
+        ScenarioRows.Remove(row);
+        await RunValidationAsync();
+    }
+
     private static ProjectionYear ToProjectionYear(
         int year,
         Dictionary<string, double> grades,
@@ -2591,9 +2737,9 @@ else
         "Medium",
         "Medium-high",
         "High",
-        "Other/existing",
         "Low/medium",
-        "Medium-high/high"
+        "Medium-high/high",
+        "Other/existing"
     ];
 
     private IReadOnlyList<string> ValidationBreakdownOptions => ValidationMeasure switch
@@ -4666,7 +4812,18 @@ else
         string ValidationDensity,
         string ValidationBreakdown,
         string ValidationValueMode,
-        IReadOnlyList<SavedChartTool>? ChartTools = null);
+        IReadOnlyList<SavedChartTool>? ChartTools = null,
+        IReadOnlyList<SavedScenarioHome>? ScenarioHomes = null);
+
+    private sealed record SavedScenarioHome(
+        string Neighborhood,
+        string Density,
+        int Year,
+        double Homes)
+    {
+        public static SavedScenarioHome From(ScenarioHomeInput row) =>
+            new(row.Neighborhood, row.Density, row.Year, row.Homes);
+    }
 
     private sealed record SavedChartTool(
         string Id,
@@ -4710,6 +4867,8 @@ else
 
     private sealed record SavedYearsState(int StartYear, int EndYear);
 
+    private sealed record ScrollPosition(double X, double Y);
+
     private sealed record ChartSelection(
         string Measure,
         string Neighborhood,
@@ -4720,6 +4879,14 @@ else
     private sealed record ChartPinnedSelection(int Id, ChartSelection Selection);
 
     private sealed record ChartAxisBounds(double Max, double Min, double Span);
+
+    private sealed class ScenarioHomeInput(string neighborhood, string density, int year, double homes)
+    {
+        public string Neighborhood { get; set; } = neighborhood;
+        public string Density { get; set; } = density;
+        public int Year { get; set; } = year;
+        public double Homes { get; set; } = homes;
+    }
 
     private sealed class ChartToolState(string id, string title)
     {

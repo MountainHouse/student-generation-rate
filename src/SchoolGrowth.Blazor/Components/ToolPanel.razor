@@ -11,6 +11,12 @@
         {
             <h2>@Title</h2>
         }
+        @if (HeaderContent is not null)
+        {
+            <div class="tool-header-content">
+                @HeaderContent
+            </div>
+        }
         <div class="tool-actions">
             <button type="button" class="secondary tool-action" title="Move up" aria-label="Move up" disabled="@(!CanMoveUp)" @onclick="() => OnMoveUp.InvokeAsync(Id)">▲</button>
             <button type="button" class="secondary tool-action" title="Move down" aria-label="Move down" disabled="@(!CanMoveDown)" @onclick="() => OnMoveDown.InvokeAsync(Id)">▼</button>
@@ -34,6 +40,7 @@
     [Parameter] public bool CanMoveUp { get; set; }
     [Parameter] public bool CanMoveDown { get; set; }
     [Parameter] public RenderFragment? TitleContent { get; set; }
+    [Parameter] public RenderFragment? HeaderContent { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public EventCallback<string> OnToggle { get; set; }
     [Parameter] public EventCallback<string> OnMoveUp { get; set; }

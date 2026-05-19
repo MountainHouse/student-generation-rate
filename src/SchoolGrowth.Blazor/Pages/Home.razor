@@ -79,9 +79,11 @@ else
                                 </td>
                                 <td>
                                     <select @bind="row.Density" @bind:after="RunSimulation">
-                                        @foreach (var density in Data.Densities)
+                                        @foreach (var density in Data.Densities
+                                            .OrderBy(DensityDisplay.SortKey)
+                                            .ThenBy(density => density, StringComparer.OrdinalIgnoreCase))
                                         {
-                                            <option value="@density">@density</option>
+                                            <option value="@density">@DensityDisplay.Label(density)</option>
                                         }
                                     </select>
                                 </td>
