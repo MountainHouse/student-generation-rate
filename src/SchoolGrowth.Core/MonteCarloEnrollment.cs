@@ -1,7 +1,7 @@
 namespace SchoolGrowth.Core;
 
 public sealed record MonteCarloParameters(
-    int Runs = 50,
+    int Runs = 30,
     int Seed = 2026,
     double OwnershipChangeProbability = 0.05,
     double MoveInZeroChildShare = 0.1109,
@@ -97,7 +97,8 @@ public sealed record MonteCarloDensityDirectParameters(
 public sealed record MonteCarloParameterPreset(
     string Name,
     string Description,
-    MonteCarloParameters Parameters);
+    MonteCarloParameters Parameters,
+    bool IsDefault = false);
 
 public sealed record MonteCarloValidationRequest(
     int StartYear,

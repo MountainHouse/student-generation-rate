@@ -65,7 +65,7 @@ dotnet run --project tests/SchoolGrowth.Core.Tests
 Run a household simulation validation from the CLI:
 
 ```powershell
-dotnet run --project src/SchoolGrowth.Cli -- validate --start 2020 --end 2024 --runs 1000
+dotnet run --project src/SchoolGrowth.Cli -- validate --start 2020 --end 2024 --runs 30
 ```
 
 Save optimizer/search traces under artifacts:

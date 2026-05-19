@@ -1334,10 +1334,10 @@ else
     private MonteCarloSearchResult? SearchResult { get; set; }
     private IReadOnlyList<MonteCarloParameterPreset> ParameterPresets { get; set; } =
     [
-        new("default", "Current hand-tuned baseline parameters.", DefaultParameters)
+        new("Legacy", "Legacy hand-tuned baseline parameters.", DefaultParameters)
     ];
     private MonteCarloParameters CustomParameters { get; set; } = DefaultParameters;
-    private string SelectedPresetName { get; set; } = "default";
+    private string SelectedPresetName { get; set; } = "Legacy";
     private IReadOnlyList<MonteCarloParameterPreset> PresetOptions =>
         new[] { new MonteCarloParameterPreset(CustomPresetName, "Last hand-edited parameter values.", CustomParameters) }
             .Concat(ParameterPresets)
@@ -1347,7 +1347,7 @@ else
     private string? LoadError { get; set; }
     private int StartYear { get; set; } = 2020;
     private int EndYear { get; set; } = 2024;
-    private int Runs { get; set; } = 50;
+    private int Runs { get; set; } = DefaultParameters.Runs;
     private int SearchRuns { get; set; } = 50;
     private int Seed { get; set; } = DefaultParameters.Seed;
     private int SelectedComparisonYear { get; set; } = 2024;
@@ -1890,16 +1890,22 @@ else
             if (presets is not null && presets.Count > 0)
             {
                 ParameterPresets = presets;
-                SelectedPresetName = presets.FirstOrDefault(preset => preset.Name.Equals("default", StringComparison.OrdinalIgnoreCase))?.Name
-                    ?? presets[0].Name;
+                SelectedPresetName = SelectStartupPreset(presets).Name;
                 ApplyParameters(SelectedPreset?.Parameters ?? presets[0].Parameters);
             }
         }
         catch
         {
-            SelectedPresetName = "default";
+            SelectedPresetName = "Legacy";
             ApplyParameters(DefaultParameters);
         }
+    }
+
+    private static MonteCarloParameterPreset SelectStartupPreset(IReadOnlyList<MonteCarloParameterPreset> presets)
+    {
+        return presets.FirstOrDefault(preset => preset.IsDefault)
+            ?? presets.FirstOrDefault(preset => preset.Name.Equals("2016-2025 balanced", StringComparison.OrdinalIgnoreCase))
+            ?? presets[0];
     }
 
     private async Task LoadPresetAsync(ChangeEventArgs args)

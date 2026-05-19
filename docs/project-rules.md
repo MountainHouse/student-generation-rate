@@ -22,6 +22,8 @@ simulation-presets.json
 
 These are the source files. The Blazor project links them into build/publish output under `wwwroot/data/`; do not edit or commit duplicate data files under the Blazor source `wwwroot` tree.
 
+`simulation-presets.json` can mark one preset with `"IsDefault": true`; the UI should use that metadata rather than relying on a preset literally named `default`. The current default preset is `2016-2025 balanced`; the former hand-tuned baseline is `Legacy`.
+
 ## Compatibility Rules
 
 There is no standing backward-compatibility requirement for routes, API paths, file names, or UI labels. Do not keep extra aliases or harder code only for compatibility. If a future change appears to need compatibility support, ask the project owner before implementing it.

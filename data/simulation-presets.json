@@ -1,9 +1,9 @@
 [
   {
-    "Name": "default",
-    "Description": "Current hand-tuned baseline parameters.",
+    "Name": "Legacy",
+    "Description": "Legacy hand-tuned baseline parameters kept for comparison.",
     "Parameters": {
-      "Runs": 50,
+      "Runs": 30,
       "Seed": 2026,
       "OwnershipChangeProbability": 0.05,
       "MoveInZeroChildShare": 0.1109,
@@ -63,7 +63,7 @@
     "Name": "best",
     "Description": "Recent-window optimized fit with explicit high-school targets for 2019-2025.",
     "Parameters": {
-      "Runs": 50,
+      "Runs": 30,
       "Seed": 2026,
       "OwnershipChangeProbability": 0.05,
       "MoveInZeroChildShare": 0.1226,
@@ -123,7 +123,7 @@
     "Name": "Full history",
     "Description": "Optimized for a 2003 warm-up with scoring only on years with school data.",
     "Parameters": {
-      "Runs": 50,
+      "Runs": 30,
       "Seed": 2026,
       "OwnershipChangeProbability": 0.0675,
       "MoveInZeroChildShare": 0.0191,
@@ -181,9 +181,10 @@
   },
   {
     "Name": "2016-2025 balanced",
-    "Description": "Optimized over 2016-2025 with weights total=1, grid=3, grade=3, HS total=2, HS grade=2, and +/-2 grade smoothing.",
+    "Description": "Default preset. Optimized over 2016-2025 with weights total=1, grid=3, grade=3, HS total=2, HS grade=2, and +/-2 grade smoothing.",
+    "IsDefault": true,
     "Parameters": {
-      "Runs": 100,
+      "Runs": 30,
       "Seed": 2026,
       "OwnershipChangeProbability": 0.06,
       "MoveInZeroChildShare": 0.11832040582233991,

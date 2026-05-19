@@ -120,6 +120,32 @@ The Blazor tool is available at:
 
 It supports direct parameter tweaking, named parameter presets, selectable browser/server execution, graph/table tools, simulation-info diagnostics, and bounded parameter search.
 
+### Run Count Guidance
+
+Named presets use `30` runs by default. The startup preset is selected by `"IsDefault": true` in `data/simulation-presets.json`, not by a magic preset name. The current default is `2016-2025 balanced`; the former hand-tuned baseline is retained as `Legacy`.
+
+A May 2026 stability check compared the `2016-2025 balanced` preset over `2016-2025` across seeds `2026`, `3026`, and `4026`.
+
+The test showed that:
+
+- `5` and `10` runs are useful only for very rough interaction; high-school totals moved too much between seeds.
+- `20` runs was already close for broad district/grid/grade readings.
+- `30` runs gave a good interactive balance, with score and grade/grid metrics close to higher-run results.
+- `50` runs did not materially improve normal UI reading over `30`.
+- `100` to `200` runs are still preferred for final reporting, close parameter comparisons, or optimizer confirmation.
+
+The observed summary was:
+
+| Runs | Combined score | Total MAE | Grid/year MAE | Grade/year MAE | HS total MAE | HS grade MAE |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 5.44 +/- 0.10 | 132.7 +/- 5.2 | 80.7 +/- 2.3 | 22.2 +/- 0.2 | 46.3 +/- 4.0 | 16.6 +/- 1.8 |
+| 10 | 5.48 +/- 0.12 | 138.3 +/- 5.2 | 80.2 +/- 1.4 | 22.1 +/- 0.8 | 46.3 +/- 4.5 | 17.2 +/- 1.8 |
+| 20 | 5.42 +/- 0.03 | 137.0 +/- 0.8 | 79.8 +/- 1.0 | 21.9 +/- 0.4 | 44.7 +/- 1.2 | 16.8 +/- 0.7 |
+| 30 | 5.37 +/- 0.04 | 138.7 +/- 1.2 | 79.3 +/- 0.6 | 21.8 +/- 0.4 | 42.0 +/- 2.2 | 16.7 +/- 0.5 |
+| 50 | 5.39 +/- 0.07 | 139.0 +/- 1.4 | 79.3 +/- 0.7 | 21.9 +/- 0.4 | 42.3 +/- 2.6 | 17.0 +/- 0.4 |
+| 100 | 5.41 +/- 0.04 | 138.7 +/- 0.5 | 79.2 +/- 0.4 | 22.0 +/- 0.2 | 42.0 +/- 1.6 | 16.9 +/- 0.5 |
+| 200 | 5.41 +/- 0.03 | 138.7 +/- 0.9 | 79.5 +/- 0.2 | 22.0 +/- 0.2 | 41.7 +/- 0.5 | 16.8 +/- 0.4 |
+
 The command-line wrapper is available in:
 
 ```text
@@ -129,7 +155,7 @@ src/SchoolGrowth.Cli
 Example validation run:
 
 ```text
-dotnet run --project src/SchoolGrowth.Cli -- validate --start 2020 --end 2024 --runs 1000
+dotnet run --project src/SchoolGrowth.Cli -- validate --start 2020 --end 2024 --runs 30
 ```
 
 Example parameter search:
