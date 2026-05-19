@@ -61,7 +61,8 @@ See `household-simulation-model.md` for the simulation and scoring details.
 - Baseline homes can already have younger household episodes than the physical home age.
 - Move-in children include preschool and post-school children, not only enrolled children.
 - New children are modeled by child number; 3rd and 4th+ children should be much less likely.
-- Density affects household child count and birth probabilities.
+- Density affects household child count and birth probabilities through direct per-density profiles.
+- The current UI can still use baseline shares plus density/child-number factors as a calibration helper; the simulation core should consume the resulting direct per-density child-count shares and birth rates.
 - Low and medium density are configurable separately, though current presets may keep them similar. Medium-high/high usually has lower higher-child probability.
 - Special education is a child attribute assigned with a low district-data-based probability.
 

@@ -97,7 +97,7 @@ Household Simulation uses a Monte Carlo model to simulate homes and household ep
 - move-in child age distribution
 - ownership/household turnover
 - new children by child number
-- density factors and child-number density factors
+- direct per-density child-count and birth-rate profiles, currently configured through density and child-number factors
 - school-year timing for new homes
 - student exits and special education assignment
 - grade progression and high-school totals

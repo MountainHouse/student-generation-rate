@@ -21,7 +21,7 @@ The model supports:
 - start-year anchoring to actual reference data when available
 - back-play for homes built before the validation window
 - synthetic played-back homes when a reference grid has students but no listed homes
-- density-specific move-in and birth/new-child multipliers
+- density-specific direct move-in child-count distributions and birth/new-child rates
 - special source grid removal for validation
 - TK exclusion from grade scoring
 - cohort smoothing for grade validation
@@ -424,10 +424,26 @@ move_in_postschool_weight  = 0.030
 
 This matters for calibration. The move-in child-count distribution represents children in the household, not only enrolled students. A household can therefore move in with two children while only one is currently enrolled in the district.
 
-Move-in child-count shares are adjusted by density before they are normalized:
+The simulation core consumes direct density profiles:
 
 ```text
-RL/RM:
+move_in_child_count_distribution[density] =
+    P(0 children), P(1 child), P(2 children), P(3 children), P(4 children)
+
+birth_rate[density] =
+    P(1st child/year), P(2nd child/year), P(3rd child/year), P(4th+ child/year)
+```
+
+The current UI and optimizer still expose baseline shares plus density factors because that is convenient for broad calibration. Before a simulation run starts, those settings are converted into the direct density profiles above. Move-in child-count shares are adjusted by density before they are normalized:
+
+```text
+RL:
+  1 child = 1.00x
+  2 child = 1.00x
+  3 child = 1.00x
+  4 child = 1.00x
+
+RM:
   1 child = 1.00x
   2 child = 1.00x
   3 child = 1.00x
@@ -639,7 +655,7 @@ effective_density_factor =
 
 For move-in child count, the zero-child share is not directly multiplied. The 1, 2, 3, and 4-child shares are adjusted, then all shares are normalized. This means denser housing can naturally produce a higher normalized zero-child share when larger-family shares are reduced.
 
-For annual new-child probability, the same density idea is applied to the next child number. The tunable child-number factor exists for 1st, 2nd, and 3rd children; 4th+ children use the built-in 4th+ density profile and the common density group factor.
+For annual new-child probability, the same density idea is applied to the next child number. The tunable child-number factor exists for 1st, 2nd, 3rd, and 4th+ children. The final direct per-density birth rates are clamped to probability range before simulation uses them.
 
 ## Outputs
 

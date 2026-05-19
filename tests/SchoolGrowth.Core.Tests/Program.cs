@@ -32,6 +32,18 @@ foreach (var year in result.Projection)
 }
 
 var monteCarlo = new MonteCarloEnrollmentModel(data);
+var densityProfiles = MonteCarloEnrollmentModel.BuildDensityDirectParameters(new MonteCarloParameters()).ToDictionary(profile => profile.DensityCode);
+AssertClose(1, densityProfiles["RL"].MoveInChildShares.Zero
+    + densityProfiles["RL"].MoveInChildShares.One
+    + densityProfiles["RL"].MoveInChildShares.Two
+    + densityProfiles["RL"].MoveInChildShares.Three
+    + densityProfiles["RL"].MoveInChildShares.Four,
+    "direct low-density move-in shares normalize");
+if (densityProfiles["RH"].MoveInChildShares.Four != 0)
+{
+    throw new InvalidOperationException("Default high-density direct profile should keep 4-child move-ins at zero.");
+}
+
 var monteCarloResult = monteCarlo.Validate(new MonteCarloValidationRequest(
     StartYear: 2020,
     EndYear: 2022,

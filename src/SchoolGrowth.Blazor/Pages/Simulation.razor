@@ -5050,6 +5050,7 @@ else
         DensityFactorBinding thirdFactor,
         DensityFactorBinding fourthFactor)
     {
+        var direct = DirectDensityParametersFor(density);
         return new DensityEffectRow(
             label,
             firstFactor,
@@ -5059,118 +5060,18 @@ else
             Enumerable.Range(0, 5)
                 .Select(child => new DensityChildEffect(
                     child,
-                    EffectiveDensityMoveInShare(density, child),
-                    EffectiveDensityBirthProbability(density, child)))
+                    direct.MoveInChildShares.ForChildCount(child),
+                    child == 0 ? 0 : direct.BirthRates.ForNextChildNumber(child)))
                 .ToList());
     }
 
-    private double EffectiveDensityMoveInShare(string density, int childNumber)
+    private MonteCarloDensityDirectParameters DirectDensityParametersFor(string density)
     {
-        var zero = Math.Max(0, MoveInZeroChildShare);
-        var one = Math.Max(0, MoveInOneChildShare) * DensityMoveInChildFactor(density, 1);
-        var two = Math.Max(0, MoveInTwoChildShare) * DensityMoveInChildFactor(density, 2);
-        var three = Math.Max(0, MoveInThreeChildShare) * DensityMoveInChildFactor(density, 3);
-        var four = Math.Max(0, MoveInFourChildShare) * DensityMoveInChildFactor(density, 4);
-        var total = zero + one + two + three + four;
-        if (total <= 0) return 0;
-
-        return childNumber switch
-        {
-            0 => zero / total,
-            1 => one / total,
-            2 => two / total,
-            3 => three / total,
-            4 => four / total,
-            _ => 0
-        };
-    }
-
-    private double EffectiveDensityBirthProbability(string density, int childNumber)
-    {
-        var baseProbability = childNumber switch
-        {
-            0 => 0,
-            <= 1 => AnnualFirstNewChildProbability,
-            2 => AnnualSecondNewChildProbability,
-            3 => AnnualThirdNewChildProbability,
-            _ => AnnualFourthPlusNewChildProbability
-        };
-        return Math.Clamp(baseProbability * DensityBirthMultiplier(density, childNumber), 0, 1);
-    }
-
-    private double DensityMoveInChildFactor(string density, int childNumber)
-    {
-        var profile = (NormalizeDensity(density), childNumber) switch
-        {
-            ("RMH", 1) => 0.95,
-            ("RMH", 2) => 0.70,
-            ("RMH", 3) => 0.20,
-            ("RMH", _) => 0.05,
-            ("RH", 1) => 0.90,
-            ("RH", 2) => 0.50,
-            ("RH", 3) => 0.05,
-            ("RH", _) => 0.00,
-            _ => 1.00
-        };
-
-        return profile * DensityGroupFactor(density) * DensityChildFactor(density, childNumber);
-    }
-
-    private double DensityBirthMultiplier(string density, int childNumber)
-    {
-        var profile = (NormalizeDensity(density), childNumber) switch
-        {
-            ("RMH", <= 1) => 0.95,
-            ("RMH", 2) => 0.65,
-            ("RMH", 3) => 0.15,
-            ("RMH", _) => 0.05,
-            ("RH", <= 1) => 0.85,
-            ("RH", 2) => 0.45,
-            ("RH", 3) => 0.05,
-            ("RH", _) => 0.00,
-            _ => 1.00
-        };
-
-        return profile * DensityGroupFactor(density) * DensityChildFactor(density, childNumber);
-    }
-
-    private double DensityGroupFactor(string density)
-    {
-        return NormalizeDensity(density) switch
-        {
-            "RL" => DensityLowFactor,
-            "RM" => DensityMediumFactor,
-            "RMH" => DensityMediumHighFactor,
-            "RH" => DensityHighFactor,
-            _ => DensityLowFactor
-        };
-    }
-
-    private double DensityChildFactor(string density, int childNumber)
-    {
-        return (NormalizeDensity(density), childNumber) switch
-        {
-            ("RL", <= 1) => DensityLowFirstChildFactor,
-            ("RL", 2) => DensityLowSecondChildFactor,
-            ("RL", 3) => DensityLowThirdChildFactor,
-            ("RL", _) => DensityLowFourthChildFactor,
-            ("RM", <= 1) => DensityMediumFirstChildFactor,
-            ("RM", 2) => DensityMediumSecondChildFactor,
-            ("RM", 3) => DensityMediumThirdChildFactor,
-            ("RM", _) => DensityMediumFourthChildFactor,
-            ("RMH", <= 1) => DensityMediumHighFirstChildFactor,
-            ("RMH", 2) => DensityMediumHighSecondChildFactor,
-            ("RMH", 3) => DensityMediumHighThirdChildFactor,
-            ("RMH", _) => DensityMediumHighFourthChildFactor,
-            ("RH", <= 1) => DensityHighFirstChildFactor,
-            ("RH", 2) => DensityHighSecondChildFactor,
-            ("RH", 3) => DensityHighThirdChildFactor,
-            ("RH", _) => DensityHighFourthChildFactor,
-            (_, <= 1) => DensityLowFirstChildFactor,
-            (_, 2) => DensityLowSecondChildFactor,
-            (_, 3) => DensityLowThirdChildFactor,
-            _ => DensityLowFourthChildFactor
-        };
+        var normalized = NormalizeDensity(density);
+        var directParameters = MonteCarloEnrollmentModel.BuildDensityDirectParameters(CurrentParameters());
+        return directParameters
+            .FirstOrDefault(row => row.DensityCode.Equals(normalized, StringComparison.OrdinalIgnoreCase))
+            ?? directParameters.First(row => row.DensityCode.Equals("EXISTING", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string NormalizeDensity(string density)

@@ -56,6 +56,44 @@ public sealed record MonteCarloParameters(
     double YearWeightSlope = 0.15,
     double YearWeightCap = 2.0);
 
+public sealed record MonteCarloMoveInChildShares(
+    double Zero,
+    double One,
+    double Two,
+    double Three,
+    double Four)
+{
+    public double ForChildCount(int childCount) => childCount switch
+    {
+        <= 0 => Zero,
+        1 => One,
+        2 => Two,
+        3 => Three,
+        _ => Four
+    };
+}
+
+public sealed record MonteCarloBirthRates(
+    double First,
+    double Second,
+    double Third,
+    double FourthPlus)
+{
+    public double ForNextChildNumber(int nextChildNumber) => nextChildNumber switch
+    {
+        <= 1 => First,
+        2 => Second,
+        3 => Third,
+        _ => FourthPlus
+    };
+}
+
+public sealed record MonteCarloDensityDirectParameters(
+    string DensityCode,
+    string Label,
+    MonteCarloMoveInChildShares MoveInChildShares,
+    MonteCarloBirthRates BirthRates);
+
 public sealed record MonteCarloParameterPreset(
     string Name,
     string Description,
@@ -249,6 +287,7 @@ public sealed class MonteCarloEnrollmentModel
 {
     private const int PostSchoolChildIndex = 200;
     private const int ForcedOwnershipTurnoverYears = 50;
+    private static readonly string[] DirectDensityCodes = ["RL", "RM", "RMH", "RH", "Existing"];
     private static readonly HashSet<string> ExcludedValidationGrids = new(StringComparer.OrdinalIgnoreCase)
     {
         "Inter-Districts",
@@ -267,6 +306,14 @@ public sealed class MonteCarloEnrollmentModel
     public MonteCarloEnrollmentModel(EnrollmentData data)
     {
         this.data = data;
+    }
+
+    public static IReadOnlyList<MonteCarloDensityDirectParameters> BuildDensityDirectParameters(MonteCarloParameters parameters)
+    {
+        var sanitized = Sanitize(parameters);
+        return DirectDensityCodes
+            .Select(density => BuildDensityDirectParameters(density, sanitized))
+            .ToList();
     }
 
     public MonteCarloValidationResult Validate(MonteCarloValidationRequest request)
@@ -1334,7 +1381,7 @@ public sealed class MonteCarloEnrollmentModel
 
     private static MonteCarloParameters Sanitize(MonteCarloParameters parameters)
     {
-        var childShares = NormalizeMoveInChildShares(parameters);
+        var childShares = NormalizeBaseMoveInChildShares(parameters);
         return parameters with
         {
             Runs = Math.Clamp(parameters.Runs, 1, 10000),
@@ -1471,15 +1518,9 @@ public sealed class MonteCarloEnrollmentModel
     private static double NewChildProbability(SimHome home, MonteCarloParameters parameters)
     {
         var nextChildNumber = home.Children.Count + 1;
-        var baseProbability = nextChildNumber switch
-        {
-            <= 1 => parameters.AnnualFirstNewChildProbability,
-            2 => parameters.AnnualSecondNewChildProbability,
-            3 => parameters.AnnualThirdNewChildProbability,
-            _ => parameters.AnnualFourthPlusNewChildProbability
-        };
-
-        return ClampProbability(baseProbability * DensityBirthMultiplier(home.Density, nextChildNumber, parameters));
+        return DensityDirectParametersFor(home.Density, parameters)
+            .BirthRates
+            .ForNextChildNumber(nextChildNumber);
     }
 
     private static double OwnershipChangeProbabilityForHome(SimHome home, MonteCarloParameters parameters)
@@ -1522,7 +1563,7 @@ public sealed class MonteCarloEnrollmentModel
             Math.Max(0, parameters.MoveInPreschoolWeight) +
             Math.Max(0, parameters.MoveInPostSchoolWeight);
         var studentShare = totalWeight > 0 ? studentWeight / totalWeight : 1;
-        var childShares = NormalizeMoveInChildShares(parameters);
+        var childShares = NormalizeBaseMoveInChildShares(parameters);
         var expectedChildren =
             childShares.One +
             childShares.Two * 2 +
@@ -1538,7 +1579,7 @@ public sealed class MonteCarloEnrollmentModel
 
     private static int DrawMoveInChildCount(string density, MonteCarloParameters parameters, Random random)
     {
-        var childShares = NormalizeMoveInChildShares(parameters, density);
+        var childShares = DensityDirectParametersFor(density, parameters).MoveInChildShares;
         var roll = random.NextDouble();
         var cumulative = childShares.Zero;
         if (roll <= cumulative) return 0;
@@ -1551,21 +1592,53 @@ public sealed class MonteCarloEnrollmentModel
         return 4;
     }
 
-    private static (double Zero, double One, double Two, double Three, double Four) NormalizeMoveInChildShares(MonteCarloParameters parameters, string? density = null)
+    private static MonteCarloMoveInChildShares NormalizeBaseMoveInChildShares(MonteCarloParameters parameters)
     {
-        var densityFactors = DensityMoveInChildFactors(density, parameters);
         var zero = Math.Max(0, parameters.MoveInZeroChildShare);
-        var one = Math.Max(0, parameters.MoveInOneChildShare) * densityFactors.One;
-        var two = Math.Max(0, parameters.MoveInTwoChildShare) * densityFactors.Two;
-        var three = Math.Max(0, parameters.MoveInThreeChildShare) * densityFactors.Three;
-        var four = Math.Max(0, parameters.MoveInFourChildShare) * densityFactors.Four;
+        var one = Math.Max(0, parameters.MoveInOneChildShare);
+        var two = Math.Max(0, parameters.MoveInTwoChildShare);
+        var three = Math.Max(0, parameters.MoveInThreeChildShare);
+        var four = Math.Max(0, parameters.MoveInFourChildShare);
         var total = zero + one + two + three + four;
         if (total <= 0)
         {
-            return (0.05, 0.30, 0.60, 0.05, 0.0);
+            return new MonteCarloMoveInChildShares(0.05, 0.30, 0.60, 0.05, 0.0);
         }
 
-        return (zero / total, one / total, two / total, three / total, four / total);
+        return new MonteCarloMoveInChildShares(zero / total, one / total, two / total, three / total, four / total);
+    }
+
+    private static MonteCarloDensityDirectParameters DensityDirectParametersFor(string? density, MonteCarloParameters parameters)
+    {
+        return BuildDensityDirectParameters(NormalizeDensity(density), parameters);
+    }
+
+    private static MonteCarloDensityDirectParameters BuildDensityDirectParameters(string density, MonteCarloParameters parameters)
+    {
+        var densityName = NormalizeDensity(density);
+        var baseShares = NormalizeBaseMoveInChildShares(parameters);
+        var moveInFactors = DensityMoveInChildFactors(densityName, parameters);
+        var zero = baseShares.Zero;
+        var one = baseShares.One * moveInFactors.One;
+        var two = baseShares.Two * moveInFactors.Two;
+        var three = baseShares.Three * moveInFactors.Three;
+        var four = baseShares.Four * moveInFactors.Four;
+        var total = zero + one + two + three + four;
+        var moveInShares = total > 0
+            ? new MonteCarloMoveInChildShares(zero / total, one / total, two / total, three / total, four / total)
+            : new MonteCarloMoveInChildShares(0.05, 0.30, 0.60, 0.05, 0.0);
+
+        var birthRates = new MonteCarloBirthRates(
+            ClampProbability(parameters.AnnualFirstNewChildProbability * DensityBirthMultiplier(densityName, 1, parameters)),
+            ClampProbability(parameters.AnnualSecondNewChildProbability * DensityBirthMultiplier(densityName, 2, parameters)),
+            ClampProbability(parameters.AnnualThirdNewChildProbability * DensityBirthMultiplier(densityName, 3, parameters)),
+            ClampProbability(parameters.AnnualFourthPlusNewChildProbability * DensityBirthMultiplier(densityName, 4, parameters)));
+
+        return new MonteCarloDensityDirectParameters(
+            densityName,
+            DensityLabel(densityName),
+            moveInShares,
+            birthRates);
     }
 
     private static (double One, double Two, double Three, double Four) DensityMoveInChildFactors(string? density, MonteCarloParameters parameters)
