@@ -79,7 +79,7 @@ dotnet run --project src/SchoolGrowth.Cli -- search --out artifacts/search-resul
 - `/projection` - Deterministic Projection
 - `/projection-validation` - Projection Validation for the deterministic model
 
-The Household Simulation page is organized into collapsible/reorderable tools. The default visible tools are the run environment, model settings, scoring, validation summary, and simulation info.
+The Household Simulation page is organized into collapsible/reorderable tools. The default visible tools are model settings and validation summary; additional diagnostics, scoring, run environment, simulation info, and custom chart tools can be added from the Tools menu.
 
 ## Model Summary
 

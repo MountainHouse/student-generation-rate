@@ -448,25 +448,20 @@ else
                 {
                     <polyline points="@ValidationChartPoints(series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
                 }
-                <rect x="60" y="40" width="800" height="220" class="chart-pointer-capture" />
+                <rect x="0" y="0" width="920" height="300" class="chart-pointer-capture" />
                 @if (TotalChartHoverIndex.HasValue)
                 {
                     <line x1="@TotalHoverX" y1="40" x2="@TotalHoverX" y2="260" class="chart-hover-line" />
-                    <rect x="@TotalHoverYearLabelX" y="44" width="58" height="20" rx="4" class="chart-hover-label-bg" />
-                    <SvgText X="@(TotalHoverYearLabelX + 29)" Y="58" Anchor="middle" Label="@Result!.Comparisons[TotalChartHoverIndex.Value].Year.ToString()" />
                     @foreach (var marker in TotalHoverMarkers)
                     {
                         <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
                     }
-                    <rect x="@TotalHoverPanelX" y="@TotalHoverPanelY" width="@TotalHoverPanelWidth" height="@TotalHoverPanelHeight" rx="5" class="chart-hover-label-bg" />
-                    @foreach (var item in TotalHoverMarkers.Select((marker, index) => new { marker, index }))
-                    {
-                        <circle cx="@(TotalHoverPanelX + 10)" cy="@(TotalHoverPanelY + 17 + item.index * 17)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
-                        <SvgText X="@(TotalHoverPanelX + 18)" Y="@(TotalHoverPanelY + 21 + item.index * 17)" Anchor="start" Label="@item.marker.Label" />
-                    }
                 }
             </svg>
             <div class="inline-legend validation-legend">
+                <span class="legend-hover-year @(TotalChartHoverIndex.HasValue ? "" : "legend-hover-year-empty")">
+                    @(TotalChartHoverIndex.HasValue ? $"Year {Result!.Comparisons[TotalChartHoverIndex.Value].Year}" : "Year")
+                </span>
                 @foreach (var group in ValidationLegendGroups)
                 {
                     <span class="validation-legend-group">
@@ -481,7 +476,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span><i style="@($"background:{series.Color}")"></i>@series.Label</span>
+                            <span><i style="@($"background:{series.Color}")"></i>@LegendSeriesLabel(series, TotalChartHoverIndex)</span>
                         }
                     </span>
                 }
@@ -525,12 +520,23 @@ else
     <ToolPanel Id="@chartTool.Id" Title="@chartTool.Title" CssClass="band tool-panel charts-tool" Style="@ToolStyle(chartTool.Id)"
                Collapsed="@IsToolCollapsed(chartTool.Id)" CanMoveUp="@CanMoveToolUp(chartTool.Id)" CanMoveDown="@CanMoveToolDown(chartTool.Id)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-        <div class="chart-title-editor">
-            <label>
-                <span>Chart name</span>
-                <input value="@chartTool.Title" @oninput="args => chartTool.Title = args.Value?.ToString() ?? chartTool.Title" />
-            </label>
-        </div>
+        <TitleContent>
+            @if (chartTool.EditingTitle)
+            {
+                <input class="tool-title-input" value="@chartTool.Title"
+                       @oninput="args => chartTool.Title = args.Value?.ToString() ?? chartTool.Title"
+                       @onblur="() => FinishChartTitleEdit(chartTool)"
+                       @onkeydown="args => OnChartTitleKeyDown(chartTool, args)" />
+            }
+            else
+            {
+                <h2 class="tool-title-editable">
+                    <button type="button" class="tool-title-button" title="Rename chart" @onclick="() => chartTool.EditingTitle = true">@chartTool.Title</button>
+                    <button type="button" class="tool-title-edit-button" title="Rename chart" aria-label="Rename chart" @onclick="() => chartTool.EditingTitle = true">✎</button>
+                </h2>
+            }
+        </TitleContent>
+        <ChildContent>
         <div class="chart-box">
             <div class="chart-head">
                 <h2>Trend</h2>
@@ -570,7 +576,9 @@ else
                     <button type="button" class="icon-button compact-icon-button" title="Pin current graph" @onclick="() => PinChartSelection(chartTool)">+</button>
                 </div>
             </div>
-            <svg viewBox="0 0 920 300" role="img" @onmouseleave="() => chartTool.HoverIndex = null">
+            <div class="chart-panel-layout">
+            <div class="chart-canvas">
+            <svg id="@ChartSvgElementId(chartTool)" viewBox="0 0 920 300" role="img">
                 @foreach (var tick in ChartYTicks(chartTool))
                 {
                     <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
@@ -587,30 +595,22 @@ else
                 {
                     <polyline points="@ChartPoints(chartTool, series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
                 }
-                @foreach (var zone in ChartHoverZones)
-                {
-                    <rect x="@zone.X" y="40" width="@zone.Width" height="220" fill="transparent" class="chart-hover-zone"
-                          @onmouseover="() => chartTool.HoverIndex = zone.Index"
-                          @onfocus="() => chartTool.HoverIndex = zone.Index" />
-                }
+                <rect x="0" y="0" width="920" height="300" class="chart-pointer-capture" />
                 @if (chartTool.HoverIndex.HasValue)
                 {
                     <line x1="@ChartHoverX(chartTool)" y1="40" x2="@ChartHoverX(chartTool)" y2="260" class="chart-hover-line" />
-                    <rect x="@ChartHoverYearLabelX(chartTool)" y="44" width="58" height="20" rx="4" class="chart-hover-label-bg" />
-                    <SvgText X="@(ChartHoverYearLabelX(chartTool) + 29)" Y="58" Anchor="middle" Label="@Result!.Comparisons[chartTool.HoverIndex.Value].Year.ToString()" />
                     @foreach (var marker in ChartHoverMarkers(chartTool))
                     {
                         <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
                     }
-                    <rect x="@ChartHoverPanelX(chartTool)" y="72" width="245" height="@(14 + ChartHoverMarkers(chartTool).Count * 17)" rx="5" class="chart-hover-label-bg" />
-                    @foreach (var item in ChartHoverMarkers(chartTool).Select((marker, index) => new { marker, index }))
-                    {
-                        <circle cx="@(ChartHoverPanelX(chartTool) + 10)" cy="@(89 + item.index * 17)" r="3" fill="@item.marker.Color" class="chart-hover-dot" />
-                        <SvgText X="@(ChartHoverPanelX(chartTool) + 18)" Y="@(93 + item.index * 17)" Anchor="start" Label="@item.marker.Label" />
-                    }
                 }
             </svg>
-            <div class="inline-legend validation-legend">
+            </div>
+            <aside class="chart-side-legend">
+            <div class="inline-legend validation-legend chart-tool-legend">
+                <span class="legend-hover-year @(chartTool.HoverIndex.HasValue ? "" : "legend-hover-year-empty")">
+                    @(chartTool.HoverIndex.HasValue ? $"Year {Result!.Comparisons[chartTool.HoverIndex.Value].Year}" : "Year")
+                </span>
                 @foreach (var group in ChartLegendGroups(chartTool))
                 {
                     <span class="validation-legend-group">
@@ -625,12 +625,15 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span><i style="@($"background:{series.Color}")"></i>@series.Label</span>
+                            <span><i style="@($"background:{series.Color}")"></i>@LegendSeriesLabel(series, chartTool.HoverIndex)</span>
                         }
                     </span>
                 }
             </div>
+            </aside>
+            </div>
         </div>
+        </ChildContent>
     </ToolPanel>
     }
 
@@ -1171,8 +1174,7 @@ else
     private static readonly IReadOnlyList<string> DefaultActiveToolIds =
     [
         ToolModelSettings,
-        ToolValidationSummary,
-        ToolSimulationInfo
+        ToolValidationSummary
     ];
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
@@ -1262,6 +1264,7 @@ else
     private ElementReference ValidationChartSvg { get; set; }
     private DotNetObjectReference<Simulation>? ValidationHoverReference { get; set; }
     private bool ValidationHoverRenderPending { get; set; }
+    private bool ChartHoverRenderPending { get; set; }
     private string ComparisonChartMode { get; set; } = "total";
     private string ComparisonChartEntity { get; set; } = "Validation total";
     private int MaxDegreeOfParallelism { get; set; } = DefaultParameters.MaxDegreeOfParallelism;
@@ -1695,9 +1698,10 @@ else
     {
         if (Data is not null)
         {
-            if (ValidationHoverRenderPending)
+            if (ValidationHoverRenderPending || ChartHoverRenderPending)
             {
                 ValidationHoverRenderPending = false;
+                ChartHoverRenderPending = false;
                 return;
             }
 
@@ -1720,7 +1724,21 @@ else
                     "schoolGrowthValidationChart.attach",
                     ValidationChartSvg,
                     ValidationHoverReference,
-                    Result.Comparisons.Count);
+                    Result.Comparisons.Count,
+                    ToolValidationSummary);
+            }
+            if (Result is not null)
+            {
+                ValidationHoverReference ??= DotNetObjectReference.Create(this);
+                foreach (var chart in ChartTools.Where(chart => IsToolActive(chart.Id) && !IsToolCollapsed(chart.Id)))
+                {
+                    await Js.InvokeVoidAsync(
+                        "schoolGrowthValidationChart.attachById",
+                        ChartSvgElementId(chart),
+                        ValidationHoverReference,
+                        Result.Comparisons.Count,
+                        chart.Id);
+                }
             }
         }
     }
@@ -3843,14 +3861,51 @@ else
         chart.SegmentStatsCache.Clear();
     }
 
+    private static void FinishChartTitleEdit(ChartToolState chart)
+    {
+        chart.Title = string.IsNullOrWhiteSpace(chart.Title)
+            ? "Chart"
+            : chart.Title.Trim();
+        chart.EditingTitle = false;
+    }
+
+    private static void OnChartTitleKeyDown(ChartToolState chart, KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or "Escape")
+        {
+            FinishChartTitleEdit(chart);
+        }
+    }
+
+    private static string LegendSeriesLabel(ValidationChartLine series, int? hoverIndex)
+    {
+        if (!hoverIndex.HasValue)
+        {
+            return series.Label;
+        }
+
+        var value = series.Values.ElementAtOrDefault(hoverIndex.Value);
+        return value.HasValue
+            ? $"{series.Label}: {series.Formatter(value.Value)}"
+            : $"{series.Label}: n/a";
+    }
+
+    private static string ValueFirstHoverLabel(string label)
+    {
+        var split = label.LastIndexOf(": ", StringComparison.Ordinal);
+        return split > 0 && split + 2 < label.Length
+            ? $"{label[(split + 2)..]} - {label[..split]}"
+            : label;
+    }
+
     private IReadOnlyList<(double Y, string Label)> ChartYTicks(ChartToolState chart)
     {
-        var cache = CurrentChart(chart);
+        var bounds = ChartAxisBoundsFor(chart);
         return Enumerable.Range(0, 5)
             .Select(index =>
             {
-                var value = cache.Max - ((cache.Max - cache.Min) * index / 4);
-                var y = ChartYForValue(chart, value);
+                var value = bounds.Max - ((bounds.Max - bounds.Min) * index / 4);
+                var y = ChartYForValue(value, bounds);
                 return (y, ChartFormatter(CurrentChartSelection(chart))(value));
             })
             .ToList();
@@ -3863,7 +3918,7 @@ else
         {
             if (!value.HasValue) return null;
             var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
-            var y = ChartYForValue(chart, value.Value);
+            var y = ChartYForValue(value.Value, ChartAxisBoundsFor(chart));
             return $"{x:0.##},{y:0.##}";
         }).Where(point => point is not null));
     }
@@ -3876,8 +3931,37 @@ else
 
     private double ChartYForValue(ChartToolState chart, double value)
     {
-        var cache = CurrentChart(chart);
-        return 260 - ((value - cache.Min) / cache.Span * 220);
+        return ChartYForValue(value, ChartAxisBoundsFor(chart));
+    }
+
+    private static double ChartYForValue(double value, ChartAxisBounds bounds)
+    {
+        return 260 - ((value - bounds.Min) / bounds.Span * 220);
+    }
+
+    private ChartAxisBounds ChartAxisBoundsFor(ChartToolState chart)
+    {
+        var numbers = ChartSeries(chart)
+            .SelectMany(series => series.Values)
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToList();
+
+        if (numbers.Count == 0)
+        {
+            return new ChartAxisBounds(1, 0, 1);
+        }
+
+        var max = numbers.Max();
+        var min = numbers.Min();
+        if (min < 0)
+        {
+            var absoluteMax = ChartAxis.NiceMaximum(Math.Max(Math.Abs(min), Math.Abs(max)) * 1.08);
+            return new ChartAxisBounds(absoluteMax, -absoluteMax, absoluteMax * 2);
+        }
+
+        var niceMax = ChartAxis.NiceMaximum(Math.Max(1, max * 1.08));
+        return new ChartAxisBounds(niceMax, 0, Math.Max(1, niceMax));
     }
 
     private double ChartHoverX(ChartToolState chart) => chart.HoverIndex.HasValue ? ChartXForIndex(chart.HoverIndex.Value) : 60;
@@ -3885,6 +3969,8 @@ else
     private double ChartHoverYearLabelX(ChartToolState chart) => Math.Clamp(ChartHoverX(chart) - 29, 62, 802);
 
     private double ChartHoverPanelX(ChartToolState chart) => ChartHoverX(chart) > 650 ? 405 : 650;
+
+    private static string ChartSvgElementId(ChartToolState chart) => $"chart-svg-{chart.Id}";
 
     private IReadOnlyList<(int Index, double X, double Width)> ChartHoverZones
     {
@@ -3992,14 +4078,34 @@ else
     [JSInvokable]
     public async Task SetValidationHoverIndex(int index)
     {
-        int? next = index < 0 ? null : index;
-        if (TotalChartHoverIndex == next)
+        await SetChartHoverIndex(ToolValidationSummary, index);
+    }
+
+    [JSInvokable]
+    public async Task SetChartHoverIndex(string chartId, int index)
+    {
+        var next = index < 0 ? (int?)null : index;
+        if (chartId.Equals(ToolValidationSummary, StringComparison.OrdinalIgnoreCase))
+        {
+            if (TotalChartHoverIndex == next)
+            {
+                return;
+            }
+
+            TotalChartHoverIndex = next;
+            ValidationHoverRenderPending = true;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var chart = ChartTools.FirstOrDefault(item => item.Id.Equals(chartId, StringComparison.OrdinalIgnoreCase));
+        if (chart is null || chart.HoverIndex == next)
         {
             return;
         }
 
-        TotalChartHoverIndex = next;
-        ValidationHoverRenderPending = true;
+        chart.HoverIndex = next;
+        ChartHoverRenderPending = true;
         await InvokeAsync(StateHasChanged);
     }
 
@@ -4613,6 +4719,8 @@ else
 
     private sealed record ChartPinnedSelection(int Id, ChartSelection Selection);
 
+    private sealed record ChartAxisBounds(double Max, double Min, double Span);
+
     private sealed class ChartToolState(string id, string title)
     {
         public string Id { get; } = id;
@@ -4628,6 +4736,7 @@ else
         public ValidationChartCache? CacheValue { get; set; }
         public Dictionary<string, SegmentStats> SegmentStatsCache { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int? HoverIndex { get; set; }
+        public bool EditingTitle { get; set; }
     }
 
     private sealed record ValidationChartLine(

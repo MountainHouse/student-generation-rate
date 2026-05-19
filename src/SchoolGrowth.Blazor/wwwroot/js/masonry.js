@@ -431,12 +431,13 @@ window.schoolGrowthStorage = (() => {
 })();
 
 window.schoolGrowthValidationChart = (() => {
-    function attach(element, dotNet, pointCount) {
+    function attach(element, dotNet, pointCount, chartId = "validation-summary") {
         if (!element || !dotNet || !pointCount) return;
 
         const state = element.__schoolGrowthValidationHover ?? {};
         state.dotNet = dotNet;
         state.pointCount = pointCount;
+        state.chartId = chartId;
         state.lastIndex = Number.isInteger(state.lastIndex) ? state.lastIndex : -2;
 
         if (!state.attached) {
@@ -447,15 +448,13 @@ window.schoolGrowthValidationChart = (() => {
                 const rect = element.getBoundingClientRect();
                 if (!rect.width) return;
 
-                const viewX = (event.clientX - rect.left) / rect.width * 920;
+                const viewX = clientXToViewBoxX(event.clientX, rect);
                 const clamped = Math.max(60, Math.min(860, viewX));
-                const index = current.pointCount <= 1
-                    ? 0
-                    : Math.round((clamped - 60) / 800 * (current.pointCount - 1));
+                const index = indexForChartX(clamped, current.pointCount);
 
                 if (index !== current.lastIndex) {
                     current.lastIndex = index;
-                    current.dotNet.invokeMethodAsync("SetValidationHoverIndex", index);
+                    current.dotNet.invokeMethodAsync("SetChartHoverIndex", current.chartId ?? "validation-summary", index);
                 }
             };
 
@@ -463,7 +462,7 @@ window.schoolGrowthValidationChart = (() => {
                 const current = element.__schoolGrowthValidationHover;
                 if (!current?.dotNet || current.lastIndex === -1) return;
                 current.lastIndex = -1;
-                current.dotNet.invokeMethodAsync("SetValidationHoverIndex", -1);
+                current.dotNet.invokeMethodAsync("SetChartHoverIndex", current.chartId ?? "validation-summary", -1);
             };
 
             element.addEventListener("pointermove", state.onPointerMove, { passive: true });
@@ -474,5 +473,43 @@ window.schoolGrowthValidationChart = (() => {
         element.__schoolGrowthValidationHover = state;
     }
 
-    return { attach };
+    function attachById(elementId, dotNet, pointCount, chartId) {
+        attach(document.getElementById(elementId), dotNet, pointCount, chartId);
+    }
+
+    function clientXToViewBoxX(clientX, rect) {
+        const viewWidth = 920;
+        const viewHeight = 300;
+        const scale = Math.min(rect.width / viewWidth, rect.height / viewHeight);
+        if (!Number.isFinite(scale) || scale <= 0) return 0;
+
+        // Default SVG preserveAspectRatio is xMidYMid meet, so wide charts
+        // have horizontal letterboxing. Remove that offset before mapping.
+        const renderedViewWidth = viewWidth * scale;
+        const offsetX = (rect.width - renderedViewWidth) / 2;
+        return (clientX - rect.left - offsetX) / scale;
+    }
+
+    function indexForChartX(viewX, pointCount) {
+        if (pointCount <= 1) return 0;
+
+        const left = 60;
+        const width = 800;
+        const step = width / (pointCount - 1);
+        for (let index = 0; index < pointCount; index++) {
+            const start = index === 0
+                ? left
+                : left + (index - 0.5) * step;
+            const end = index === pointCount - 1
+                ? left + width
+                : left + (index + 0.5) * step;
+            if (viewX >= start && viewX <= end) {
+                return index;
+            }
+        }
+
+        return viewX < left ? 0 : pointCount - 1;
+    }
+
+    return { attach, attachById };
 })();

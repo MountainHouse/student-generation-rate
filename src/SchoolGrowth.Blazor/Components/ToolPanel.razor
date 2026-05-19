@@ -3,7 +3,14 @@
         <button type="button" class="tool-toggle" title="Collapse or expand" @onclick="() => OnToggle.InvokeAsync(Id)">
             @(Collapsed ? "+" : "-")
         </button>
-        <h2>@Title</h2>
+        @if (TitleContent is not null)
+        {
+            @TitleContent
+        }
+        else
+        {
+            <h2>@Title</h2>
+        }
         <div class="tool-actions">
             <button type="button" class="secondary tool-action" title="Move up" aria-label="Move up" disabled="@(!CanMoveUp)" @onclick="() => OnMoveUp.InvokeAsync(Id)">▲</button>
             <button type="button" class="secondary tool-action" title="Move down" aria-label="Move down" disabled="@(!CanMoveDown)" @onclick="() => OnMoveDown.InvokeAsync(Id)">▼</button>
@@ -26,6 +33,7 @@
     [Parameter] public bool Collapsed { get; set; }
     [Parameter] public bool CanMoveUp { get; set; }
     [Parameter] public bool CanMoveDown { get; set; }
+    [Parameter] public RenderFragment? TitleContent { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public EventCallback<string> OnToggle { get; set; }
     [Parameter] public EventCallback<string> OnMoveUp { get; set; }

@@ -330,6 +330,50 @@ button.icon {
     color: #33424d;
 }
 
+.tool-title-editable {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    margin: 0;
+}
+
+.tool-title-button {
+    justify-self: start;
+    min-height: 30px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tool-title-input {
+    width: min(420px, 100%);
+    min-height: 34px;
+    padding: 4px 8px;
+    color: #33424d;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.tool-title-edit-button {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #eef7f7;
+    color: #006b68;
+    font-size: 13px;
+    font-weight: 800;
+}
+
 .tool-toggle {
     width: 32px;
     min-height: 32px;
@@ -562,6 +606,54 @@ input[type="checkbox"] {
     display: grid;
     gap: 4px;
     width: min(320px, 100%);
+}
+
+.chart-panel-layout {
+    display: grid;
+    grid-template-columns: minmax(560px, 2fr) minmax(340px, 1fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.chart-canvas {
+    min-width: 0;
+}
+
+.chart-side-legend {
+    display: grid;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+}
+
+.chart-hover-readout {
+    display: grid;
+    gap: 6px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #f8fbfb;
+    font-size: 12px;
+}
+
+.chart-hover-readout strong {
+    color: var(--ink);
+    font-size: 13px;
+}
+
+.chart-hover-readout span {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 7px;
+    align-items: start;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+}
+
+.chart-hover-readout i {
+    width: 18px;
+    height: 4px;
+    margin-top: 0.45em;
 }
 
 svg {
@@ -946,6 +1038,23 @@ dd {
     gap: 8px;
 }
 
+.legend-hover-year {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    min-width: 72px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #eef7f7;
+    color: #006b68;
+    font-weight: 750;
+}
+
+.legend-hover-year-empty {
+    visibility: hidden;
+}
+
 .validation-legend-group {
     display: grid;
     grid-template-columns: 20px minmax(220px, 1fr) repeat(2, max-content);
@@ -958,7 +1067,31 @@ dd {
 }
 
 .validation-legend-group strong {
+    overflow-wrap: break-word;
     color: var(--ink);
+}
+
+.chart-tool-legend {
+    width: 100%;
+    min-width: 0;
+}
+
+.chart-tool-legend .validation-legend-group {
+    width: 100%;
+    box-sizing: border-box;
+    grid-template-columns: 20px minmax(0, 1fr) repeat(2, max-content);
+}
+
+.chart-tool-legend .validation-legend-group > strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chart-tool-legend .validation-legend-group > span {
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .legend-remove {
@@ -1131,6 +1264,10 @@ th {
     }
 
     .validation-chart-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-panel-layout {
         grid-template-columns: 1fr;
     }
 }

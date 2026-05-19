@@ -7,6 +7,7 @@ The UI is an analytical planning tool. It should be dense, inspectable, and usef
 The Household Simulation page is organized as a set of tools:
 
 - tools are collapsible, removable, and reorderable
+- custom Chart tools can be added more than once, renamed in the panel header, and grouped by the user
 - settings are grouped into subpanels
 - initially visible tools should focus on model settings and validation summary
 - other details can be added through the tool menu
@@ -25,7 +26,13 @@ Tables and charts should use the shared patterns:
 - if no lines are selected, hide the graph
 - table first columns should remain visible during horizontal scroll
 - table headers should remain readable when possible
-- graph hover should show a vertical guide and values at line intersections
+- graph hover should show a vertical guide and point markers
+- chart hover values should be integrated into the legend, not shown as separate SVG tooltip boxes
+- reserve legend space for the hovered x-value/year so the legend does not jump when hover starts
+- repeatable Chart tools should use the same selector model as Validation Summary where practical
+- custom Chart panels place the legend to the right of the chart on wide screens and below it on narrow screens
+- custom Chart panel titles are editable from the panel header; the displayed title should match normal tool header typography
+- when multiple lines are visible, the y-axis scale must use the maximum/minimum across all rendered lines, including pinned lines
 
 ## Copy and Controls
 
