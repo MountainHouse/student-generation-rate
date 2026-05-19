@@ -95,6 +95,7 @@ Validation behavior:
 1. Clamp the requested start/end years to available construction/reference ranges.
 2. If actual grid and grade data exists for the start year, anchor the start year to that actual distribution.
 3. Otherwise choose the latest prior reference year as the baseline and back-play from it.
+   If there is no prior reference year, play homes forward from construction history only.
 4. Exclude Lammersville, Inter-Districts, and MHESD from simulation and validation scoring.
 5. Remove their estimated grade shares from district grade reference data before grade comparison.
 6. Initialize homes from `homes.csv`; back-play pre-window construction to the baseline year.
@@ -589,11 +590,24 @@ Initialization uses a hybrid of home back-play and reference-data anchoring.
 
 If the requested start year has actual grid and grade data, that start year is treated as an anchor. The model still initializes households and homes, but the start-year validation comparison receives `anchor_year_weight`, which is usually lower because the model is deliberately reconciled to that year.
 
-If the requested start year does not have actual reference data, the model uses the latest prior reference year as a baseline and simulates forward from there.
+For an anchored start, the observed enrolled K-12 population is known. It does not matter much whether those known students originally moved in, were born in-district, or arrived through earlier turnover; reconciliation places the known grade/grid counts into available homes. The hidden household context remains approximate:
+
+```text
+pre-school children who will enter school later
+post-school children who affect household child count but not enrollment
+sibling grouping inside homes
+household / ownership age and turnover state
+```
+
+This means anchored forecasts start from a solid enrolled-student count, but the future kindergarten pipeline and household composition are still model assumptions.
+
+If the requested start year does not have actual reference data, the model uses the latest prior reference year as a baseline and simulates forward from there. If there is no earlier reference year, the model must not use future reference data. It plays every listed home forward from its construction year, including ownership changes, move-in households, births/new children, exits, and aging. This makes a direct pre-reference start, such as 2015 when the first reference year is 2016, comparable to running the full homes-only history from 2003 through 2015.
 
 Before the validation window, homes from `homes.csv` are added in their construction years and advanced to the baseline year. That lets older baseline homes already have turnover episodes and younger households. If a reference grid has students but no listed homes, synthetic homes are created and played back so the model has homes to hold the reference children.
 
 Baseline children are reconciled to the adjusted actual grade distribution, excluding TK. The kindergarten pipeline is seeded from reference data so missing TK history does not create artificial cohort holes.
+
+Future improvement: anchored starts could infer richer household histories for the homes that receive observed students. That would mean allocating observed students into plausible sibling groups, then inferring likely younger preschool siblings, older post-school siblings, and household tenure. This is intentionally not implemented yet because it is a separate inference layer and must preserve the exact observed grade/grid counts.
 
 ## Calibration
 

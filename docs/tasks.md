@@ -8,6 +8,19 @@ General note: use quick non-AOT builds for ordinary development. AOT/threaded pu
 
 ## Product Direction
 
+### Improve anchored household hidden-state inference
+
+Current behavior: when a start year has actual grid and grade reference data, Household Simulation reconciles enrolled K-12 students to the observed grade/grid counts. That is correct for known enrollment, but hidden household state is approximate: preschool siblings, post-school siblings, sibling grouping, and household tenure are generated from general model probabilities.
+
+Goal: design an optional inference layer for anchored starts that allocates observed students into plausible households and infers hidden family context without changing the known grade/grid counts.
+
+Acceptance criteria:
+
+- Observed anchored grade/grid student counts remain preserved.
+- The inferred preschool pipeline improves K/early-grade forecasts without using future reference data.
+- The inferred high-school/post-school tail improves HS forecasts and family child-count diagnostics.
+- The method is documented as inference, not observed data.
+
 ### Evaluate deterministic model retirement or migration
 
 Current direction: Household Simulation is the primary product path. The deterministic projection and validation pages remain useful as a simple comparison/reference, but they may become maintenance cost.
