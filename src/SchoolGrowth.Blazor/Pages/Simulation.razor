@@ -552,7 +552,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span style="@($"--legend-value-width:{ChartLegendReserveWidthCh(series):0.#}ch")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
+                            <span style="@($"--legend-value-width:{CssCh(ChartLegendReserveWidthCh(series))}")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
                         }
                     </span>
                 }
@@ -711,7 +711,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span style="@($"--legend-value-width:{ChartLegendReserveWidthCh(series):0.#}ch")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
+                            <span style="@($"--legend-value-width:{CssCh(ChartLegendReserveWidthCh(series))}")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
                         }
                     </span>
                 }
@@ -4379,7 +4379,7 @@ else
             if (!value.HasValue) return null;
             var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
             var y = ChartYForValue(value.Value, ChartAxisBoundsFor(chart));
-            return $"{x:0.##},{y:0.##}";
+            return SvgPoint(x, y);
         }).Where(point => point is not null));
     }
 
@@ -4693,7 +4693,7 @@ else
             if (!value.HasValue) return null;
             var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
             var y = TotalYForValue(value.Value);
-            return $"{x:0.##},{y:0.##}";
+            return SvgPoint(x, y);
         }).Where(point => point is not null));
     }
 
@@ -4726,11 +4726,11 @@ else
         }
 
         double xForIndex(int index) => series.Values.Count == 1 ? 60 : 60 + (index * 800.0 / (series.Values.Count - 1));
-        var highPoints = points.Select(item => $"{xForIndex(item.Index):0.##},{ySelector(item.High!.Value):0.##}");
+        var highPoints = points.Select(item => SvgPoint(xForIndex(item.Index), ySelector(item.High!.Value)));
         var lowPoints = points
             .AsEnumerable()
             .Reverse()
-            .Select(item => $"{xForIndex(item.Index):0.##},{ySelector(item.Low!.Value):0.##}");
+            .Select(item => SvgPoint(xForIndex(item.Index), ySelector(item.Low!.Value)));
 
         return string.Join(" ", highPoints.Concat(lowPoints));
     }
@@ -4744,7 +4744,7 @@ else
             if (!value.HasValue) return null;
             var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
             var y = 260 - (value.Value / max * 220);
-            return $"{x:0.##},{y:0.##}";
+            return SvgPoint(x, y);
         }).Where(point => point is not null));
     }
 
@@ -4863,7 +4863,7 @@ else
             if (!value.HasValue) return null;
             var x = points.Count == 1 ? 46 : 46 + (index * 454.0 / (points.Count - 1));
             var y = 220 - (value.Value / max * 192);
-            return $"{x:0.##},{y:0.##}";
+            return SvgPoint(x, y);
         }).Where(point => point is not null));
     }
 
@@ -4982,6 +4982,16 @@ else
             < 0.0001 => "<0.0001",
             _ => value.ToString("0.####")
         };
+    }
+
+    private static string SvgPoint(double x, double y)
+    {
+        return FormattableString.Invariant($"{x:0.##},{y:0.##}");
+    }
+
+    private static string CssCh(double value)
+    {
+        return FormattableString.Invariant($"{value:0.#}ch");
     }
 
     private static string FormatCount(double value)
