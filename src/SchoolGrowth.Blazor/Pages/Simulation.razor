@@ -88,7 +88,7 @@ else
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="controls monte-controls">
             <label>
-                <span>Parameter preset</span>
+                <span class="label-with-help">Parameter preset <HelpTip Text="Saved parameter set. Changing any parameter switches the selection to Custom so the active values are not mistaken for a named preset." /></span>
                 <select value="@SelectedPresetName" @onchange="LoadPresetAsync">
                     @foreach (var preset in PresetOptions)
                     {
@@ -101,15 +101,15 @@ else
                 <div class="preset-note">@SelectedPreset.Description</div>
             }
             <label>
-                <span>Runs</span>
+                <span class="label-with-help">Runs <HelpTip Text="Number of independent Monte Carlo runs averaged together. More runs reduce random noise but take longer." /></span>
                 <input type="number" min="10" max="10000" step="10" @bind="Runs" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Seed</span>
+                <span class="label-with-help">Seed <HelpTip Text="Starting random seed. Keep it fixed to make repeated runs comparable." /></span>
                 <input type="number" @bind="Seed" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Execution</span>
+                <span class="label-with-help">Execution <HelpTip Text="Auto uses the server when running from the hosted app and browser execution for static WebAssembly." /></span>
                 <select @bind="ExecutionMode" @bind:after="RunValidationAsync">
                     <option value="Auto">Auto</option>
                     <option value="Server">Server API</option>
@@ -117,11 +117,11 @@ else
                 </select>
             </label>
             <label>
-                <span>Server API</span>
+                <span class="label-with-help">Server API <HelpTip Text="Base URL for backend simulation. Auto mode uses this when the app is hosted with the server; static WebAssembly can run without it." /></span>
                 <input @bind="ServerApiBaseAddress" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Max parallelism</span>
+                <span class="label-with-help">Max parallelism <HelpTip Text="Maximum worker count for simulation runs. Use 0 to let the model choose a reasonable default." /></span>
                 <input type="number" min="0" step="1" @bind="MaxDegreeOfParallelism" @bind:after="RunValidationAsync" />
             </label>
         </div>
@@ -138,15 +138,15 @@ else
         <summary>Planning Window</summary>
         <div class="controls monte-controls">
             <label>
-                <span>Start year</span>
+                <span class="label-with-help">Start year <HelpTip Text="First school year to simulate. If actual data exists, that year anchors from reference counts; otherwise the model backplays homes up to this year." /></span>
                 <input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="StartYear" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>End year</span>
+                <span class="label-with-help">End year <HelpTip Text="Last school year shown in validation and charts. Future years can be explored even when no reference data exists." /></span>
                 <input type="number" min="@StartYear" max="@MaxSimulationEndYear" @bind="EndYear" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Ownership change</span>
+                <span class="label-with-help">Ownership change <HelpTip Text="Yearly probability that a home starts a new household episode. This includes sale, renter turnover, and next-generation family replacement." /></span>
                 <input type="number" min="0" max="1" step="0.005" @bind="OwnershipChangeProbability" @bind:after="RunValidationAsync" />
             </label>
         </div>
@@ -155,23 +155,23 @@ else
         <summary>Move-In Kids Count</summary>
         <div class="normalized-inputs">
             <label>
-                <span>0 child share</span>
+                <span class="label-with-help">0 child share <HelpTip Text="Relative share of move-in households with 0 children. Count shares are normalized together, so the shown value at right is the effective share." /></span>
                 <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInZeroChildShare" @oninput="value => MoveInZeroChildShare = ParseInputDouble(value, MoveInZeroChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[0])</output></span>
             </label>
             <label>
-                <span>1 child share</span>
+                <span class="label-with-help">1 child share <HelpTip Text="Relative share of move-in households with 1 child. Count shares are normalized together." /></span>
                 <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInOneChildShare" @oninput="value => MoveInOneChildShare = ParseInputDouble(value, MoveInOneChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[1])</output></span>
             </label>
             <label>
-                <span>2 child share</span>
+                <span class="label-with-help">2 child share <HelpTip Text="Relative share of move-in households with 2 children. Count shares are normalized together." /></span>
                 <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInTwoChildShare" @oninput="value => MoveInTwoChildShare = ParseInputDouble(value, MoveInTwoChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[2])</output></span>
             </label>
             <label>
-                <span>3 child share</span>
+                <span class="label-with-help">3 child share <HelpTip Text="Relative share of move-in households with 3 children. Density factors can further reduce larger families in higher-density homes." /></span>
                 <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInThreeChildShare" @oninput="value => MoveInThreeChildShare = ParseInputDouble(value, MoveInThreeChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[3])</output></span>
             </label>
             <label>
-                <span>4 child share</span>
+                <span class="label-with-help">4 child share <HelpTip Text="Relative share of move-in households with 4 children. The model currently treats this as exactly 4 children." /></span>
                 <span class="normalized-input"><input type="number" min="0" max="1" step="0.005" value="@MoveInFourChildShare" @oninput="value => MoveInFourChildShare = ParseInputDouble(value, MoveInFourChildShare)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInChildCountNormalizers[4])</output></span>
             </label>
         </div>
@@ -180,27 +180,27 @@ else
         <summary>Move-In Kids Age</summary>
         <div class="normalized-inputs">
             <label>
-                <span>Preschool weight</span>
+                <span class="label-with-help">Preschool weight <HelpTip Text="Relative weight for assigning move-in children below school age. Age weights are normalized across all age bands." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInPreschoolWeight" @oninput="value => MoveInPreschoolWeight = ParseInputDouble(value, MoveInPreschoolWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[0])</output></span>
             </label>
             <label>
-                <span>TK/K weight</span>
+                <span class="label-with-help">TK/K weight <HelpTip Text="Relative weight for assigning move-in children to TK/K age. Age weights are normalized across all age bands." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInTkKWeight" @oninput="value => MoveInTkKWeight = ParseInputDouble(value, MoveInTkKWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[1])</output></span>
             </label>
             <label>
-                <span>Elementary weight</span>
+                <span class="label-with-help">Elementary weight <HelpTip Text="Relative weight for assigning move-in children to grades 1-5. Age weights are normalized across all age bands." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInElementaryWeight" @oninput="value => MoveInElementaryWeight = ParseInputDouble(value, MoveInElementaryWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[2])</output></span>
             </label>
             <label>
-                <span>Middle weight</span>
+                <span class="label-with-help">Middle weight <HelpTip Text="Relative weight for assigning move-in children to grades 6-8. Age weights are normalized across all age bands." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInMiddleWeight" @oninput="value => MoveInMiddleWeight = ParseInputDouble(value, MoveInMiddleWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[3])</output></span>
             </label>
             <label>
-                <span>High weight</span>
+                <span class="label-with-help">High weight <HelpTip Text="Relative weight for assigning move-in children to grades 9-12. Age weights are normalized across all age bands." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInHighWeight" @oninput="value => MoveInHighWeight = ParseInputDouble(value, MoveInHighWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[4])</output></span>
             </label>
             <label>
-                <span>Post-school weight</span>
+                <span class="label-with-help">Post-school weight <HelpTip Text="Relative weight for move-in children already beyond school age. These affect household child counts but not K-12 enrollment." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.01" value="@MoveInPostSchoolWeight" @oninput="value => MoveInPostSchoolWeight = ParseInputDouble(value, MoveInPostSchoolWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(MoveInAgeNormalizers[5])</output></span>
             </label>
         </div>
@@ -209,19 +209,19 @@ else
         <summary>Birth/New Child Rates</summary>
         <div class="controls monte-controls">
         <label>
-            <span>1st birth / year</span>
+            <span class="label-with-help">1st birth / year <HelpTip Text="Yearly probability that a household without children adds its first new child. Density multipliers can adjust the effective value." /></span>
             <input type="number" min="0" max="1" step="0.001" @bind="AnnualFirstNewChildProbability" @bind:after="RunValidationAsync" />
         </label>
         <label>
-            <span>2nd birth / year</span>
+            <span class="label-with-help">2nd birth / year <HelpTip Text="Yearly probability that a household with one child adds a second new child. Density multipliers can adjust the effective value." /></span>
             <input type="number" min="0" max="1" step="0.001" @bind="AnnualSecondNewChildProbability" @bind:after="RunValidationAsync" />
         </label>
         <label>
-            <span>3rd birth / year</span>
+            <span class="label-with-help">3rd birth / year <HelpTip Text="Yearly probability that a household with two children adds a third new child. Higher-density profiles usually reduce this strongly." /></span>
             <input type="number" min="0" max="1" step="0.001" @bind="AnnualThirdNewChildProbability" @bind:after="RunValidationAsync" />
         </label>
         <label>
-            <span>4th+ birth / year</span>
+            <span class="label-with-help">4th+ birth / year <HelpTip Text="Yearly probability that a household with three children adds a fourth child. The model currently caps simulated child count at 4." /></span>
             <input type="number" min="0" max="1" step="0.001" @bind="AnnualFourthPlusNewChildProbability" @bind:after="RunValidationAsync" />
         </label>
         </div>
@@ -230,19 +230,19 @@ else
         <summary>Density Factors</summary>
         <div class="controls monte-controls">
         <label>
-            <span>Low factor</span>
+            <span class="label-with-help">Low factor <HelpTip Text="Common density adjustment applied to move-in child-count odds and new-child probabilities for low density homes." /></span>
             <input type="number" min="0" step="0.01" value="@DensityLowFactor" @oninput="value => DensityLowFactor = ParseInputDouble(value, DensityLowFactor)" @onchange="RunValidationAsync" />
         </label>
         <label>
-            <span>Medium factor</span>
+            <span class="label-with-help">Medium factor <HelpTip Text="Common density adjustment applied to move-in child-count odds and new-child probabilities for medium density homes." /></span>
             <input type="number" min="0" step="0.01" value="@DensityMediumFactor" @oninput="value => DensityMediumFactor = ParseInputDouble(value, DensityMediumFactor)" @onchange="RunValidationAsync" />
         </label>
         <label>
-            <span>Medium-high factor</span>
+            <span class="label-with-help">Medium-high factor <HelpTip Text="Common adjustment for medium-high homes. It is combined with built-in higher-density child-count penalties and per-child factors." /></span>
             <input type="number" min="0" step="0.01" value="@DensityMediumHighFactor" @oninput="value => DensityMediumHighFactor = ParseInputDouble(value, DensityMediumHighFactor)" @onchange="RunValidationAsync" />
         </label>
         <label>
-            <span>High factor</span>
+            <span class="label-with-help">High factor <HelpTip Text="Common adjustment for high density homes. It is combined with strong built-in penalties for larger households." /></span>
             <input type="number" min="0" step="0.01" value="@DensityHighFactor" @oninput="value => DensityHighFactor = ParseInputDouble(value, DensityHighFactor)" @onchange="RunValidationAsync" />
         </label>
         </div>
@@ -252,10 +252,10 @@ else
                     <tr>
                         <th>Density</th>
                         <th>0 child</th>
-                        <th>1st child</th>
-                        <th>2nd child</th>
-                        <th>3rd child</th>
-                        <th>4th child</th>
+                        <th>1st child <HelpTip Text="Per-child density multiplier for 1-child move-in odds and first new-child probability." /></th>
+                        <th>2nd child <HelpTip Text="Per-child density multiplier for 2-child move-in odds and second new-child probability." /></th>
+                        <th>3rd child <HelpTip Text="Per-child density multiplier for 3-child move-in odds and third new-child probability." /></th>
+                        <th>4th child <HelpTip Text="Per-child density multiplier for 4-child move-in odds and fourth-child probability." /></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -301,15 +301,15 @@ else
         <summary>Exit Probabilities</summary>
         <div class="controls monte-controls">
             <label>
-                <span>TK-8 exit</span>
+                <span class="label-with-help">TK-8 exit <HelpTip Text="Yearly probability that a TK-8 student leaves the district without a modeled household turnover." /></span>
                 <input type="number" min="0" max="1" step="0.005" @bind="Tk8ExitProbability" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>High school exit</span>
+                <span class="label-with-help">High school exit <HelpTip Text="Yearly probability that a high-school student leaves the district without a modeled household turnover." /></span>
                 <input type="number" min="0" max="1" step="0.005" @bind="HighSchoolExitProbability" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Special ed exit</span>
+                <span class="label-with-help">Special ed exit <HelpTip Text="Yearly probability that a special-program student leaves the modeled district/program population." /></span>
                 <input type="number" min="0" max="1" step="0.005" @bind="SpecialExitProbability" @bind:after="RunValidationAsync" />
             </label>
         </div>
@@ -318,11 +318,11 @@ else
         <summary>Other Settings</summary>
         <div class="controls monte-controls">
             <label>
-                <span>Special ed probability</span>
+                <span class="label-with-help">Special ed probability <HelpTip Text="Probability assigned to each child for special-program status when that child is created or moved in." /></span>
                 <input type="number" min="0" max="1" step="0.001" @bind="SpecialEducationProbability" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Same school year</span>
+                <span class="label-with-help">Same school year <HelpTip Text="Probability that a newly built home contributes students in its build year instead of starting the next school year." /></span>
                 <input type="number" min="0" max="1" step="0.005" @bind="SameSchoolYearProbability" @bind:after="RunValidationAsync" />
             </label>
         </div>
@@ -344,10 +344,10 @@ else
             <table class="scenario-homes-table">
                 <thead>
                     <tr>
-                        <th>Neighborhood</th>
-                        <th>Density</th>
-                        <th>Built year</th>
-                        <th>Homes</th>
+                        <th><span class="label-with-help">Neighborhood <HelpTip Text="Residence grid/village receiving the additional scenario homes." /></span></th>
+                        <th><span class="label-with-help">Density <HelpTip Text="Zoning density bucket for the added homes. Density changes move-in and birth probabilities." /></span></th>
+                        <th><span class="label-with-help">Built year <HelpTip Text="School year when the added homes become available. Same-school-year probability decides whether students appear in this year or the next." /></span></th>
+                        <th><span class="label-with-help">Homes <HelpTip Text="Additional dwelling units. Rows with the same neighborhood, density, and built year are added together." /></span></th>
                         <th></th>
                     </tr>
                 </thead>
@@ -396,39 +396,39 @@ else
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="controls monte-controls">
             <label>
-                <span>Total score weight</span>
+                <span class="label-with-help">Total score weight <HelpTip Text="Relative importance of district total error in the combined validation/optimizer score. Score weights are normalized together." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreTotalWeight" @oninput="value => ScoreTotalWeight = ParseInputDouble(value, ScoreTotalWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[0])</output></span>
             </label>
             <label>
-                <span>Grid score weight</span>
+                <span class="label-with-help">Grid score weight <HelpTip Text="Relative importance of per-neighborhood/grid error in the combined validation/optimizer score." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreGridWeight" @oninput="value => ScoreGridWeight = ParseInputDouble(value, ScoreGridWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[1])</output></span>
             </label>
             <label>
-                <span>Grade score weight</span>
+                <span class="label-with-help">Grade score weight <HelpTip Text="Relative importance of grade-by-grade error in the combined validation/optimizer score." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreGradeWeight" @oninput="value => ScoreGradeWeight = ParseInputDouble(value, ScoreGradeWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[2])</output></span>
             </label>
             <label>
-                <span>Grade smoothing window</span>
+                <span class="label-with-help">Grade smoothing window <HelpTip Text="Allows grade validation to match nearby cohort years within plus/minus this window. This softens timing noise from build dates and enrollment reporting." /></span>
                 <input type="number" min="0" max="4" step="1" @bind="GradeSmoothingWindow" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>HS total score weight</span>
+                <span class="label-with-help">HS total score weight <HelpTip Text="Relative importance of total high-school enrollment error. This helps tune the model for MHHS planning." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreHighSchoolTotalWeight" @oninput="value => ScoreHighSchoolTotalWeight = ParseInputDouble(value, ScoreHighSchoolTotalWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[3])</output></span>
             </label>
             <label>
-                <span>HS grade score weight</span>
+                <span class="label-with-help">HS grade score weight <HelpTip Text="Relative importance of high-school grade-by-grade error, separate from the overall grade score." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreHighSchoolGradeWeight" @oninput="value => ScoreHighSchoolGradeWeight = ParseInputDouble(value, ScoreHighSchoolGradeWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[4])</output></span>
             </label>
             <label>
-                <span>Year weight slope</span>
+                <span class="label-with-help">Year weight slope <HelpTip Text="How quickly later validation years receive more score weight after the start year. Higher values emphasize accumulated forecast accuracy." /></span>
                 <input type="number" min="0" step="0.05" @bind="YearWeightSlope" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Year weight cap</span>
+                <span class="label-with-help">Year weight cap <HelpTip Text="Maximum multiplier from year weighting. This prevents later years from dominating the score completely." /></span>
                 <input type="number" min="0.01" step="0.1" @bind="YearWeightCap" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span>Anchor year weight</span>
+                <span class="label-with-help">Anchor year weight <HelpTip Text="Score multiplier for the anchor/start year when actual data exists. It is usually lower because that year can be initialized from actual counts." /></span>
                 <input type="number" min="0" step="0.05" @bind="AnchorYearWeight" @bind:after="RunValidationAsync" />
             </label>
         </div>

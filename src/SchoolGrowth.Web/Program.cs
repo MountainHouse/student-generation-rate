@@ -23,6 +23,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 var dataRoot = ResolveDataRoot(app.Environment.ContentRootPath);
 var generatedDataRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot", "data");
+var blazorGeneratedWwwroot = ResolveBlazorGeneratedWwwroot(app.Environment.ContentRootPath, AppContext.BaseDirectory);
 var store = EnrollmentData.Load(dataRoot);
 var model = EnrollmentModel.Calibrate(store);
 var monteCarloModel = new MonteCarloEnrollmentModel(store);
@@ -37,6 +38,13 @@ if (enableCrossOriginIsolationHeaders)
         context.Response.Headers["Cross-Origin-Embedder-Policy"] = "require-corp";
         context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
         await next();
+    });
+}
+if (blazorGeneratedWwwroot is not null)
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(blazorGeneratedWwwroot)
     });
 }
 app.UseBlazorFrameworkFiles();
@@ -107,4 +115,25 @@ static string ResolveDataRoot(string contentRoot)
     return candidates
         .Select(Path.GetFullPath)
         .First(path => File.Exists(Path.Combine(path, "homes.csv")));
+}
+
+static string? ResolveBlazorGeneratedWwwroot(string contentRoot, string baseDirectory)
+{
+    var targetFramework = Path.GetFileName(Path.GetFullPath(baseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+    var configuration = Directory.GetParent(Path.GetFullPath(baseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)))?.Name;
+    if (string.IsNullOrWhiteSpace(configuration) || string.IsNullOrWhiteSpace(targetFramework))
+    {
+        return null;
+    }
+
+    var candidate = Path.GetFullPath(Path.Combine(
+        contentRoot,
+        "..",
+        "SchoolGrowth.Blazor",
+        "bin",
+        configuration,
+        targetFramework,
+        "wwwroot"));
+
+    return Directory.Exists(candidate) ? candidate : null;
 }
