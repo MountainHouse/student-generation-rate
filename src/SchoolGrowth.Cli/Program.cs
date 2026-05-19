@@ -509,8 +509,16 @@ static IEnumerable<OptimizeVariable> BuildOptimizeVariables(CliOptions options)
         0.10,
         0.80,
         1.40,
-        p => p.DensityLowMediumFactor,
-        (p, value) => p with { DensityLowMediumFactor = value });
+        p => p.DensityLowFactor,
+        (p, value) => p with { DensityLowFactor = value });
+
+    yield return new OptimizeVariable(
+        "density-medium",
+        0.10,
+        0.80,
+        1.40,
+        p => p.DensityMediumFactor,
+        (p, value) => p with { DensityMediumFactor = value });
 
     yield return new OptimizeVariable(
         "density-rmh",
@@ -528,15 +536,22 @@ static IEnumerable<OptimizeVariable> BuildOptimizeVariables(CliOptions options)
         p => p.DensityHighFactor,
         (p, value) => p with { DensityHighFactor = value });
 
-    yield return new OptimizeVariable("low-1st", 0.10, 0.80, 1.50, p => p.DensityLowMediumFirstChildFactor, (p, value) => p with { DensityLowMediumFirstChildFactor = value });
-    yield return new OptimizeVariable("low-2nd", 0.10, 0.80, 1.50, p => p.DensityLowMediumSecondChildFactor, (p, value) => p with { DensityLowMediumSecondChildFactor = value });
-    yield return new OptimizeVariable("low-3rd", 0.10, 0.50, 1.50, p => p.DensityLowMediumThirdChildFactor, (p, value) => p with { DensityLowMediumThirdChildFactor = value });
+    yield return new OptimizeVariable("low-1st", 0.10, 0.80, 1.50, p => p.DensityLowFirstChildFactor, (p, value) => p with { DensityLowFirstChildFactor = value });
+    yield return new OptimizeVariable("low-2nd", 0.10, 0.80, 1.50, p => p.DensityLowSecondChildFactor, (p, value) => p with { DensityLowSecondChildFactor = value });
+    yield return new OptimizeVariable("low-3rd", 0.10, 0.50, 1.50, p => p.DensityLowThirdChildFactor, (p, value) => p with { DensityLowThirdChildFactor = value });
+    yield return new OptimizeVariable("low-4th", 0.05, 0.00, 1.50, p => p.DensityLowFourthChildFactor, (p, value) => p with { DensityLowFourthChildFactor = value });
+    yield return new OptimizeVariable("medium-1st", 0.10, 0.80, 1.50, p => p.DensityMediumFirstChildFactor, (p, value) => p with { DensityMediumFirstChildFactor = value });
+    yield return new OptimizeVariable("medium-2nd", 0.10, 0.80, 1.50, p => p.DensityMediumSecondChildFactor, (p, value) => p with { DensityMediumSecondChildFactor = value });
+    yield return new OptimizeVariable("medium-3rd", 0.10, 0.50, 1.50, p => p.DensityMediumThirdChildFactor, (p, value) => p with { DensityMediumThirdChildFactor = value });
+    yield return new OptimizeVariable("medium-4th", 0.05, 0.00, 1.50, p => p.DensityMediumFourthChildFactor, (p, value) => p with { DensityMediumFourthChildFactor = value });
     yield return new OptimizeVariable("rmh-1st", 0.10, 0.70, 1.30, p => p.DensityMediumHighFirstChildFactor, (p, value) => p with { DensityMediumHighFirstChildFactor = value });
     yield return new OptimizeVariable("rmh-2nd", 0.10, 0.40, 1.20, p => p.DensityMediumHighSecondChildFactor, (p, value) => p with { DensityMediumHighSecondChildFactor = value });
     yield return new OptimizeVariable("rmh-3rd", 0.05, 0.00, 0.80, p => p.DensityMediumHighThirdChildFactor, (p, value) => p with { DensityMediumHighThirdChildFactor = value });
+    yield return new OptimizeVariable("rmh-4th", 0.05, 0.00, 0.80, p => p.DensityMediumHighFourthChildFactor, (p, value) => p with { DensityMediumHighFourthChildFactor = value });
     yield return new OptimizeVariable("high-1st", 0.10, 0.60, 1.30, p => p.DensityHighFirstChildFactor, (p, value) => p with { DensityHighFirstChildFactor = value });
     yield return new OptimizeVariable("high-2nd", 0.10, 0.20, 1.20, p => p.DensityHighSecondChildFactor, (p, value) => p with { DensityHighSecondChildFactor = value });
     yield return new OptimizeVariable("high-3rd", 0.05, 0.00, 0.60, p => p.DensityHighThirdChildFactor, (p, value) => p with { DensityHighThirdChildFactor = value });
+    yield return new OptimizeVariable("high-4th", 0.05, 0.00, 0.60, p => p.DensityHighFourthChildFactor, (p, value) => p with { DensityHighFourthChildFactor = value });
 }
 
 static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails = false)
@@ -548,10 +563,11 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     Console.WriteLine($"  grade win:  +/-{result.Parameters.GradeSmoothingWindow:N0} years");
     Console.WriteLine($"  score wts:  total {result.Parameters.ScoreTotalWeight:N2}, grid {result.Parameters.ScoreGridWeight:N2}, grade {result.Parameters.ScoreGradeWeight:N2}, HS total {result.Parameters.ScoreHighSchoolTotalWeight:N2}, HS grade {result.Parameters.ScoreHighSchoolGradeWeight:N2}");
     Console.WriteLine($"  year wts:   anchor {result.Parameters.AnchorYearWeight:N2}, slope {result.Parameters.YearWeightSlope:N2}/yr, cap {result.Parameters.YearWeightCap:N2}");
-    Console.WriteLine($"  density:    low/med {result.Parameters.DensityLowMediumFactor:N2}, med-high {result.Parameters.DensityMediumHighFactor:N2}, high {result.Parameters.DensityHighFactor:N2}");
-    Console.WriteLine($"  density 1:  low/med {result.Parameters.DensityLowMediumFirstChildFactor:N2}, med-high {result.Parameters.DensityMediumHighFirstChildFactor:N2}, high {result.Parameters.DensityHighFirstChildFactor:N2}");
-    Console.WriteLine($"  density 2:  low/med {result.Parameters.DensityLowMediumSecondChildFactor:N2}, med-high {result.Parameters.DensityMediumHighSecondChildFactor:N2}, high {result.Parameters.DensityHighSecondChildFactor:N2}");
-    Console.WriteLine($"  density 3:  low/med {result.Parameters.DensityLowMediumThirdChildFactor:N2}, med-high {result.Parameters.DensityMediumHighThirdChildFactor:N2}, high {result.Parameters.DensityHighThirdChildFactor:N2}");
+    Console.WriteLine($"  density:    low {result.Parameters.DensityLowFactor:N2}, medium {result.Parameters.DensityMediumFactor:N2}, med-high {result.Parameters.DensityMediumHighFactor:N2}, high {result.Parameters.DensityHighFactor:N2}");
+    Console.WriteLine($"  density 1:  low {result.Parameters.DensityLowFirstChildFactor:N2}, medium {result.Parameters.DensityMediumFirstChildFactor:N2}, med-high {result.Parameters.DensityMediumHighFirstChildFactor:N2}, high {result.Parameters.DensityHighFirstChildFactor:N2}");
+    Console.WriteLine($"  density 2:  low {result.Parameters.DensityLowSecondChildFactor:N2}, medium {result.Parameters.DensityMediumSecondChildFactor:N2}, med-high {result.Parameters.DensityMediumHighSecondChildFactor:N2}, high {result.Parameters.DensityHighSecondChildFactor:N2}");
+    Console.WriteLine($"  density 3:  low {result.Parameters.DensityLowThirdChildFactor:N2}, medium {result.Parameters.DensityMediumThirdChildFactor:N2}, med-high {result.Parameters.DensityMediumHighThirdChildFactor:N2}, high {result.Parameters.DensityHighThirdChildFactor:N2}");
+    Console.WriteLine($"  density 4:  low {result.Parameters.DensityLowFourthChildFactor:N2}, medium {result.Parameters.DensityMediumFourthChildFactor:N2}, med-high {result.Parameters.DensityMediumHighFourthChildFactor:N2}, high {result.Parameters.DensityHighFourthChildFactor:N2}");
     Console.WriteLine($"  turnover:   {result.Parameters.OwnershipChangeProbability:P2}");
     Console.WriteLine($"  0 child:    {result.Parameters.MoveInZeroChildShare:P2}");
     Console.WriteLine($"  1 child:    {result.Parameters.MoveInOneChildShare:P2}");
@@ -667,7 +683,7 @@ static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> resu
     }
 
     using var writer = new StreamWriter(path);
-    writer.WriteLine("score,total_mape,grid_year_mape,grade_total_mape,grade_year_mape,hs_total_mape,hs_grade_mape,total_mae,grid_year_mae,grade_total_mae,grade_year_mae,hs_total_mae,hs_grade_mae,runs,seed,parallelism,grade_smoothing_window,score_total_weight,score_grid_weight,score_grade_weight,score_hs_total_weight,score_hs_grade_weight,anchor_year_weight,year_weight_slope,year_weight_cap,density_low_medium,density_medium_high,density_high,turnover,zero_child_share,one_child_share,two_child_share,three_child_share,four_child_share,student_exit,annual_first_birth,annual_second_birth,annual_third_birth,annual_fourth_plus_birth,tk8_exit,high_exit,special_exit,special_education_probability,same_school_year,preschool_weight,tkk_weight,elementary_weight,middle_weight,high_weight,postschool_weight");
+    writer.WriteLine("score,total_mape,grid_year_mape,grade_total_mape,grade_year_mape,hs_total_mape,hs_grade_mape,total_mae,grid_year_mae,grade_total_mae,grade_year_mae,hs_total_mae,hs_grade_mae,runs,seed,parallelism,grade_smoothing_window,score_total_weight,score_grid_weight,score_grade_weight,score_hs_total_weight,score_hs_grade_weight,anchor_year_weight,year_weight_slope,year_weight_cap,density_low,density_medium,density_medium_high,density_high,turnover,zero_child_share,one_child_share,two_child_share,three_child_share,four_child_share,student_exit,annual_first_birth,annual_second_birth,annual_third_birth,annual_fourth_plus_birth,tk8_exit,high_exit,special_exit,special_education_probability,same_school_year,preschool_weight,tkk_weight,elementary_weight,middle_weight,high_weight,postschool_weight");
     foreach (var result in results.OrderBy(item => item.CombinedScore))
     {
         var p = result.Parameters;
@@ -697,7 +713,8 @@ static void WriteCsv(string path, IReadOnlyList<MonteCarloValidationResult> resu
             p.AnchorYearWeight,
             p.YearWeightSlope,
             p.YearWeightCap,
-            p.DensityLowMediumFactor,
+            p.DensityLowFactor,
+            p.DensityMediumFactor,
             p.DensityMediumHighFactor,
             p.DensityHighFactor,
             p.OwnershipChangeProbability,
@@ -773,18 +790,26 @@ Common options:
   --anchor-weight <n>  Weight for anchored start year when actual data exists, default 0.25
   --year-weight-slope <n> Extra validation weight per year after start, default 0.15
   --year-weight-cap <n> Maximum validation year weight, default 2.00
-  --density-low <n>   Low/medium density student factor, default 1.00
+  --density-low <n>   Low density student factor, default 1.00
+  --density-medium <n> Medium density student factor, default 1.00
   --density-rmh <n>   Medium-high density student factor, default 0.90
   --density-high <n>  High density student factor, default 0.95
-  --density-low-1st <n>  Low/medium 1st-child density factor, default 1.00
-  --density-low-2nd <n>  Low/medium 2nd-child density factor, default 1.00
-  --density-low-3rd <n>  Low/medium 3rd-child density factor, default 1.00
+  --density-low-1st <n>  Low 1st-child density factor, default 1.00
+  --density-low-2nd <n>  Low 2nd-child density factor, default 1.00
+  --density-low-3rd <n>  Low 3rd-child density factor, default 1.00
+  --density-low-4th <n>  Low 4th-child density factor, default 1.00
+  --density-medium-1st <n> Medium 1st-child density factor, default 1.00
+  --density-medium-2nd <n> Medium 2nd-child density factor, default 1.00
+  --density-medium-3rd <n> Medium 3rd-child density factor, default 1.00
+  --density-medium-4th <n> Medium 4th-child density factor, default 1.00
   --density-rmh-1st <n>  Medium-high 1st-child density factor, default 1.00
   --density-rmh-2nd <n>  Medium-high 2nd-child density factor, default 1.00
   --density-rmh-3rd <n>  Medium-high 3rd-child density factor, default 1.00
+  --density-rmh-4th <n>  Medium-high 4th-child density factor, default 1.00
   --density-high-1st <n> High 1st-child density factor, default 1.00
   --density-high-2nd <n> High 2nd-child density factor, default 1.00
   --density-high-3rd <n> High 3rd-child density factor, default 0.59
+  --density-high-4th <n> High 4th-child density factor, default 1.00
   --seed <n>          Random seed, default 2026
   --turnover <p>      Household reset probability, default 0.05
   --zero-child <p>    Move-in share with 0 children, default 0.1109
@@ -933,17 +958,25 @@ sealed class CliOptions
                 ReadDouble(values, "score-hs-total", 2.0),
                 ReadDouble(values, "score-hs-grade", 1.0),
                 ReadDouble(values, "density-low", 1.0),
+                ReadDouble(values, "density-medium", 1.0),
                 ReadDouble(values, "density-rmh", 0.90),
                 ReadDouble(values, "density-high", 0.95),
                 ReadDouble(values, "density-low-1st", 1.0),
                 ReadDouble(values, "density-low-2nd", 1.0),
                 ReadDouble(values, "density-low-3rd", 1.0),
+                ReadDouble(values, "density-low-4th", 1.0),
+                ReadDouble(values, "density-medium-1st", 1.0),
+                ReadDouble(values, "density-medium-2nd", 1.0),
+                ReadDouble(values, "density-medium-3rd", 1.0),
+                ReadDouble(values, "density-medium-4th", 1.0),
                 ReadDouble(values, "density-rmh-1st", 1.0),
                 ReadDouble(values, "density-rmh-2nd", 1.0),
                 ReadDouble(values, "density-rmh-3rd", 1.0),
+                ReadDouble(values, "density-rmh-4th", 1.0),
                 ReadDouble(values, "density-high-1st", 1.0),
                 ReadDouble(values, "density-high-2nd", 1.0),
                 ReadDouble(values, "density-high-3rd", 0.59),
+                ReadDouble(values, "density-high-4th", 1.0),
                 ReadDouble(values, "anchor-weight", 0.25),
                 ReadDouble(values, "year-weight-slope", 0.15),
                 ReadDouble(values, "year-weight-cap", 2.0)),

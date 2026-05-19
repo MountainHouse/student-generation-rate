@@ -241,8 +241,12 @@ else
         <summary>Density Factors</summary>
         <div class="controls monte-controls">
         <label>
-            <span>Low/medium factor</span>
-            <input type="number" min="0" step="0.01" value="@DensityLowMediumFactor" @oninput="value => DensityLowMediumFactor = ParseInputDouble(value, DensityLowMediumFactor)" @onchange="RunValidationAsync" />
+            <span>Low factor</span>
+            <input type="number" min="0" step="0.01" value="@DensityLowFactor" @oninput="value => DensityLowFactor = ParseInputDouble(value, DensityLowFactor)" @onchange="RunValidationAsync" />
+        </label>
+        <label>
+            <span>Medium factor</span>
+            <input type="number" min="0" step="0.01" value="@DensityMediumFactor" @oninput="value => DensityMediumFactor = ParseInputDouble(value, DensityMediumFactor)" @onchange="RunValidationAsync" />
         </label>
         <label>
             <span>Medium-high factor</span>
@@ -290,6 +294,7 @@ else
                                     }
                                     else
                                     {
+                                        <input type="number" min="0" step="0.01" value="@row.FourthFactor.Value" @oninput="value => row.FourthFactor.Value = ParseInputDouble(value, row.FourthFactor.Value)" @onchange="RunValidationAsync" />
                                     }
                                     <div class="density-effective">
                                         <span>Move-in @FormatNormalized(child.MoveInShare)</span>
@@ -1209,7 +1214,7 @@ else
         <p><strong>Special grids:</strong> Lammersville and Inter-Districts use fair grade shares; MHESD uses grades 9-12 only.</p>
         <p><strong>Ownership change:</strong> each home has a yearly chance to replace its household, with lower early-year turnover and forced turnover by year 50.</p>
         <p><strong>Children at move-in:</strong> the model draws a household child count from explicit 0, 1, 2, 3, and 4 child shares. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
-        <p><strong>Density:</strong> low/medium, medium-high, and high density homes apply common density factors plus child-number factors for 1st, 2nd, and 3rd children.</p>
+        <p><strong>Density:</strong> low, medium, medium-high, and high density homes apply common density factors plus child-number factors for 1st, 2nd, 3rd, and 4th+ children.</p>
         <p><strong>Special education:</strong> every child has a probability of receiving a special education attribute. Special education children keep their underlying age/grade for aging, but are counted in the Sp. Ed. reporting bucket while enrolled.</p>
         <p><strong>Build timing:</strong> each newly built home joins either the same school year or the next school year, controlled by the same-school-year probability.</p>
         <p><strong>New children after move-in:</strong> annual 1st, 2nd, 3rd, and 4th+ child probabilities control births/new preschool children after the household arrives.</p>
@@ -1404,18 +1409,26 @@ else
     private double AnchorYearWeight { get; set; } = DefaultParameters.AnchorYearWeight;
     private double YearWeightSlope { get; set; } = DefaultParameters.YearWeightSlope;
     private double YearWeightCap { get; set; } = DefaultParameters.YearWeightCap;
-    private double DensityLowMediumFactor { get; set; } = DefaultParameters.DensityLowMediumFactor;
+    private double DensityLowFactor { get; set; } = DefaultParameters.DensityLowFactor;
+    private double DensityMediumFactor { get; set; } = DefaultParameters.DensityMediumFactor;
     private double DensityMediumHighFactor { get; set; } = DefaultParameters.DensityMediumHighFactor;
     private double DensityHighFactor { get; set; } = DefaultParameters.DensityHighFactor;
-    private double DensityLowMediumFirstChildFactor { get; set; } = DefaultParameters.DensityLowMediumFirstChildFactor;
-    private double DensityLowMediumSecondChildFactor { get; set; } = DefaultParameters.DensityLowMediumSecondChildFactor;
-    private double DensityLowMediumThirdChildFactor { get; set; } = DefaultParameters.DensityLowMediumThirdChildFactor;
+    private double DensityLowFirstChildFactor { get; set; } = DefaultParameters.DensityLowFirstChildFactor;
+    private double DensityLowSecondChildFactor { get; set; } = DefaultParameters.DensityLowSecondChildFactor;
+    private double DensityLowThirdChildFactor { get; set; } = DefaultParameters.DensityLowThirdChildFactor;
+    private double DensityLowFourthChildFactor { get; set; } = DefaultParameters.DensityLowFourthChildFactor;
+    private double DensityMediumFirstChildFactor { get; set; } = DefaultParameters.DensityMediumFirstChildFactor;
+    private double DensityMediumSecondChildFactor { get; set; } = DefaultParameters.DensityMediumSecondChildFactor;
+    private double DensityMediumThirdChildFactor { get; set; } = DefaultParameters.DensityMediumThirdChildFactor;
+    private double DensityMediumFourthChildFactor { get; set; } = DefaultParameters.DensityMediumFourthChildFactor;
     private double DensityMediumHighFirstChildFactor { get; set; } = DefaultParameters.DensityMediumHighFirstChildFactor;
     private double DensityMediumHighSecondChildFactor { get; set; } = DefaultParameters.DensityMediumHighSecondChildFactor;
     private double DensityMediumHighThirdChildFactor { get; set; } = DefaultParameters.DensityMediumHighThirdChildFactor;
+    private double DensityMediumHighFourthChildFactor { get; set; } = DefaultParameters.DensityMediumHighFourthChildFactor;
     private double DensityHighFirstChildFactor { get; set; } = DefaultParameters.DensityHighFirstChildFactor;
     private double DensityHighSecondChildFactor { get; set; } = DefaultParameters.DensityHighSecondChildFactor;
     private double DensityHighThirdChildFactor { get; set; } = DefaultParameters.DensityHighThirdChildFactor;
+    private double DensityHighFourthChildFactor { get; set; } = DefaultParameters.DensityHighFourthChildFactor;
     private string OwnershipCandidatesText { get; set; } = "0.02,0.04,0.06";
     private string ZeroChildCandidatesText { get; set; } = "0.03,0.05,0.08";
     private string OneChildCandidatesText { get; set; } = "0.25,0.30,0.35";
@@ -1566,23 +1579,33 @@ else
     private IReadOnlyList<DensityEffectRow> DensityEffectRows =>
     [
         BuildDensityEffectRow(
-            "Low/Medium",
+            "Low",
             "RL",
-            new DensityFactorBinding(() => DensityLowMediumFirstChildFactor, value => DensityLowMediumFirstChildFactor = value),
-            new DensityFactorBinding(() => DensityLowMediumSecondChildFactor, value => DensityLowMediumSecondChildFactor = value),
-            new DensityFactorBinding(() => DensityLowMediumThirdChildFactor, value => DensityLowMediumThirdChildFactor = value)),
+            new DensityFactorBinding(() => DensityLowFirstChildFactor, value => DensityLowFirstChildFactor = value),
+            new DensityFactorBinding(() => DensityLowSecondChildFactor, value => DensityLowSecondChildFactor = value),
+            new DensityFactorBinding(() => DensityLowThirdChildFactor, value => DensityLowThirdChildFactor = value),
+            new DensityFactorBinding(() => DensityLowFourthChildFactor, value => DensityLowFourthChildFactor = value)),
+        BuildDensityEffectRow(
+            "Medium",
+            "RM",
+            new DensityFactorBinding(() => DensityMediumFirstChildFactor, value => DensityMediumFirstChildFactor = value),
+            new DensityFactorBinding(() => DensityMediumSecondChildFactor, value => DensityMediumSecondChildFactor = value),
+            new DensityFactorBinding(() => DensityMediumThirdChildFactor, value => DensityMediumThirdChildFactor = value),
+            new DensityFactorBinding(() => DensityMediumFourthChildFactor, value => DensityMediumFourthChildFactor = value)),
         BuildDensityEffectRow(
             "Medium-High",
             "RMH",
             new DensityFactorBinding(() => DensityMediumHighFirstChildFactor, value => DensityMediumHighFirstChildFactor = value),
             new DensityFactorBinding(() => DensityMediumHighSecondChildFactor, value => DensityMediumHighSecondChildFactor = value),
-            new DensityFactorBinding(() => DensityMediumHighThirdChildFactor, value => DensityMediumHighThirdChildFactor = value)),
+            new DensityFactorBinding(() => DensityMediumHighThirdChildFactor, value => DensityMediumHighThirdChildFactor = value),
+            new DensityFactorBinding(() => DensityMediumHighFourthChildFactor, value => DensityMediumHighFourthChildFactor = value)),
         BuildDensityEffectRow(
             "High",
             "RH",
             new DensityFactorBinding(() => DensityHighFirstChildFactor, value => DensityHighFirstChildFactor = value),
             new DensityFactorBinding(() => DensityHighSecondChildFactor, value => DensityHighSecondChildFactor = value),
-            new DensityFactorBinding(() => DensityHighThirdChildFactor, value => DensityHighThirdChildFactor = value))
+            new DensityFactorBinding(() => DensityHighThirdChildFactor, value => DensityHighThirdChildFactor = value),
+            new DensityFactorBinding(() => DensityHighFourthChildFactor, value => DensityHighFourthChildFactor = value))
     ];
 
     private bool IsToolActive(string id) => ActiveToolIds.Contains(id);
@@ -2407,18 +2430,26 @@ else
         AnchorYearWeight = parameters.AnchorYearWeight;
         YearWeightSlope = parameters.YearWeightSlope;
         YearWeightCap = parameters.YearWeightCap;
-        DensityLowMediumFactor = parameters.DensityLowMediumFactor;
+        DensityLowFactor = parameters.DensityLowFactor;
+        DensityMediumFactor = parameters.DensityMediumFactor;
         DensityMediumHighFactor = parameters.DensityMediumHighFactor;
         DensityHighFactor = parameters.DensityHighFactor;
-        DensityLowMediumFirstChildFactor = parameters.DensityLowMediumFirstChildFactor;
-        DensityLowMediumSecondChildFactor = parameters.DensityLowMediumSecondChildFactor;
-        DensityLowMediumThirdChildFactor = parameters.DensityLowMediumThirdChildFactor;
+        DensityLowFirstChildFactor = parameters.DensityLowFirstChildFactor;
+        DensityLowSecondChildFactor = parameters.DensityLowSecondChildFactor;
+        DensityLowThirdChildFactor = parameters.DensityLowThirdChildFactor;
+        DensityLowFourthChildFactor = parameters.DensityLowFourthChildFactor;
+        DensityMediumFirstChildFactor = parameters.DensityMediumFirstChildFactor;
+        DensityMediumSecondChildFactor = parameters.DensityMediumSecondChildFactor;
+        DensityMediumThirdChildFactor = parameters.DensityMediumThirdChildFactor;
+        DensityMediumFourthChildFactor = parameters.DensityMediumFourthChildFactor;
         DensityMediumHighFirstChildFactor = parameters.DensityMediumHighFirstChildFactor;
         DensityMediumHighSecondChildFactor = parameters.DensityMediumHighSecondChildFactor;
         DensityMediumHighThirdChildFactor = parameters.DensityMediumHighThirdChildFactor;
+        DensityMediumHighFourthChildFactor = parameters.DensityMediumHighFourthChildFactor;
         DensityHighFirstChildFactor = parameters.DensityHighFirstChildFactor;
         DensityHighSecondChildFactor = parameters.DensityHighSecondChildFactor;
         DensityHighThirdChildFactor = parameters.DensityHighThirdChildFactor;
+        DensityHighFourthChildFactor = parameters.DensityHighFourthChildFactor;
     }
 
     private MonteCarloParameters CurrentParameters()
@@ -2458,18 +2489,26 @@ else
             AnchorYearWeight: AnchorYearWeight,
             YearWeightSlope: YearWeightSlope,
             YearWeightCap: YearWeightCap,
-            DensityLowMediumFactor: DensityLowMediumFactor,
+            DensityLowFactor: DensityLowFactor,
+            DensityMediumFactor: DensityMediumFactor,
             DensityMediumHighFactor: DensityMediumHighFactor,
             DensityHighFactor: DensityHighFactor,
-            DensityLowMediumFirstChildFactor: DensityLowMediumFirstChildFactor,
-            DensityLowMediumSecondChildFactor: DensityLowMediumSecondChildFactor,
-            DensityLowMediumThirdChildFactor: DensityLowMediumThirdChildFactor,
+            DensityLowFirstChildFactor: DensityLowFirstChildFactor,
+            DensityLowSecondChildFactor: DensityLowSecondChildFactor,
+            DensityLowThirdChildFactor: DensityLowThirdChildFactor,
+            DensityLowFourthChildFactor: DensityLowFourthChildFactor,
+            DensityMediumFirstChildFactor: DensityMediumFirstChildFactor,
+            DensityMediumSecondChildFactor: DensityMediumSecondChildFactor,
+            DensityMediumThirdChildFactor: DensityMediumThirdChildFactor,
+            DensityMediumFourthChildFactor: DensityMediumFourthChildFactor,
             DensityMediumHighFirstChildFactor: DensityMediumHighFirstChildFactor,
             DensityMediumHighSecondChildFactor: DensityMediumHighSecondChildFactor,
             DensityMediumHighThirdChildFactor: DensityMediumHighThirdChildFactor,
+            DensityMediumHighFourthChildFactor: DensityMediumHighFourthChildFactor,
             DensityHighFirstChildFactor: DensityHighFirstChildFactor,
             DensityHighSecondChildFactor: DensityHighSecondChildFactor,
-            DensityHighThirdChildFactor: DensityHighThirdChildFactor);
+            DensityHighThirdChildFactor: DensityHighThirdChildFactor,
+            DensityHighFourthChildFactor: DensityHighFourthChildFactor);
     }
 
     private IReadOnlyList<ScenarioHome> BuildScenarioHomes()
@@ -5002,13 +5041,15 @@ else
         string density,
         DensityFactorBinding firstFactor,
         DensityFactorBinding secondFactor,
-        DensityFactorBinding thirdFactor)
+        DensityFactorBinding thirdFactor,
+        DensityFactorBinding fourthFactor)
     {
         return new DensityEffectRow(
             label,
             firstFactor,
             secondFactor,
             thirdFactor,
+            fourthFactor,
             Enumerable.Range(0, 5)
                 .Select(child => new DensityChildEffect(
                     child,
@@ -5091,9 +5132,11 @@ else
     {
         return NormalizeDensity(density) switch
         {
+            "RL" => DensityLowFactor,
+            "RM" => DensityMediumFactor,
             "RMH" => DensityMediumHighFactor,
             "RH" => DensityHighFactor,
-            _ => DensityLowMediumFactor
+            _ => DensityLowFactor
         };
     }
 
@@ -5101,16 +5144,26 @@ else
     {
         return (NormalizeDensity(density), childNumber) switch
         {
+            ("RL", <= 1) => DensityLowFirstChildFactor,
+            ("RL", 2) => DensityLowSecondChildFactor,
+            ("RL", 3) => DensityLowThirdChildFactor,
+            ("RL", _) => DensityLowFourthChildFactor,
+            ("RM", <= 1) => DensityMediumFirstChildFactor,
+            ("RM", 2) => DensityMediumSecondChildFactor,
+            ("RM", 3) => DensityMediumThirdChildFactor,
+            ("RM", _) => DensityMediumFourthChildFactor,
             ("RMH", <= 1) => DensityMediumHighFirstChildFactor,
             ("RMH", 2) => DensityMediumHighSecondChildFactor,
             ("RMH", 3) => DensityMediumHighThirdChildFactor,
+            ("RMH", _) => DensityMediumHighFourthChildFactor,
             ("RH", <= 1) => DensityHighFirstChildFactor,
             ("RH", 2) => DensityHighSecondChildFactor,
             ("RH", 3) => DensityHighThirdChildFactor,
-            (_, <= 1) => DensityLowMediumFirstChildFactor,
-            (_, 2) => DensityLowMediumSecondChildFactor,
-            (_, 3) => DensityLowMediumThirdChildFactor,
-            _ => 1.0
+            ("RH", _) => DensityHighFourthChildFactor,
+            (_, <= 1) => DensityLowFirstChildFactor,
+            (_, 2) => DensityLowSecondChildFactor,
+            (_, 3) => DensityLowThirdChildFactor,
+            _ => DensityLowFourthChildFactor
         };
     }
 
@@ -5301,6 +5354,7 @@ else
         DensityFactorBinding FirstFactor,
         DensityFactorBinding SecondFactor,
         DensityFactorBinding ThirdFactor,
+        DensityFactorBinding FourthFactor,
         IReadOnlyList<DensityChildEffect> Children);
 
     private sealed record DensityChildEffect(int ChildNumber, double MoveInShare, double BirthProbability);

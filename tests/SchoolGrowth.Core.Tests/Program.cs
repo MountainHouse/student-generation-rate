@@ -62,7 +62,7 @@ var search = monteCarlo.FindBest(new MonteCarloSearchRequest(
     MoveInOneChildShares: [0.30],
     MoveInTwoChildShares: [0.60],
     MoveInThreeChildShares: [0.05],
-    MoveInFourPlusChildShares: [0.0],
+    MoveInFourChildShares: [0.0],
     StudentExitProbabilities: [0.01, 0.02]));
 
 if (search.Candidates.Count != 4 || search.Best.Comparisons.Count != 2)

@@ -32,18 +32,26 @@ public sealed record MonteCarloParameters(
     double ScoreGradeWeight = 1.0,
     double ScoreHighSchoolTotalWeight = 2.0,
     double ScoreHighSchoolGradeWeight = 1.0,
-    double DensityLowMediumFactor = 1.0,
+    double DensityLowFactor = 1.0,
+    double DensityMediumFactor = 1.0,
     double DensityMediumHighFactor = 0.90,
     double DensityHighFactor = 0.95,
-    double DensityLowMediumFirstChildFactor = 1.0,
-    double DensityLowMediumSecondChildFactor = 1.0,
-    double DensityLowMediumThirdChildFactor = 1.0,
+    double DensityLowFirstChildFactor = 1.0,
+    double DensityLowSecondChildFactor = 1.0,
+    double DensityLowThirdChildFactor = 1.0,
+    double DensityLowFourthChildFactor = 1.0,
+    double DensityMediumFirstChildFactor = 1.0,
+    double DensityMediumSecondChildFactor = 1.0,
+    double DensityMediumThirdChildFactor = 1.0,
+    double DensityMediumFourthChildFactor = 1.0,
     double DensityMediumHighFirstChildFactor = 1.0,
     double DensityMediumHighSecondChildFactor = 1.0,
     double DensityMediumHighThirdChildFactor = 1.0,
+    double DensityMediumHighFourthChildFactor = 1.0,
     double DensityHighFirstChildFactor = 1.0,
     double DensityHighSecondChildFactor = 1.0,
     double DensityHighThirdChildFactor = 0.59,
+    double DensityHighFourthChildFactor = 1.0,
     double AnchorYearWeight = 0.25,
     double YearWeightSlope = 0.15,
     double YearWeightCap = 2.0);
@@ -1362,18 +1370,26 @@ public sealed class MonteCarloEnrollmentModel
             AnchorYearWeight = Math.Clamp(parameters.AnchorYearWeight, 0, 10),
             YearWeightSlope = Math.Clamp(parameters.YearWeightSlope, 0, 10),
             YearWeightCap = Math.Clamp(parameters.YearWeightCap, 0.01, 100),
-            DensityLowMediumFactor = Math.Clamp(parameters.DensityLowMediumFactor, 0.2, 2.0),
+            DensityLowFactor = Math.Clamp(parameters.DensityLowFactor, 0.2, 2.0),
+            DensityMediumFactor = Math.Clamp(parameters.DensityMediumFactor, 0.2, 2.0),
             DensityMediumHighFactor = Math.Clamp(parameters.DensityMediumHighFactor, 0.1, 2.0),
             DensityHighFactor = Math.Clamp(parameters.DensityHighFactor, 0.0, 2.0),
-            DensityLowMediumFirstChildFactor = Math.Clamp(parameters.DensityLowMediumFirstChildFactor, 0.5, 2.0),
-            DensityLowMediumSecondChildFactor = Math.Clamp(parameters.DensityLowMediumSecondChildFactor, 0.5, 2.0),
-            DensityLowMediumThirdChildFactor = Math.Clamp(parameters.DensityLowMediumThirdChildFactor, 0.0, 2.0),
+            DensityLowFirstChildFactor = Math.Clamp(parameters.DensityLowFirstChildFactor, 0.5, 2.0),
+            DensityLowSecondChildFactor = Math.Clamp(parameters.DensityLowSecondChildFactor, 0.5, 2.0),
+            DensityLowThirdChildFactor = Math.Clamp(parameters.DensityLowThirdChildFactor, 0.0, 2.0),
+            DensityLowFourthChildFactor = Math.Clamp(parameters.DensityLowFourthChildFactor, 0.0, 2.0),
+            DensityMediumFirstChildFactor = Math.Clamp(parameters.DensityMediumFirstChildFactor, 0.5, 2.0),
+            DensityMediumSecondChildFactor = Math.Clamp(parameters.DensityMediumSecondChildFactor, 0.5, 2.0),
+            DensityMediumThirdChildFactor = Math.Clamp(parameters.DensityMediumThirdChildFactor, 0.0, 2.0),
+            DensityMediumFourthChildFactor = Math.Clamp(parameters.DensityMediumFourthChildFactor, 0.0, 2.0),
             DensityMediumHighFirstChildFactor = Math.Clamp(parameters.DensityMediumHighFirstChildFactor, 0.2, 2.0),
             DensityMediumHighSecondChildFactor = Math.Clamp(parameters.DensityMediumHighSecondChildFactor, 0.0, 2.0),
             DensityMediumHighThirdChildFactor = Math.Clamp(parameters.DensityMediumHighThirdChildFactor, 0.0, 2.0),
+            DensityMediumHighFourthChildFactor = Math.Clamp(parameters.DensityMediumHighFourthChildFactor, 0.0, 2.0),
             DensityHighFirstChildFactor = Math.Clamp(parameters.DensityHighFirstChildFactor, 0.2, 2.0),
             DensityHighSecondChildFactor = Math.Clamp(parameters.DensityHighSecondChildFactor, 0.0, 2.0),
-            DensityHighThirdChildFactor = Math.Clamp(parameters.DensityHighThirdChildFactor, 0.0, 2.0)
+            DensityHighThirdChildFactor = Math.Clamp(parameters.DensityHighThirdChildFactor, 0.0, 2.0),
+            DensityHighFourthChildFactor = Math.Clamp(parameters.DensityHighFourthChildFactor, 0.0, 2.0)
         };
     }
 
@@ -1566,7 +1582,7 @@ public sealed class MonteCarloEnrollmentModel
             profile.Item1 * multiplier * DensityChildFactor(densityName, 1, parameters),
             profile.Item2 * multiplier * DensityChildFactor(densityName, 2, parameters),
             profile.Item3 * multiplier * DensityChildFactor(densityName, 3, parameters),
-            profile.Item4 * multiplier);
+            profile.Item4 * multiplier * DensityChildFactor(densityName, 4, parameters));
     }
 
     private static double DensityBirthMultiplier(string? density, int nextChildNumber, MonteCarloParameters parameters)
@@ -1591,9 +1607,11 @@ public sealed class MonteCarloEnrollmentModel
     {
         return density switch
         {
+            "RL" => parameters.DensityLowFactor,
+            "RM" => parameters.DensityMediumFactor,
             "RMH" => parameters.DensityMediumHighFactor,
             "RH" => parameters.DensityHighFactor,
-            _ => parameters.DensityLowMediumFactor
+            _ => parameters.DensityLowFactor
         };
     }
 
@@ -1601,16 +1619,26 @@ public sealed class MonteCarloEnrollmentModel
     {
         return (density, childNumber) switch
         {
+            ("RL", <= 1) => parameters.DensityLowFirstChildFactor,
+            ("RL", 2) => parameters.DensityLowSecondChildFactor,
+            ("RL", 3) => parameters.DensityLowThirdChildFactor,
+            ("RL", _) => parameters.DensityLowFourthChildFactor,
+            ("RM", <= 1) => parameters.DensityMediumFirstChildFactor,
+            ("RM", 2) => parameters.DensityMediumSecondChildFactor,
+            ("RM", 3) => parameters.DensityMediumThirdChildFactor,
+            ("RM", _) => parameters.DensityMediumFourthChildFactor,
             ("RMH", <= 1) => parameters.DensityMediumHighFirstChildFactor,
             ("RMH", 2) => parameters.DensityMediumHighSecondChildFactor,
             ("RMH", 3) => parameters.DensityMediumHighThirdChildFactor,
+            ("RMH", _) => parameters.DensityMediumHighFourthChildFactor,
             ("RH", <= 1) => parameters.DensityHighFirstChildFactor,
             ("RH", 2) => parameters.DensityHighSecondChildFactor,
             ("RH", 3) => parameters.DensityHighThirdChildFactor,
-            (_, <= 1) => parameters.DensityLowMediumFirstChildFactor,
-            (_, 2) => parameters.DensityLowMediumSecondChildFactor,
-            (_, 3) => parameters.DensityLowMediumThirdChildFactor,
-            _ => 1.0
+            ("RH", _) => parameters.DensityHighFourthChildFactor,
+            (_, <= 1) => parameters.DensityLowFirstChildFactor,
+            (_, 2) => parameters.DensityLowSecondChildFactor,
+            (_, 3) => parameters.DensityLowThirdChildFactor,
+            _ => parameters.DensityLowFourthChildFactor
         };
     }
 

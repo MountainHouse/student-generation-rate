@@ -62,7 +62,7 @@ See `household-simulation-model.md` for the simulation and scoring details.
 - Move-in children include preschool and post-school children, not only enrolled children.
 - New children are modeled by child number; 3rd and 4th+ children should be much less likely.
 - Density affects household child count and birth probabilities.
-- Low/medium density usually shares one profile; medium-high/high usually has lower higher-child probability.
+- Low and medium density are configurable separately, though current presets may keep them similar. Medium-high/high usually has lower higher-child probability.
 - Special education is a child attribute assigned with a low district-data-based probability.
 
 ## Execution Rules
