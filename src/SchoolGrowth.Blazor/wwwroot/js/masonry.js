@@ -186,3 +186,219 @@ window.schoolGrowthTables = (() => {
 
     return { attach, updateAll };
 })();
+
+window.schoolGrowthTools = (() => {
+    const dragState = new WeakMap();
+
+    function scrollToTool(id) {
+        const element = document.getElementById(`tool-${id}`);
+        if (!element) return;
+
+        element.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    }
+
+    function attachDraggable(selector) {
+        document.querySelectorAll(selector).forEach(element => {
+            if (dragState.has(element)) return;
+
+            const button = element.querySelector(".tool-nav-toggle");
+            if (!button) return;
+
+            const state = {
+                dragging: false,
+                moved: false,
+                pointerId: null,
+                offsetX: 0,
+                offsetY: 0,
+                startX: 0,
+                startY: 0
+            };
+            dragState.set(element, state);
+
+            button.addEventListener("pointerdown", event => {
+                if (event.button !== undefined && event.button !== 0) return;
+
+                const rect = element.getBoundingClientRect();
+                state.dragging = true;
+                state.moved = false;
+                state.pointerId = event.pointerId;
+                state.offsetX = event.clientX - rect.left;
+                state.offsetY = event.clientY - rect.top;
+                state.startX = event.clientX;
+                state.startY = event.clientY;
+                button.setPointerCapture?.(event.pointerId);
+            });
+
+            button.addEventListener("pointermove", event => {
+                if (!state.dragging || state.pointerId !== event.pointerId) return;
+
+                const deltaX = Math.abs(event.clientX - state.startX);
+                const deltaY = Math.abs(event.clientY - state.startY);
+                if (deltaX + deltaY > 4) {
+                    state.moved = true;
+                }
+
+                const rect = element.getBoundingClientRect();
+                const left = Math.min(
+                    Math.max(8, event.clientX - state.offsetX),
+                    window.innerWidth - rect.width - 8);
+                const top = Math.min(
+                    Math.max(8, event.clientY - state.offsetY),
+                    window.innerHeight - rect.height - 8);
+
+                element.style.left = `${left}px`;
+                element.style.top = `${top}px`;
+                element.style.right = "auto";
+                element.style.bottom = "auto";
+            });
+
+            button.addEventListener("pointerup", event => {
+                if (!state.dragging || state.pointerId !== event.pointerId) return;
+
+                state.dragging = false;
+                state.pointerId = null;
+                button.releasePointerCapture?.(event.pointerId);
+            });
+
+            button.addEventListener("click", event => {
+                if (!state.moved) return;
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                state.moved = false;
+            }, true);
+        });
+    }
+
+    function setOpen(selector, open) {
+        document.querySelectorAll(selector).forEach(element => {
+            const state = dragState.get(element);
+            if (!open) {
+                element.classList.remove("tool-nav-open-above");
+                const popup = element.querySelector(".tool-nav-popup");
+                if (popup) popup.style.maxHeight = "";
+                restoreCollapsedPosition(element, state);
+                return;
+            }
+
+            window.requestAnimationFrame(() => {
+                rememberCollapsedPosition(element, state);
+                chooseOpenDirection(element);
+                clampIntoViewport(element);
+            });
+        });
+    }
+
+    function rememberCollapsedPosition(element, state) {
+        if (!state || state.collapsedPosition) return;
+
+        const rect = element.getBoundingClientRect();
+        state.collapsedPosition = {
+            left: rect.left,
+            top: rect.top
+        };
+    }
+
+    function restoreCollapsedPosition(element, state) {
+        if (!state?.collapsedPosition) return;
+
+        element.style.left = `${state.collapsedPosition.left}px`;
+        element.style.top = `${state.collapsedPosition.top}px`;
+        element.style.right = "auto";
+        element.style.bottom = "auto";
+        state.collapsedPosition = null;
+    }
+
+    function chooseOpenDirection(element) {
+        const header = element.querySelector(".tool-nav-header");
+        const popup = element.querySelector(".tool-nav-popup");
+        if (!header || !popup) return;
+
+        element.classList.remove("tool-nav-open-above");
+        const headerRect = header.getBoundingClientRect();
+        const popupHeight = popup.getBoundingClientRect().height;
+        const margin = 8;
+        const spaceBelow = window.innerHeight - headerRect.bottom - margin;
+        const spaceAbove = headerRect.top - margin;
+
+        if (spaceBelow < popupHeight && spaceAbove > spaceBelow) {
+            element.classList.add("tool-nav-open-above");
+        }
+    }
+
+    function clampIntoViewport(element) {
+        const panel = element.querySelector(".tool-nav-panel");
+        if (!panel) return;
+
+        const header = panel.querySelector(".tool-nav-header");
+        const popup = panel.querySelector(".tool-nav-popup");
+        if (!header) return;
+
+        const headerRect = header.getBoundingClientRect();
+        const popupRect = popup?.getBoundingClientRect();
+        const rect = combinedRect([header, popup]) ?? headerRect;
+
+        let left = element.style.left ? parseFloat(element.style.left) : element.getBoundingClientRect().left;
+        let top = element.style.top ? parseFloat(element.style.top) : element.getBoundingClientRect().top;
+        const margin = 8;
+        const opensAbove = element.classList.contains("tool-nav-open-above");
+
+        if (rect.left < margin) {
+            left += margin - rect.left;
+        }
+        if (rect.right > window.innerWidth - margin) {
+            left -= rect.right - (window.innerWidth - margin);
+        }
+        if (opensAbove) {
+            if (headerRect.bottom > window.innerHeight - margin) {
+                top -= headerRect.bottom - (window.innerHeight - margin);
+            }
+            if (headerRect.top < margin && (!popupRect || popupRect.top >= margin)) {
+                top += margin - headerRect.top;
+            }
+            if (popup && popupRect && popupRect.top < margin) {
+                const maxPopupHeight = Math.max(120, headerRect.top - margin);
+                popup.style.maxHeight = `${Math.min(maxPopupHeight, window.innerHeight - margin * 2)}px`;
+            }
+        } else {
+            if (headerRect.top < margin) {
+                top += margin - headerRect.top;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                top -= rect.bottom - (window.innerHeight - margin);
+            }
+        }
+
+        const headerWidth = headerRect.width || 120;
+        const headerHeight = headerRect.height || 34;
+        left = Math.max(margin, Math.min(left, window.innerWidth - Math.min(headerWidth, window.innerWidth - margin * 2) - margin));
+        top = Math.max(margin, Math.min(top, window.innerHeight - Math.min(headerHeight, window.innerHeight - margin * 2) - margin));
+
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+        element.style.right = "auto";
+        element.style.bottom = "auto";
+    }
+
+    function combinedRect(elements) {
+        const rects = elements
+            .filter(Boolean)
+            .map(element => element.getBoundingClientRect());
+        if (rects.length === 0) return null;
+
+        const left = Math.min(...rects.map(rect => rect.left));
+        const top = Math.min(...rects.map(rect => rect.top));
+        const right = Math.max(...rects.map(rect => rect.right));
+        const bottom = Math.max(...rects.map(rect => rect.bottom));
+        return {
+            left,
+            top,
+            right,
+            bottom,
+            width: right - left,
+            height: bottom - top
+        };
+    }
+
+    return { scrollToTool, attachDraggable, setOpen };
+})();

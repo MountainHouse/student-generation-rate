@@ -165,9 +165,151 @@ button.icon {
     font-size: 12px;
 }
 
+.tool-nav-float {
+    position: fixed;
+    right: 14px;
+    bottom: 14px;
+    z-index: 130;
+}
+
+.tool-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background: transparent;
+}
+
+.tool-nav-panel {
+    position: relative;
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+}
+
+.tool-nav-panel-open {
+    justify-items: stretch;
+}
+
+.tool-nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.tool-nav-toggle {
+    min-height: 34px;
+    padding: 0 12px;
+    box-shadow: 0 4px 16px rgba(23, 32, 38, 0.16);
+    touch-action: none;
+    user-select: none;
+}
+
+.tool-nav-close {
+    width: 34px;
+    min-height: 34px;
+    padding: 0;
+}
+
+.tool-nav-popup {
+    position: absolute;
+    right: 0;
+    top: calc(100% - 1px);
+    width: min(300px, calc(100vw - 28px));
+    max-height: min(520px, calc(100vh - 82px));
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 0 0 8px 8px;
+    background: #ffffff;
+    box-shadow: 0 12px 36px rgba(23, 32, 38, 0.18);
+    padding: 8px;
+}
+
+.tool-nav-open-above .tool-nav-popup {
+    top: auto;
+    bottom: calc(100% - 1px);
+    border-radius: 8px 8px 0 0;
+}
+
+.tool-nav-panel-open .tool-nav-header {
+    min-width: min(300px, calc(100vw - 28px));
+    border: 1px solid var(--line);
+    border-radius: 8px 8px 0 0;
+    background: #ffffff;
+    padding: 6px;
+    box-shadow: 0 12px 36px rgba(23, 32, 38, 0.18);
+}
+
+.tool-nav-open-above .tool-nav-panel-open .tool-nav-header {
+    border-radius: 0 0 8px 8px;
+}
+
+.tool-nav-panel-open .tool-nav-toggle {
+    flex: 1;
+    box-shadow: none;
+}
+
+.tool-nav-title {
+    padding: 4px 6px 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.tool-nav-add {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding: 4px 6px 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.tool-nav-add select {
+    min-width: 0;
+}
+
+.tool-nav-row {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.tool-nav-collapse,
+.tool-nav-link {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+}
+
+.tool-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: start;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .tool-board {
     display: flex;
     flex-direction: column;
+}
+
+.tool-add {
+    order: 9999;
+}
+
+.tool-add select {
+    max-width: 360px;
 }
 
 .tool-panel {

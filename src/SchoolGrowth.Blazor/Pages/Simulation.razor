@@ -36,29 +36,50 @@ else
         </section>
     }
 
-    <section class="band tool-menu">
-        <div class="section-head">
-            <h2>Tools</h2>
-            <div class="tool-create">
-                <select @bind="NewToolId" disabled="@(!InactiveTools.Any())">
-                    <option value="">@(InactiveTools.Any() ? "Select tool" : "All tools visible")</option>
-                    @foreach (var tool in InactiveTools)
-                    {
-                        <option value="@tool.Id">@tool.Title</option>
-                    }
-                </select>
-                <button type="button" class="secondary" disabled="@(!InactiveTools.Any())" @onclick="AddSelectedTool">Add Tool</button>
-            </div>
-        </div>
-        <div class="tool-strip">
-            @foreach (var tool in ActiveTools)
-            {
-                <button type="button" class="secondary tool-chip" @onclick="() => ToggleTool(tool.Id)">
-                    @(IsToolCollapsed(tool.Id) ? "+" : "-") @tool.Title
+    @if (ToolsPopupOpen)
+    {
+        <div class="tool-nav-backdrop" @onclick="() => ToolsPopupOpen = false"></div>
+    }
+    <div class="tool-nav-float">
+        <div class="tool-nav-panel @(ToolsPopupOpen ? "tool-nav-panel-open" : "")" @onclick:stopPropagation="true">
+            <div class="tool-nav-header">
+                <button type="button" class="secondary tool-nav-toggle" @onclick="() => ToolsPopupOpen = !ToolsPopupOpen">
+                    Tools
                 </button>
+                @if (ToolsPopupOpen)
+                {
+                    <button type="button" class="secondary tool-nav-close" title="Close tools" @onclick="() => ToolsPopupOpen = false">x</button>
+                }
+            </div>
+            @if (ToolsPopupOpen)
+            {
+            <div class="tool-nav-popup">
+                <label class="tool-nav-add">
+                    <span>Add</span>
+                    <select value="@NewToolId" disabled="@(!InactiveTools.Any())" @onchange="AddToolFromSelectionAsync">
+                        <option value="">@(InactiveTools.Any() ? "Select panel" : "All visible")</option>
+                        @foreach (var tool in InactiveTools)
+                        {
+                            <option value="@tool.Id">@tool.Title</option>
+                        }
+                    </select>
+                </label>
+                <div class="tool-nav-title">Visible tools</div>
+                @foreach (var tool in ActiveTools)
+                {
+                    <div class="tool-nav-row">
+                        <button type="button" class="secondary tool-nav-collapse" title="Collapse or expand" @onclick="() => ToggleTool(tool.Id)">
+                            @(IsToolCollapsed(tool.Id) ? "+" : "-")
+                        </button>
+                        <button type="button" class="secondary tool-nav-link" @onclick="() => NavigateToToolAsync(tool.Id)">
+                            @tool.Title
+                        </button>
+                    </div>
+                }
+            </div>
             }
         </div>
-    </section>
+    </div>
 
     <div class="tool-board">
     @if (IsToolActive(ToolRunEnvironment))
@@ -921,7 +942,20 @@ else
         <p><strong>Validation:</strong> results are averaged over all runs and compared year-over-year against total enrollment, grid spread, and smoothed grade-by-grade error. TK is excluded from grade validation.</p>
     </ToolPanel>
     }
+
     }
+    <section class="band tool-add">
+        <div class="section-head">
+            <h2>Add Tool</h2>
+        </div>
+        <select value="@NewToolId" disabled="@(!InactiveTools.Any())" @onchange="AddToolFromSelectionAsync">
+            <option value="">@(InactiveTools.Any() ? "Select a tool to add here" : "All tools visible")</option>
+            @foreach (var tool in InactiveTools)
+            {
+                <option value="@tool.Id">@tool.Title</option>
+            }
+        </select>
+    </section>
     </div>
 }
 
@@ -1088,6 +1122,7 @@ else
     private HashSet<string> CollapsedToolIds { get; set; } = [];
     private HashSet<string> SelectedSimulationInfoRows { get; } = new(StringComparer.OrdinalIgnoreCase);
     private string NewToolId { get; set; } = "";
+    private bool ToolsPopupOpen { get; set; }
     private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
         .Select(id => ToolDefinitions.FirstOrDefault(tool => tool.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
         .Where(tool => tool is not null)
@@ -1272,6 +1307,47 @@ else
         NewToolId = "";
     }
 
+    private async Task AddToolFromSelectionAsync(ChangeEventArgs args)
+    {
+        var id = args.Value?.ToString();
+        NewToolId = "";
+        if (string.IsNullOrWhiteSpace(id) || ActiveToolIds.Contains(id)) return;
+
+        ActiveToolIds.Add(id);
+        CollapsedToolIds.Remove(id);
+        ToolsPopupOpen = false;
+        await InvokeAsync(StateHasChanged);
+        await ScrollToToolAsync(id);
+    }
+
+    private async Task NavigateToToolAsync(string id)
+    {
+        ToolsPopupOpen = false;
+        await ScrollToToolAsync(id);
+    }
+
+    private async Task OnToolsPopupChangedAsync()
+    {
+        if (Data is not null)
+        {
+            await Js.InvokeVoidAsync("schoolGrowthTools.attachDraggable", ".tool-nav-float");
+            await Js.InvokeVoidAsync("schoolGrowthTools.setOpen", ".tool-nav-float", ToolsPopupOpen);
+        }
+    }
+
+    private async Task ScrollToToolAsync(string id)
+    {
+        try
+        {
+            await Task.Delay(50);
+            await Js.InvokeVoidAsync("schoolGrowthTools.scrollToTool", id);
+        }
+        catch
+        {
+            // Navigation is a convenience; rendering and validation should not depend on it.
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -1301,6 +1377,8 @@ else
         {
             await Js.InvokeVoidAsync("schoolGrowthMasonry.attach", ".settings-stack");
             await Js.InvokeVoidAsync("schoolGrowthTables.attach", ".table-wrap");
+            await Js.InvokeVoidAsync("schoolGrowthTools.attachDraggable", ".tool-nav-float");
+            await Js.InvokeVoidAsync("schoolGrowthTools.setOpen", ".tool-nav-float", ToolsPopupOpen);
         }
     }
 

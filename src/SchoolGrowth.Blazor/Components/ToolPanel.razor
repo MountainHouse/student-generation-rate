@@ -1,4 +1,4 @@
-<section class="@CssClass" style="@Style">
+<section id="@($"tool-{Id}")" class="@CssClass" style="@Style">
     <div class="tool-header">
         <button type="button" class="tool-toggle" title="Collapse or expand" @onclick="() => OnToggle.InvokeAsync(Id)">
             @(Collapsed ? "+" : "-")
