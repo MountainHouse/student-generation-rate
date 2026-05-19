@@ -30,6 +30,7 @@ Tables and charts should use the shared patterns:
 - graph hover should show a vertical guide and point markers
 - chart hover values should be integrated into the legend, not shown as separate SVG tooltip boxes
 - reserve legend space for the hovered x-value/year so the legend does not jump when hover starts
+- hover-only changes must be implemented with JavaScript DOM updates, not Blazor state changes or component re-renders; Blazor hover callbacks have repeatedly caused visible lag on charts
 - repeatable Chart tools should use the same selector model as Validation Summary where practical
 - custom Chart panels place the legend to the right of the chart on wide screens and below it on narrow screens
 - custom Chart panel titles are editable from the panel header; the displayed title should match normal tool header typography

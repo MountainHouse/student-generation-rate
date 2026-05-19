@@ -63,24 +63,30 @@ public sealed record MonteCarloYearComparison(
     int Year,
     Dictionary<string, double?> ActualGridTotals,
     Dictionary<string, double> ModeledGridTotals,
+    Dictionary<string, double> ModeledGridTotalStandardDeviations,
     Dictionary<string, Dictionary<string, double>> ModeledGridGrades,
+    Dictionary<string, Dictionary<string, double>> ModeledGridGradeStandardDeviations,
     Dictionary<string, double?> ActualGrades,
     Dictionary<string, double> AdjustedActualGrades,
     Dictionary<string, double> ModeledGrades,
+    Dictionary<string, double> ModeledGradeStandardDeviations,
     double ActualGridTotal,
     double ModeledGridTotal,
+    double ModeledGridTotalStandardDeviation,
     double GridError,
     double GridAbsolutePercentageError,
     double GridLevelMeanAbsoluteError,
     double GridLevelMeanAbsolutePercentageError,
     double ActualGradeTotal,
     double ModeledGradeTotal,
+    double ModeledGradeTotalStandardDeviation,
     double GradeError,
     double GradeAbsolutePercentageError,
     double GradeLevelMeanAbsoluteError,
     double GradeLevelMeanAbsolutePercentageError,
     double HighSchoolActualTotal,
     double HighSchoolModeledTotal,
+    double HighSchoolModeledTotalStandardDeviation,
     double HighSchoolError,
     double HighSchoolAbsolutePercentageError,
     double HighSchoolGradeMeanAbsoluteError,
@@ -943,20 +949,39 @@ public sealed class MonteCarloEnrollmentModel
 
     private MonteCarloYearComparison BuildComparison(int year, YearAccumulator accumulator, MonteCarloParameters parameters)
     {
+        var runs = Math.Max(1, parameters.Runs);
         var modeledGridTotals = accumulator.GridTotals.ToDictionary(
             kvp => kvp.Key,
-            kvp => kvp.Value / parameters.Runs,
+            kvp => kvp.Value / runs,
+            StringComparer.OrdinalIgnoreCase);
+        var modeledGridTotalStandardDeviations = accumulator.GridTotalSquares.ToDictionary(
+            kvp => kvp.Key,
+            kvp => StandardDeviation(accumulator.GridTotals.GetValueOrDefault(kvp.Key), kvp.Value, runs),
             StringComparer.OrdinalIgnoreCase);
         var modeledGridGrades = accumulator.GridGrades.ToDictionary(
             grid => grid.Key,
             grid => grid.Value.ToDictionary(
                 grade => grade.Key,
-                grade => grade.Value / parameters.Runs,
+                grade => grade.Value / runs,
+                StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
+        var modeledGridGradeStandardDeviations = accumulator.GridGradeSquares.ToDictionary(
+            grid => grid.Key,
+            grid => grid.Value.ToDictionary(
+                grade => grade.Key,
+                grade => StandardDeviation(
+                    accumulator.GridGrades.GetValueOrDefault(grid.Key)?.GetValueOrDefault(grade.Key) ?? 0,
+                    grade.Value,
+                    runs),
                 StringComparer.OrdinalIgnoreCase),
             StringComparer.OrdinalIgnoreCase);
         var modeledGrades = accumulator.GradeTotals.ToDictionary(
             kvp => kvp.Key,
-            kvp => kvp.Value / parameters.Runs,
+            kvp => kvp.Value / runs,
+            StringComparer.OrdinalIgnoreCase);
+        var modeledGradeStandardDeviations = accumulator.GradeTotalSquares.ToDictionary(
+            kvp => kvp.Key,
+            kvp => StandardDeviation(accumulator.GradeTotals.GetValueOrDefault(kvp.Key), kvp.Value, runs),
             StringComparer.OrdinalIgnoreCase);
         var actualGridTotals = data.GridRows.ToDictionary(
             grid => grid.Name,
@@ -974,10 +999,22 @@ public sealed class MonteCarloEnrollmentModel
         var modeledGridTotal = modeledGridTotals
             .Where(kvp => !IsExcludedValidationGrid(kvp.Key))
             .Sum(kvp => kvp.Value);
+        var modeledGridTotalStdDev = StandardDeviation(
+            accumulator.GridTotalPerRunSum,
+            accumulator.GridTotalPerRunSquareSum,
+            runs);
         var actualGradeTotal = GradeOrder.Sum(grade => adjustedActualGrades.GetValueOrDefault(grade));
         var modeledGradeTotal = GradeOrder.Sum(grade => modeledGrades.GetValueOrDefault(grade));
+        var modeledGradeTotalStdDev = StandardDeviation(
+            accumulator.GradeTotalPerRunSum,
+            accumulator.GradeTotalPerRunSquareSum,
+            runs);
         var actualHighSchoolTotal = HighSchoolGrades.Sum(grade => adjustedActualGrades.GetValueOrDefault(grade));
         var modeledHighSchoolTotal = HighSchoolGrades.Sum(grade => modeledGrades.GetValueOrDefault(grade));
+        var modeledHighSchoolTotalStdDev = StandardDeviation(
+            accumulator.HighSchoolTotalPerRunSum,
+            accumulator.HighSchoolTotalPerRunSquareSum,
+            runs);
         var gridErrors = actualGridTotals
             .Where(kvp => !IsExcludedValidationGrid(kvp.Key))
             .Select(kvp =>
@@ -1021,24 +1058,30 @@ public sealed class MonteCarloEnrollmentModel
             year,
             actualGridTotals,
             modeledGridTotals,
+            modeledGridTotalStandardDeviations,
             modeledGridGrades,
+            modeledGridGradeStandardDeviations,
             actualGrades,
             adjustedActualGrades,
             modeledGrades,
+            modeledGradeStandardDeviations,
             actualGridTotal,
             modeledGridTotal,
+            modeledGridTotalStdDev,
             modeledGridTotal - actualGridTotal,
             actualGridTotal > 0 ? Math.Abs(modeledGridTotal - actualGridTotal) / actualGridTotal : 0,
             gridLevelMae,
             gridLevelMape,
             actualGradeTotal,
             modeledGradeTotal,
+            modeledGradeTotalStdDev,
             modeledGradeTotal - actualGradeTotal,
             actualGradeTotal > 0 ? Math.Abs(modeledGradeTotal - actualGradeTotal) / actualGradeTotal : 0,
             gradeLevelMae,
             gradeLevelMape,
             actualHighSchoolTotal,
             modeledHighSchoolTotal,
+            modeledHighSchoolTotalStdDev,
             modeledHighSchoolTotal - actualHighSchoolTotal,
             actualHighSchoolTotal > 0 ? Math.Abs(modeledHighSchoolTotal - actualHighSchoolTotal) / actualHighSchoolTotal : 0,
             highSchoolGradeMae,
@@ -1375,6 +1418,22 @@ public sealed class MonteCarloEnrollmentModel
         return denominator > 0 ? numerator / denominator : 0;
     }
 
+    private static double Variance(double sum, double squareSum, double count)
+    {
+        if (count <= 1)
+        {
+            return 0;
+        }
+
+        var mean = sum / count;
+        return Math.Max(0, (squareSum / count) - (mean * mean));
+    }
+
+    private static double StandardDeviation(double sum, double squareSum, double count)
+    {
+        return Math.Sqrt(Variance(sum, squareSum, count));
+    }
+
     private static bool IsExcludedValidationGrid(string grid)
     {
         return ExcludedValidationGrids.Contains(grid);
@@ -1612,12 +1671,27 @@ public sealed class MonteCarloEnrollmentModel
                 _ => gradeList.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase),
                 StringComparer.OrdinalIgnoreCase);
             GradeTotals = gradeList.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+            GridTotalSquares = grids.ToDictionary(grid => grid, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+            GridGradeSquares = grids.ToDictionary(
+                grid => grid,
+                _ => gradeList.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+            GradeTotalSquares = gradeList.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
         }
 
         public Dictionary<string, double> GridTotals { get; }
         public Dictionary<string, Dictionary<string, double>> GridGrades { get; }
         public Dictionary<string, double> GradeTotals { get; }
+        public Dictionary<string, double> GridTotalSquares { get; }
+        public Dictionary<string, Dictionary<string, double>> GridGradeSquares { get; }
+        public Dictionary<string, double> GradeTotalSquares { get; }
         public Dictionary<string, SegmentAccumulator> Segments { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public double GridTotalPerRunSum { get; private set; }
+        public double GridTotalPerRunSquareSum { get; private set; }
+        public double GradeTotalPerRunSum { get; private set; }
+        public double GradeTotalPerRunSquareSum { get; private set; }
+        public double HighSchoolTotalPerRunSum { get; private set; }
+        public double HighSchoolTotalPerRunSquareSum { get; private set; }
         public double TotalHomes { get; private set; }
         public double LowDensityHomes { get; private set; }
         public double MediumDensityHomes { get; private set; }
@@ -1640,6 +1714,16 @@ public sealed class MonteCarloEnrollmentModel
 
         public void Add(IEnumerable<SimHome> homes, int year)
         {
+            var runGridTotals = GridTotals.Keys.ToDictionary(grid => grid, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+            var runGridGrades = GridGrades.Keys.ToDictionary(
+                grid => grid,
+                _ => GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+            var runGradeTotals = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+            var runGridTotal = 0.0;
+            var runGradeTotal = 0.0;
+            var runHighSchoolTotal = 0.0;
+
             foreach (var home in homes)
             {
                 if (!home.IsActive(year)) continue;
@@ -1658,10 +1742,61 @@ public sealed class MonteCarloEnrollmentModel
                     }
                     gridGrades[child.Grade] = gridGrades.GetValueOrDefault(child.Grade) + 1;
                     GradeTotals[child.Grade] = GradeTotals.GetValueOrDefault(child.Grade) + 1;
+                    runGridTotals[home.Grid] = runGridTotals.GetValueOrDefault(home.Grid) + 1;
+                    if (!runGridGrades.TryGetValue(home.Grid, out var runGradesForGrid))
+                    {
+                        runGradesForGrid = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+                        runGridGrades[home.Grid] = runGradesForGrid;
+                    }
+                    runGradesForGrid[child.Grade] = runGradesForGrid.GetValueOrDefault(child.Grade) + 1;
+                    runGradeTotals[child.Grade] = runGradeTotals.GetValueOrDefault(child.Grade) + 1;
+                    if (!IsExcludedValidationGrid(home.Grid))
+                    {
+                        runGridTotal++;
+                    }
+                    if (GradeOrder.Contains(child.Grade))
+                    {
+                        runGradeTotal++;
+                    }
+                    if (HighSchoolGrades.Contains(child.Grade))
+                    {
+                        runHighSchoolTotal++;
+                    }
                     segment.AddStudent(child);
                     AddStudent(home, child);
                 }
             }
+
+            foreach (var (grid, total) in runGridTotals)
+            {
+                GridTotalSquares[grid] = GridTotalSquares.GetValueOrDefault(grid) + total * total;
+            }
+
+            foreach (var (grid, grades) in runGridGrades)
+            {
+                if (!GridGradeSquares.TryGetValue(grid, out var targetSquares))
+                {
+                    targetSquares = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+                    GridGradeSquares[grid] = targetSquares;
+                }
+
+                foreach (var (grade, total) in grades)
+                {
+                    targetSquares[grade] = targetSquares.GetValueOrDefault(grade) + total * total;
+                }
+            }
+
+            foreach (var (grade, total) in runGradeTotals)
+            {
+                GradeTotalSquares[grade] = GradeTotalSquares.GetValueOrDefault(grade) + total * total;
+            }
+
+            GridTotalPerRunSum += runGridTotal;
+            GridTotalPerRunSquareSum += runGridTotal * runGridTotal;
+            GradeTotalPerRunSum += runGradeTotal;
+            GradeTotalPerRunSquareSum += runGradeTotal * runGradeTotal;
+            HighSchoolTotalPerRunSum += runHighSchoolTotal;
+            HighSchoolTotalPerRunSquareSum += runHighSchoolTotal * runHighSchoolTotal;
         }
 
         public void AddTurnover(SimHome home, int longevity)
@@ -1683,12 +1818,31 @@ public sealed class MonteCarloEnrollmentModel
                 GridTotals[grid] = GridTotals.GetValueOrDefault(grid) + total;
             }
 
+            foreach (var (grid, total) in other.GridTotalSquares)
+            {
+                GridTotalSquares[grid] = GridTotalSquares.GetValueOrDefault(grid) + total;
+            }
+
             foreach (var (grid, grades) in other.GridGrades)
             {
                 if (!GridGrades.TryGetValue(grid, out var targetGrades))
                 {
                     targetGrades = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
                     GridGrades[grid] = targetGrades;
+                }
+
+                foreach (var (grade, total) in grades)
+                {
+                    targetGrades[grade] = targetGrades.GetValueOrDefault(grade) + total;
+                }
+            }
+
+            foreach (var (grid, grades) in other.GridGradeSquares)
+            {
+                if (!GridGradeSquares.TryGetValue(grid, out var targetGrades))
+                {
+                    targetGrades = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
+                    GridGradeSquares[grid] = targetGrades;
                 }
 
                 foreach (var (grade, total) in grades)
@@ -1713,6 +1867,17 @@ public sealed class MonteCarloEnrollmentModel
                 GradeTotals[grade] = GradeTotals.GetValueOrDefault(grade) + total;
             }
 
+            foreach (var (grade, total) in other.GradeTotalSquares)
+            {
+                GradeTotalSquares[grade] = GradeTotalSquares.GetValueOrDefault(grade) + total;
+            }
+
+            GridTotalPerRunSum += other.GridTotalPerRunSum;
+            GridTotalPerRunSquareSum += other.GridTotalPerRunSquareSum;
+            GradeTotalPerRunSum += other.GradeTotalPerRunSum;
+            GradeTotalPerRunSquareSum += other.GradeTotalPerRunSquareSum;
+            HighSchoolTotalPerRunSum += other.HighSchoolTotalPerRunSum;
+            HighSchoolTotalPerRunSquareSum += other.HighSchoolTotalPerRunSquareSum;
             TotalHomes += other.TotalHomes;
             LowDensityHomes += other.LowDensityHomes;
             MediumDensityHomes += other.MediumDensityHomes;

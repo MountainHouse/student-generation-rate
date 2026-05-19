@@ -431,18 +431,30 @@ window.schoolGrowthStorage = (() => {
 
 window.schoolGrowthValidationChart = (() => {
     function attach(element, dotNet, pointCount, chartId = "validation-summary") {
-        if (!element || !dotNet || !pointCount) return;
+        if (!element || !pointCount) return;
 
         const state = element.__schoolGrowthValidationHover ?? {};
-        state.dotNet = dotNet;
         state.pointCount = pointCount;
         state.chartId = chartId;
         state.lastIndex = Number.isInteger(state.lastIndex) ? state.lastIndex : -2;
+        state.root = element.closest(".chart-box") ?? element.parentElement;
+        state.line = element.querySelector(".js-chart-hover-line");
+        state.dots = Array.from(element.querySelectorAll(".js-chart-hover-dot")).map(dot => ({
+            dot,
+            yValues: readJson(dot.dataset.yValues, [])
+        }));
+        state.year = state.root?.querySelector(".js-chart-hover-year") ?? null;
+        state.years = readJson(state.year?.dataset.years, []);
+        state.labels = Array.from(state.root?.querySelectorAll(".js-chart-hover-label") ?? []).map(label => ({
+            label,
+            defaultLabel: label.dataset.defaultLabel || label.textContent || "",
+            labels: readJson(label.dataset.labels, [])
+        }));
 
         if (!state.attached) {
             state.onPointerMove = event => {
                 const current = element.__schoolGrowthValidationHover;
-                if (!current?.dotNet || !current.pointCount) return;
+                if (!current?.pointCount) return;
 
                 const rect = element.getBoundingClientRect();
                 if (!rect.width) return;
@@ -453,15 +465,15 @@ window.schoolGrowthValidationChart = (() => {
 
                 if (index !== current.lastIndex) {
                     current.lastIndex = index;
-                    current.dotNet.invokeMethodAsync("SetChartHoverIndex", current.chartId ?? "validation-summary", index);
+                    updateHoverDom(element, index);
                 }
             };
 
             state.onPointerLeave = () => {
                 const current = element.__schoolGrowthValidationHover;
-                if (!current?.dotNet || current.lastIndex === -1) return;
+                if (!current || current.lastIndex === -1) return;
                 current.lastIndex = -1;
-                current.dotNet.invokeMethodAsync("SetChartHoverIndex", current.chartId ?? "validation-summary", -1);
+                clearHoverDom(element);
             };
 
             element.addEventListener("pointermove", state.onPointerMove, { passive: true });
@@ -474,6 +486,70 @@ window.schoolGrowthValidationChart = (() => {
 
     function attachById(elementId, dotNet, pointCount, chartId) {
         attach(document.getElementById(elementId), dotNet, pointCount, chartId);
+    }
+
+    function updateHoverDom(element, index) {
+        const state = element.__schoolGrowthValidationHover;
+        if (!state) return;
+
+        const x = xForIndex(index, state.pointCount);
+        if (state.line) {
+            state.line.style.display = "";
+            state.line.setAttribute("x1", x);
+            state.line.setAttribute("x2", x);
+        }
+
+        for (const item of state.dots) {
+            const y = item.yValues[index];
+            if (typeof y === "number" && Number.isFinite(y)) {
+                item.dot.style.display = "";
+                item.dot.setAttribute("cx", x);
+                item.dot.setAttribute("cy", y);
+            } else {
+                item.dot.style.display = "none";
+            }
+        }
+
+        if (state.year) {
+            state.year.textContent = state.years[index] ? `Year ${state.years[index]}` : "Year";
+            state.year.classList.toggle("legend-hover-year-empty", !state.years[index]);
+        }
+
+        for (const item of state.labels) {
+            item.label.textContent = item.labels[index] || `${item.defaultLabel}: n/a`;
+        }
+    }
+
+    function clearHoverDom(element) {
+        const state = element.__schoolGrowthValidationHover;
+        if (!state) return;
+
+        if (state.line) {
+            state.line.style.display = "none";
+        }
+        for (const item of state.dots) {
+            item.dot.style.display = "none";
+        }
+        if (state.year) {
+            state.year.textContent = "Year";
+            state.year.classList.add("legend-hover-year-empty");
+        }
+        for (const item of state.labels) {
+            item.label.textContent = item.defaultLabel;
+        }
+    }
+
+    function xForIndex(index, pointCount) {
+        return pointCount <= 1 ? 60 : 60 + (index * 800 / Math.max(1, pointCount - 1));
+    }
+
+    function readJson(value, fallback) {
+        if (!value) return fallback;
+        try {
+            return JSON.parse(value);
+        } catch {
+            return fallback;
+        }
     }
 
     function clientXToViewBoxX(clientX, rect) {

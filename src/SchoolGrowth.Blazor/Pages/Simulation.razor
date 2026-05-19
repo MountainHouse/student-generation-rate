@@ -5,6 +5,9 @@
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
 
+@using System.Globalization
+@using System.Text.Json
+
 <PageTitle>Household Simulation</PageTitle>
 
 <header class="topbar">
@@ -489,6 +492,9 @@ else
                     <button type="button" class="icon-button compact-icon-button" title="Pin current graph" @onclick="PinValidationChartSelection">+</button>
                 </div>
             </div>
+            @{
+                var validationSeries = ValidationChartSeries;
+            }
             <svg @ref="ValidationChartSvg" viewBox="0 0 920 300" role="img">
                 @foreach (var tick in ValidationYTicks)
                 {
@@ -502,23 +508,30 @@ else
                     <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
                     <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
                 }
-                @foreach (var series in ValidationChartSeries)
+                @foreach (var series in validationSeries)
                 {
+                    var twoSigmaBandPoints = ValidationChartBandPoints(series, sigmaMultiplier: 2);
+                    var oneSigmaBandPoints = ValidationChartBandPoints(series, sigmaMultiplier: 1);
+                    @if (!string.IsNullOrWhiteSpace(twoSigmaBandPoints))
+                    {
+                        <polygon points="@twoSigmaBandPoints" fill="@series.Color" opacity="0.4" stroke="none" />
+                    }
+                    @if (!string.IsNullOrWhiteSpace(oneSigmaBandPoints))
+                    {
+                        <polygon points="@oneSigmaBandPoints" fill="@series.Color" opacity="0.6" stroke="none" />
+                    }
                     <polyline points="@ValidationChartPoints(series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
                 }
                 <rect x="0" y="0" width="920" height="300" class="chart-pointer-capture" />
-                @if (TotalChartHoverIndex.HasValue)
+                <line x1="60" y1="40" x2="60" y2="260" class="chart-hover-line js-chart-hover-line" style="display:none" />
+                @foreach (var series in validationSeries)
                 {
-                    <line x1="@TotalHoverX" y1="40" x2="@TotalHoverX" y2="260" class="chart-hover-line" />
-                    @foreach (var marker in TotalHoverMarkers)
-                    {
-                        <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
-                    }
+                    <circle cx="60" cy="260" r="4" fill="@series.Color" class="chart-hover-dot js-chart-hover-dot" data-y-values="@ChartYValuesJson(series.Values, TotalYForValue)" style="display:none" />
                 }
             </svg>
             <div class="inline-legend validation-legend">
-                <span class="legend-hover-year @(TotalChartHoverIndex.HasValue ? "" : "legend-hover-year-empty")">
-                    @(TotalChartHoverIndex.HasValue ? $"Year {Result!.Comparisons[TotalChartHoverIndex.Value].Year}" : "Year")
+                <span class="legend-hover-year legend-hover-year-empty js-chart-hover-year" data-years="@ChartYearsJson">
+                    Year
                 </span>
                 @foreach (var group in ValidationLegendGroups)
                 {
@@ -534,7 +547,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span><i style="@($"background:{series.Color}")"></i>@LegendSeriesLabel(series, TotalChartHoverIndex)</span>
+                            <span style="@($"--legend-value-width:{ChartLegendReserveWidthCh(series):0.#}ch")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
                         }
                     </span>
                 }
@@ -636,6 +649,9 @@ else
             </div>
             <div class="chart-panel-layout">
             <div class="chart-canvas">
+            @{
+                var chartSeries = ChartSeries(chartTool);
+            }
             <svg id="@ChartSvgElementId(chartTool)" viewBox="0 0 920 300" role="img">
                 @foreach (var tick in ChartYTicks(chartTool))
                 {
@@ -649,25 +665,32 @@ else
                     <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
                     <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
                 }
-                @foreach (var series in ChartSeries(chartTool))
+                @foreach (var series in chartSeries)
                 {
+                    var twoSigmaBandPoints = ChartBandPoints(chartTool, series, sigmaMultiplier: 2);
+                    var oneSigmaBandPoints = ChartBandPoints(chartTool, series, sigmaMultiplier: 1);
+                    @if (!string.IsNullOrWhiteSpace(twoSigmaBandPoints))
+                    {
+                        <polygon points="@twoSigmaBandPoints" fill="@series.Color" opacity="0.4" stroke="none" />
+                    }
+                    @if (!string.IsNullOrWhiteSpace(oneSigmaBandPoints))
+                    {
+                        <polygon points="@oneSigmaBandPoints" fill="@series.Color" opacity="0.6" stroke="none" />
+                    }
                     <polyline points="@ChartPoints(chartTool, series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
                 }
                 <rect x="0" y="0" width="920" height="300" class="chart-pointer-capture" />
-                @if (chartTool.HoverIndex.HasValue)
+                <line x1="60" y1="40" x2="60" y2="260" class="chart-hover-line js-chart-hover-line" style="display:none" />
+                @foreach (var series in chartSeries)
                 {
-                    <line x1="@ChartHoverX(chartTool)" y1="40" x2="@ChartHoverX(chartTool)" y2="260" class="chart-hover-line" />
-                    @foreach (var marker in ChartHoverMarkers(chartTool))
-                    {
-                        <circle cx="@marker.X" cy="@marker.Y" r="4" fill="@marker.Color" class="chart-hover-dot" />
-                    }
+                    <circle cx="60" cy="260" r="4" fill="@series.Color" class="chart-hover-dot js-chart-hover-dot" data-y-values="@ChartYValuesJson(series.Values, value => ChartYForValue(chartTool, value))" style="display:none" />
                 }
             </svg>
             </div>
             <aside class="chart-side-legend">
             <div class="inline-legend validation-legend chart-tool-legend">
-                <span class="legend-hover-year @(chartTool.HoverIndex.HasValue ? "" : "legend-hover-year-empty")">
-                    @(chartTool.HoverIndex.HasValue ? $"Year {Result!.Comparisons[chartTool.HoverIndex.Value].Year}" : "Year")
+                <span class="legend-hover-year legend-hover-year-empty js-chart-hover-year" data-years="@ChartYearsJson">
+                    Year
                 </span>
                 @foreach (var group in ChartLegendGroups(chartTool))
                 {
@@ -683,7 +706,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span><i style="@($"background:{series.Color}")"></i>@LegendSeriesLabel(series, chartTool.HoverIndex)</span>
+                            <span style="@($"--legend-value-width:{ChartLegendReserveWidthCh(series):0.#}ch")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
                         }
                     </span>
                 }
@@ -1002,16 +1025,22 @@ else
                             <th>Year</th>
                             <th>Actual Grid</th>
                             <th>Modeled Grid</th>
+                            <th>Grid σ</th>
+                            <th>Grid SE</th>
                             <th>Grid Error</th>
                             <th>Grid Error %</th>
                             <th>Grid/Year Error %</th>
                             <th>Adjusted Grade</th>
                             <th>Modeled Grade</th>
+                            <th>Grade σ</th>
+                            <th>Grade SE</th>
                             <th>Grade Error</th>
                             <th>Grade Error %</th>
                             <th>Grade/Year Error %</th>
                             <th>Actual HS</th>
                             <th>Modeled HS</th>
+                            <th>HS σ</th>
+                            <th>HS SE</th>
                             <th>HS Error</th>
                             <th>HS Error %</th>
                         </tr>
@@ -1023,16 +1052,22 @@ else
                                 <td>@comparison.Year</td>
                                 <td>@comparison.ActualGridTotal.ToString("N0")</td>
                                 <td>@comparison.ModeledGridTotal.ToString("N0")</td>
+                                <td>@comparison.ModeledGridTotalStandardDeviation.ToString("N0")</td>
+                                <td>@StandardError(comparison.ModeledGridTotalStandardDeviation).ToString("N1")</td>
                                 <td>@comparison.GridError.ToString("+#,##0;-#,##0;0")</td>
                                 <td>@comparison.GridAbsolutePercentageError.ToString("P1")</td>
                                 <td>@comparison.GridLevelMeanAbsolutePercentageError.ToString("P1")</td>
                                 <td>@comparison.ActualGradeTotal.ToString("N0")</td>
                                 <td>@comparison.ModeledGradeTotal.ToString("N0")</td>
+                                <td>@comparison.ModeledGradeTotalStandardDeviation.ToString("N0")</td>
+                                <td>@StandardError(comparison.ModeledGradeTotalStandardDeviation).ToString("N1")</td>
                                 <td>@comparison.GradeError.ToString("+#,##0;-#,##0;0")</td>
                                 <td>@comparison.GradeAbsolutePercentageError.ToString("P1")</td>
                                 <td>@comparison.GradeLevelMeanAbsolutePercentageError.ToString("P1")</td>
                                 <td>@comparison.HighSchoolActualTotal.ToString("N0")</td>
                                 <td>@comparison.HighSchoolModeledTotal.ToString("N0")</td>
+                                <td>@comparison.HighSchoolModeledTotalStandardDeviation.ToString("N0")</td>
+                                <td>@StandardError(comparison.HighSchoolModeledTotalStandardDeviation).ToString("N1")</td>
                                 <td>@comparison.HighSchoolError.ToString("+#,##0;-#,##0;0")</td>
                                 <td>@comparison.HighSchoolAbsolutePercentageError.ToString("P1")</td>
                             </tr>
@@ -1103,6 +1138,8 @@ else
                         <th>Grid</th>
                         <th>Actual</th>
                         <th>Modeled</th>
+                        <th>σ</th>
+                        <th>SE</th>
                         <th>Error</th>
                         <th>Error %</th>
                     </tr>
@@ -1114,6 +1151,8 @@ else
                             <td>@row.Grid</td>
                             <td>@FormatNullable(row.Actual)</td>
                             <td>@row.Modeled.ToString("N0")</td>
+                            <td>@row.StandardDeviation.ToString("N0")</td>
+                            <td>@StandardError(row.StandardDeviation).ToString("N1")</td>
                             <td>@(row.Actual.HasValue ? (row.Modeled - row.Actual.Value).ToString("+#,##0;-#,##0;0") : "n/a")</td>
                             <td>@(row.Actual is > 0 ? (Math.Abs(row.Modeled - row.Actual.Value) / row.Actual.Value).ToString("P1") : "n/a")</td>
                         </tr>
@@ -1137,6 +1176,8 @@ else
                         <th>Actual Raw</th>
                         <th>Adjusted Actual</th>
                         <th>Modeled</th>
+                        <th>σ</th>
+                        <th>SE</th>
                         <th>Error</th>
                     </tr>
                 </thead>
@@ -1148,6 +1189,8 @@ else
                             <td>@FormatNullable(row.Actual)</td>
                             <td>@row.AdjustedActual.ToString("N0")</td>
                             <td>@row.Modeled.ToString("N0")</td>
+                            <td>@row.StandardDeviation.ToString("N0")</td>
+                            <td>@StandardError(row.StandardDeviation).ToString("N1")</td>
                             <td>@((row.Modeled - row.AdjustedActual).ToString("+#,##0;-#,##0;0"))</td>
                         </tr>
                     }
@@ -2699,15 +2742,19 @@ else
 
     private MonteCarloYearComparison? SelectedComparison => Result?.Comparisons.FirstOrDefault(item => item.Year == SelectedComparisonYear);
 
-    private IReadOnlyList<(string Grid, double? Actual, double Modeled)> SelectedGridComparisons =>
+    private IReadOnlyList<(string Grid, double? Actual, double Modeled, double StandardDeviation)> SelectedGridComparisons =>
         SelectedComparison is null
             ? []
             : SelectedComparison.ModeledGridTotals.Keys.Order()
                 .Where(grid => !ExcludedValidationGrids.Contains(grid))
-                .Select(grid => (grid, SelectedComparison.ActualGridTotals.GetValueOrDefault(grid), SelectedComparison.ModeledGridTotals.GetValueOrDefault(grid)))
+                .Select(grid => (
+                    grid,
+                    SelectedComparison.ActualGridTotals.GetValueOrDefault(grid),
+                    SelectedComparison.ModeledGridTotals.GetValueOrDefault(grid),
+                    SelectedComparison.ModeledGridTotalStandardDeviations.GetValueOrDefault(grid)))
                 .ToList();
 
-    private IReadOnlyList<(string Grade, double? Actual, double AdjustedActual, double Modeled)> SelectedGradeComparisons =>
+    private IReadOnlyList<(string Grade, double? Actual, double AdjustedActual, double Modeled, double StandardDeviation)> SelectedGradeComparisons =>
         SelectedComparison is null
             ? []
             : VisibleGradeOrder
@@ -2715,7 +2762,8 @@ else
                     grade,
                     SelectedComparison.ActualGrades.GetValueOrDefault(grade),
                     SelectedComparison.AdjustedActualGrades.GetValueOrDefault(grade),
-                    SelectedComparison.ModeledGrades.GetValueOrDefault(grade)))
+                    SelectedComparison.ModeledGrades.GetValueOrDefault(grade),
+                    SelectedComparison.ModeledGradeStandardDeviations.GetValueOrDefault(grade)))
                 .ToList();
 
     private IReadOnlyList<string> ValidationNeighborhoodOptions => ValidationMeasure is "family" or "turnover"
@@ -2864,6 +2912,10 @@ else
         .Select(ValidationReferenceBaseValue)
         .ToList() ?? [];
 
+    private IReadOnlyList<double?> ValidationModeledStandardDeviationBaseValues => Result?.Comparisons
+        .Select(ValidationModeledStandardDeviationBaseValue)
+        .ToList() ?? [];
+
     private IReadOnlyList<double?> ValidationModeledValues => CurrentValidationChart.ModeledValues;
 
     private IReadOnlyList<double?> ValidationReferenceValues => CurrentValidationChart.ReferenceValues;
@@ -2919,6 +2971,48 @@ else
         return colors[Math.Abs(index) % colors.Length];
     }
 
+    private ValidationChartLine BuildModeledChartLine(
+        string label,
+        string color,
+        IReadOnlyList<double?> values,
+        IReadOnlyList<double?> standardDeviations,
+        Func<double, string> formatter)
+    {
+        if (!standardDeviations.Any(value => value is > 0))
+        {
+            return new(label, color, values, formatter, "");
+        }
+
+        var oneSigmaLow = SigmaBand(values, standardDeviations, -1);
+        var oneSigmaHigh = SigmaBand(values, standardDeviations, 1);
+        var twoSigmaLow = SigmaBand(values, standardDeviations, -2);
+        var twoSigmaHigh = SigmaBand(values, standardDeviations, 2);
+
+        return new(
+            label,
+            color,
+            values,
+            formatter,
+            "",
+            StandardDeviations: standardDeviations,
+            Runs: Result?.Parameters.Runs ?? Runs,
+            OneSigmaLowValues: oneSigmaLow,
+            OneSigmaHighValues: oneSigmaHigh,
+            TwoSigmaLowValues: twoSigmaLow,
+            TwoSigmaHighValues: twoSigmaHigh);
+    }
+
+    private static IReadOnlyList<double?> SigmaBand(IReadOnlyList<double?> values, IReadOnlyList<double?> standardDeviations, int multiplier)
+    {
+        return values.Select((value, index) =>
+        {
+            var deviation = standardDeviations.ElementAtOrDefault(index);
+            return value.HasValue && deviation.HasValue
+                ? value.Value + deviation.Value * multiplier
+                : (double?)null;
+        }).ToList();
+    }
+
     private void PinValidationChartSelection()
     {
         if (ValidationPinnedSelections.Any(selection => selection.Key.Equals(CurrentValidationSelectionKey, StringComparison.OrdinalIgnoreCase)))
@@ -2946,7 +3040,11 @@ else
     }
 
     private IReadOnlyList<double> ValidationChartNumbers => ValidationChartSeries
-        .SelectMany(series => series.Values)
+        .SelectMany(series => series.Values
+            .Concat(series.OneSigmaLowValues ?? [])
+            .Concat(series.OneSigmaHighValues ?? [])
+            .Concat(series.TwoSigmaLowValues ?? [])
+            .Concat(series.TwoSigmaHighValues ?? []))
         .Where(value => value.HasValue)
         .Select(value => value!.Value)
         .ToList();
@@ -2990,6 +3088,7 @@ else
             var referenceBase = ValidationReferenceBaseValues;
             var modeledValues = TransformValidationValues(modeledBase, reference: false);
             var referenceValues = TransformValidationValues(referenceBase, reference: true);
+            var modeledStdDevs = TransformValidationStandardDeviations(ValidationModeledStandardDeviationBaseValues, modeledBase);
             var absoluteErrors = referenceBase
                 .Zip(modeledBase, (reference, modeled) => reference.HasValue && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) : (double?)null)
                 .ToList();
@@ -3006,15 +3105,19 @@ else
                     ?
                     [
                         new("Reference", color, referenceValues, ValidationFormatter, "7 5"),
-                        new(ValidationModeledSeriesLabel, color, modeledValues, ValidationFormatter, "")
+                        BuildModeledChartLine(ValidationModeledSeriesLabel, color, modeledValues, modeledStdDevs, ValidationFormatter)
                     ]
                     :
                     [
-                        new(ValidationModeledSeriesLabel, color, modeledValues, ValidationFormatter, "")
+                        BuildModeledChartLine(ValidationModeledSeriesLabel, color, modeledValues, modeledStdDevs, ValidationFormatter)
                     ]
             };
             var numbers = series
-                .SelectMany(item => item.Values)
+                .SelectMany(item => item.Values
+                    .Concat(item.OneSigmaLowValues ?? [])
+                    .Concat(item.OneSigmaHighValues ?? [])
+                    .Concat(item.TwoSigmaLowValues ?? [])
+                    .Concat(item.TwoSigmaHighValues ?? []))
                 .Where(value => value.HasValue)
                 .Select(value => value!.Value)
                 .ToList();
@@ -3072,6 +3175,16 @@ else
             "cohort" => CohortValue(comparison, modeled: false),
             "generation" => StudentGenerationReferenceValue(comparison),
             "students" => StudentValue(comparison, modeled: false),
+            _ => null
+        };
+    }
+
+    private double? ValidationModeledStandardDeviationBaseValue(MonteCarloYearComparison comparison)
+    {
+        return ValidationMeasure switch
+        {
+            "cohort" => CohortStandardDeviation(comparison),
+            "students" => StudentStandardDeviation(comparison),
             _ => null
         };
     }
@@ -3161,6 +3274,50 @@ else
             : comparison.AdjustedActualGrades.GetValueOrDefault(grade);
     }
 
+    private double? CohortStandardDeviation(MonteCarloYearComparison comparison)
+    {
+        var cohort = CohortForLabel(EffectiveValidationBreakdown);
+        var grade = cohort is null ? null : GradeForCohort(cohort, comparison.Year);
+        if (grade is null)
+        {
+            return null;
+        }
+
+        if (!EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+            || !EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            return EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)
+                && !EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                ? comparison.ModeledGridGradeStandardDeviations.GetValueOrDefault(EffectiveValidationNeighborhood)?.GetValueOrDefault(grade)
+                : null;
+        }
+
+        return comparison.ModeledGradeStandardDeviations.GetValueOrDefault(grade);
+    }
+
+    private double? StudentStandardDeviation(MonteCarloYearComparison comparison)
+    {
+        if (!EffectiveValidationDensity.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!EffectiveValidationNeighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase))
+        {
+            return EffectiveValidationBreakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                ? comparison.ModeledGridTotalStandardDeviations.GetValueOrDefault(EffectiveValidationNeighborhood)
+                : comparison.ModeledGridGradeStandardDeviations.GetValueOrDefault(EffectiveValidationNeighborhood)?.GetValueOrDefault(EffectiveValidationBreakdown);
+        }
+
+        return EffectiveValidationBreakdown switch
+        {
+            "Total" or "K-12" => comparison.ModeledGradeTotalStandardDeviation,
+            "HS" => comparison.HighSchoolModeledTotalStandardDeviation,
+            "K-8" => null,
+            _ => comparison.ModeledGradeStandardDeviations.GetValueOrDefault(EffectiveValidationBreakdown)
+        };
+    }
+
     private double? StudentValueForGeneration(MonteCarloYearComparison comparison, bool modeled)
     {
         var breakdown = EffectiveValidationBreakdown;
@@ -3192,6 +3349,15 @@ else
             "start-percent" => TransformAgainstStart(values, percent: true),
             _ => values
         };
+    }
+
+    private IReadOnlyList<double?> TransformValidationStandardDeviations(
+        IReadOnlyList<double?> standardDeviations,
+        IReadOnlyList<double?> modeledBaseValues)
+    {
+        return EffectiveValidationValueMode.Equals("value", StringComparison.OrdinalIgnoreCase)
+            ? standardDeviations
+            : modeledBaseValues.Select(_ => (double?)null).ToList();
     }
 
     private static IReadOnlyList<double?> TransformAgainstPrevious(IReadOnlyList<double?> values, bool percent)
@@ -3654,6 +3820,7 @@ else
         var referenceBase = Result?.Comparisons.Select(comparison => ChartReferenceBaseValue(selection, comparison)).ToList() ?? [];
         var modeledValues = TransformChartValues(chart, selection, modeledBase, reference: false);
         var referenceValues = TransformChartValues(chart, selection, referenceBase, reference: true);
+        var modeledStdDevs = TransformChartStandardDeviations(chart, selection, Result?.Comparisons.Select(comparison => ChartModeledStandardDeviationBaseValue(chart, selection, comparison)).ToList() ?? [], modeledBase);
         var absoluteErrors = referenceBase
             .Zip(modeledBase, (reference, modeled) => reference.HasValue && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) : (double?)null)
             .ToList();
@@ -3670,15 +3837,19 @@ else
                 ?
                 [
                     new("Reference", color, referenceValues, ChartFormatter(selection), "7 5"),
-                    new(ChartModeledSeriesLabel(selection), color, modeledValues, ChartFormatter(selection), "")
+                    BuildModeledChartLine(ChartModeledSeriesLabel(selection), color, modeledValues, modeledStdDevs, ChartFormatter(selection))
                 ]
                 :
                 [
-                    new(ChartModeledSeriesLabel(selection), color, modeledValues, ChartFormatter(selection), "")
+                    BuildModeledChartLine(ChartModeledSeriesLabel(selection), color, modeledValues, modeledStdDevs, ChartFormatter(selection))
                 ]
         };
         var numbers = series
-            .SelectMany(item => item.Values)
+            .SelectMany(item => item.Values
+                .Concat(item.OneSigmaLowValues ?? [])
+                .Concat(item.OneSigmaHighValues ?? [])
+                .Concat(item.TwoSigmaLowValues ?? [])
+                .Concat(item.TwoSigmaHighValues ?? []))
             .Where(value => value.HasValue)
             .Select(value => value!.Value)
             .ToList();
@@ -3738,6 +3909,16 @@ else
             "cohort" => CohortValue(null, selection, comparison, modeled: false),
             "generation" => StudentGenerationReferenceValue(selection, comparison),
             "students" => StudentValue(null, selection, comparison, modeled: false),
+            _ => null
+        };
+    }
+
+    private double? ChartModeledStandardDeviationBaseValue(ChartToolState chart, ChartSelection selection, MonteCarloYearComparison comparison)
+    {
+        return selection.Measure switch
+        {
+            "cohort" => CohortStandardDeviation(selection, comparison),
+            "students" => StudentStandardDeviation(selection, comparison),
             _ => null
         };
     }
@@ -3825,6 +4006,50 @@ else
             : comparison.AdjustedActualGrades.GetValueOrDefault(grade);
     }
 
+    private double? CohortStandardDeviation(ChartSelection selection, MonteCarloYearComparison comparison)
+    {
+        var cohort = CohortForLabel(selection.Breakdown);
+        var grade = cohort is null ? null : GradeForCohort(cohort, comparison.Year);
+        if (grade is null)
+        {
+            return null;
+        }
+
+        if (!selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+            || !selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            return selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase)
+                && !selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
+                ? comparison.ModeledGridGradeStandardDeviations.GetValueOrDefault(selection.Neighborhood)?.GetValueOrDefault(grade)
+                : null;
+        }
+
+        return comparison.ModeledGradeStandardDeviations.GetValueOrDefault(grade);
+    }
+
+    private static double? StudentStandardDeviation(ChartSelection selection, MonteCarloYearComparison comparison)
+    {
+        if (!selection.Density.Equals(AllDensity, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase))
+        {
+            return selection.Breakdown.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                ? comparison.ModeledGridTotalStandardDeviations.GetValueOrDefault(selection.Neighborhood)
+                : comparison.ModeledGridGradeStandardDeviations.GetValueOrDefault(selection.Neighborhood)?.GetValueOrDefault(selection.Breakdown);
+        }
+
+        return selection.Breakdown switch
+        {
+            "Total" or "K-12" => comparison.ModeledGradeTotalStandardDeviation,
+            "HS" => comparison.HighSchoolModeledTotalStandardDeviation,
+            "K-8" => null,
+            _ => comparison.ModeledGradeStandardDeviations.GetValueOrDefault(selection.Breakdown)
+        };
+    }
+
     private double? StudentValueForGeneration(ChartToolState? chart, ChartSelection selection, MonteCarloYearComparison comparison, bool modeled)
     {
         if ((!selection.Neighborhood.Equals(AllNeighborhood, StringComparison.OrdinalIgnoreCase)
@@ -3854,6 +4079,17 @@ else
             "start-percent" => TransformAgainstStart(values, percent: true),
             _ => values
         };
+    }
+
+    private IReadOnlyList<double?> TransformChartStandardDeviations(
+        ChartToolState chart,
+        ChartSelection selection,
+        IReadOnlyList<double?> standardDeviations,
+        IReadOnlyList<double?> modeledBaseValues)
+    {
+        return selection.ValueMode.Equals("value", StringComparison.OrdinalIgnoreCase)
+            ? standardDeviations
+            : modeledBaseValues.Select(_ => (double?)null).ToList();
     }
 
     private double? ChartShareDenominator(ChartToolState chart, ChartSelection selection, MonteCarloYearComparison comparison, bool reference)
@@ -4031,9 +4267,48 @@ else
         }
 
         var value = series.Values.ElementAtOrDefault(hoverIndex.Value);
-        return value.HasValue
-            ? $"{series.Label}: {series.Formatter(value.Value)}"
-            : $"{series.Label}: n/a";
+        if (!value.HasValue)
+        {
+            return $"{series.Label}: n/a";
+        }
+
+        var deviation = series.StandardDeviations?.ElementAtOrDefault(hoverIndex.Value);
+        var suffix = deviation is > 0
+            ? $" ±{series.Formatter(deviation.Value)} σ, SE {series.Formatter(StandardError(deviation.Value, series.Runs))}"
+            : "";
+        return $"{series.Label}: {series.Formatter(value.Value)}{suffix}";
+    }
+
+    private string ChartYearsJson => JsonSerializer.Serialize(Result?.Comparisons.Select(item => item.Year.ToString(CultureInfo.InvariantCulture)).ToList() ?? []);
+
+    private static string ChartYValuesJson(IReadOnlyList<double?> values, Func<double, double> ySelector)
+    {
+        return JsonSerializer.Serialize(values.Select(value => value.HasValue ? Math.Round(ySelector(value.Value), 2) : (double?)null).ToList());
+    }
+
+    private static string ChartLegendLabelsJson(ValidationChartLine series)
+    {
+        return JsonSerializer.Serialize(series.Values.Select((_, index) => LegendSeriesLabel(series, index)).ToList());
+    }
+
+    private static double ChartLegendReserveWidthCh(ValidationChartLine series)
+    {
+        var maxLength = series.Values
+            .Select((_, index) => LegendSeriesLabel(series, index).Length)
+            .Append(series.Label.Length)
+            .DefaultIfEmpty(series.Label.Length)
+            .Max();
+        return Math.Max(series.Label.Length, maxLength) + 1;
+    }
+
+    private double StandardError(double standardDeviation)
+    {
+        return StandardError(standardDeviation, Result?.Parameters.Runs ?? Runs);
+    }
+
+    private static double StandardError(double standardDeviation, int runs)
+    {
+        return runs > 0 ? standardDeviation / Math.Sqrt(runs) : 0;
     }
 
     private static string ValueFirstHoverLabel(string label)
@@ -4069,6 +4344,11 @@ else
         }).Where(point => point is not null));
     }
 
+    private string ChartBandPoints(ChartToolState chart, ValidationChartLine series, int sigmaMultiplier)
+    {
+        return ChartBandPoints(series, sigmaMultiplier, value => ChartYForValue(chart, value));
+    }
+
     private double ChartXForIndex(int index)
     {
         var points = Result?.Comparisons ?? [];
@@ -4088,7 +4368,11 @@ else
     private ChartAxisBounds ChartAxisBoundsFor(ChartToolState chart)
     {
         var numbers = ChartSeries(chart)
-            .SelectMany(series => series.Values)
+            .SelectMany(series => series.Values
+                .Concat(series.OneSigmaLowValues ?? [])
+                .Concat(series.OneSigmaHighValues ?? [])
+                .Concat(series.TwoSigmaLowValues ?? [])
+                .Concat(series.TwoSigmaHighValues ?? []))
             .Where(value => value.HasValue)
             .Select(value => value!.Value)
             .ToList();
@@ -4372,6 +4656,44 @@ else
             var y = TotalYForValue(value.Value);
             return $"{x:0.##},{y:0.##}";
         }).Where(point => point is not null));
+    }
+
+    private string ValidationChartBandPoints(ValidationChartLine series, int sigmaMultiplier)
+    {
+        return ChartBandPoints(series, sigmaMultiplier, TotalYForValue);
+    }
+
+    private static string ChartBandPoints(ValidationChartLine series, int sigmaMultiplier, Func<double, double> ySelector)
+    {
+        var lowValues = sigmaMultiplier == 2 ? series.TwoSigmaLowValues : series.OneSigmaLowValues;
+        var highValues = sigmaMultiplier == 2 ? series.TwoSigmaHighValues : series.OneSigmaHighValues;
+        if (lowValues is null || highValues is null || series.Values.Count < 2)
+        {
+            return "";
+        }
+
+        var points = series.Values
+            .Select((_, index) => new
+            {
+                Index = index,
+                Low = lowValues.ElementAtOrDefault(index),
+                High = highValues.ElementAtOrDefault(index)
+            })
+            .Where(item => item.Low.HasValue && item.High.HasValue)
+            .ToList();
+        if (points.Count < 2)
+        {
+            return "";
+        }
+
+        double xForIndex(int index) => series.Values.Count == 1 ? 60 : 60 + (index * 800.0 / (series.Values.Count - 1));
+        var highPoints = points.Select(item => $"{xForIndex(item.Index):0.##},{ySelector(item.High!.Value):0.##}");
+        var lowPoints = points
+            .AsEnumerable()
+            .Reverse()
+            .Select(item => $"{xForIndex(item.Index):0.##},{ySelector(item.Low!.Value):0.##}");
+
+        return string.Join(" ", highPoints.Concat(lowPoints));
     }
 
     private string ComparisonChartPoints(IReadOnlyList<double?> values)
@@ -4912,7 +5234,13 @@ else
         IReadOnlyList<double?> Values,
         Func<double, string> Formatter,
         string DashArray,
-        string HoverLabel = "");
+        string HoverLabel = "",
+        IReadOnlyList<double?>? StandardDeviations = null,
+        int Runs = 0,
+        IReadOnlyList<double?>? OneSigmaLowValues = null,
+        IReadOnlyList<double?>? OneSigmaHighValues = null,
+        IReadOnlyList<double?>? TwoSigmaLowValues = null,
+        IReadOnlyList<double?>? TwoSigmaHighValues = null);
 
     private sealed record ValidationPinnedSelection(
         int Id,

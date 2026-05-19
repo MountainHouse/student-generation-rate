@@ -24,6 +24,7 @@ For human-facing orientation and detailed project rules, read:
 - If changing Household Simulation validation/scoring, update `docs/household-simulation-model.md`.
 - If changing UI interaction patterns, update `docs/ui.md`.
 - Reuse existing UI components/patterns when adding controls. Avoid duplicating matching UI behavior when a shared component is practical. If matching behavior exists only as page-local markup/code, consider extracting a shared reusable component before adding another copy.
+- Do not implement hover-only UI effects through Blazor state changes or component re-renders. Use JavaScript DOM updates for hover guides, markers, and legend value swaps; Blazor hover callbacks are too slow for this app.
 - If changing deployment/startup behavior, update `docs/deployment.md` and test hosted/static assumptions.
 
 ## Architecture Map

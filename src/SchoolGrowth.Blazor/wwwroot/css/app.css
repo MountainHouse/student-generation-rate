@@ -1126,6 +1126,19 @@ dd {
     white-space: nowrap;
 }
 
+.validation-legend-group > span:not(.legend-remove-spacer) {
+    display: inline-flex;
+    align-items: center;
+    min-width: var(--legend-value-width, auto);
+    white-space: nowrap;
+}
+
+.js-chart-hover-label {
+    display: inline-block;
+    width: var(--legend-value-width, auto);
+    white-space: nowrap;
+}
+
 .legend-remove {
     border: 0;
     border-radius: 999px;
