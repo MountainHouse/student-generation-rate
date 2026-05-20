@@ -813,22 +813,58 @@ public sealed class MonteCarloEnrollmentModel
             .ToList();
         if (gridHomes.Count == 0) return;
 
-        foreach (var (grade, value) in grades)
-        {
-            if (grade.Equals("TK", StringComparison.OrdinalIgnoreCase)) continue;
+        var targets = ValidationGrades.ToDictionary(
+            grade => grade,
+            grade => (int)Math.Round(Math.Max(0, grades.GetValueOrDefault(grade))),
+            StringComparer.OrdinalIgnoreCase);
+        var current = ValidationGrades.ToDictionary(
+            grade => grade,
+            grade => CountRegularGrade(gridHomes, grade),
+            StringComparer.OrdinalIgnoreCase);
+        var deficits = targets.ToDictionary(
+            kvp => kvp.Key,
+            kvp => Math.Max(0, kvp.Value - current.GetValueOrDefault(kvp.Key)),
+            StringComparer.OrdinalIgnoreCase);
+        var surplus = targets.ToDictionary(
+            kvp => kvp.Key,
+            kvp => Math.Max(0, current.GetValueOrDefault(kvp.Key) - kvp.Value),
+            StringComparer.OrdinalIgnoreCase);
 
-            var target = (int)Math.Round(Math.Max(0, value));
-            var current = gridHomes.Sum(home => home.Children.Count(child => ChildMatchesGrade(child, grade)));
-            var difference = target - current;
-            if (difference > 0)
+        foreach (var grade in ValidationGrades)
+        {
+            while (deficits.GetValueOrDefault(grade) > 0 && TryRetargetClosestSurplusChild(gridHomes, grade, surplus, random))
             {
-                AddBaselineChildren(gridHomes, grade, difference, random);
-            }
-            else if (difference < 0)
-            {
-                RemoveBaselineChildren(gridHomes, grade, -difference, random);
+                deficits[grade]--;
             }
         }
+
+        foreach (var grade in ValidationGrades)
+        {
+            while (deficits.GetValueOrDefault(grade) > 0 && TryConvertPostSchoolChild(gridHomes, grade, random))
+            {
+                deficits[grade]--;
+            }
+        }
+
+        foreach (var grade in ValidationGrades)
+        {
+            var remainingDeficit = deficits.GetValueOrDefault(grade);
+            if (remainingDeficit > 0)
+            {
+                AddBaselineChildrenToSmallestFamilies(gridHomes, grade, remainingDeficit, random);
+            }
+        }
+
+        foreach (var grade in ValidationGrades)
+        {
+            var remainingSurplus = surplus.GetValueOrDefault(grade);
+            if (remainingSurplus > 0)
+            {
+                RemoveBaselineChildrenFromLargestFamilies(gridHomes, grade, remainingSurplus, random);
+            }
+        }
+
+        ReconcileSpecialEducationChildren(gridHomes, grades, random);
     }
 
     private static bool ChildMatchesGrade(SimChild child, string grade)
@@ -838,28 +874,78 @@ public sealed class MonteCarloEnrollmentModel
             : !child.IsSpecialEducation && child.Grade.Equals(grade, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void AddBaselineChildren(List<SimHome> gridHomes, string grade, int count, Random random)
+    private static int CountRegularGrade(List<SimHome> gridHomes, string grade)
     {
+        var gradeIndex = GradeIndexFor(grade);
+        return gridHomes.Sum(home => home.Children.Count(child => !child.IsSpecialEducation && child.GradeIndex == gradeIndex));
+    }
+
+    private static bool TryRetargetClosestSurplusChild(
+        List<SimHome> gridHomes,
+        string targetGrade,
+        Dictionary<string, int> surplus,
+        Random random)
+    {
+        var targetIndex = GradeIndexFor(targetGrade);
+        var sourceGrades = surplus
+            .Where(kvp => kvp.Value > 0)
+            .Select(kvp => (Grade: kvp.Key, Index: GradeIndexFor(kvp.Key)))
+            .OrderBy(item => Math.Abs(item.Index - targetIndex))
+            .ThenBy(item => item.Index)
+            .ToList();
+
+        foreach (var source in sourceGrades)
+        {
+            var candidates = ChildLocations(gridHomes, child => !child.IsSpecialEducation && child.GradeIndex == source.Index);
+            if (candidates.Count == 0) continue;
+
+            var candidate = candidates[random.Next(candidates.Count)];
+            candidate.Child.SetGradeIndex(targetIndex);
+            surplus[source.Grade]--;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryConvertPostSchoolChild(List<SimHome> gridHomes, string targetGrade, Random random)
+    {
+        var targetIndex = GradeIndexFor(targetGrade);
+        var candidates = ChildLocations(gridHomes, child => !child.IsSpecialEducation && child.GradeIndex > 13)
+            .GroupBy(item => Math.Abs(item.Child.GradeIndex - targetIndex))
+            .OrderBy(group => group.Key)
+            .FirstOrDefault()
+            ?.ToList() ?? [];
+        if (candidates.Count == 0) return false;
+
+        var candidate = candidates[random.Next(candidates.Count)];
+        candidate.Child.SetGradeIndex(targetIndex);
+        return true;
+    }
+
+    private static void AddBaselineChildrenToSmallestFamilies(List<SimHome> gridHomes, string grade, int count, Random random)
+    {
+        var gradeIndex = GradeIndexFor(grade);
         for (var i = 0; i < count; i++)
         {
-            var isSpecialEducation = grade.Equals("Sp. Ed.", StringComparison.OrdinalIgnoreCase);
-            var gradeIndex = isSpecialEducation
-                ? DrawFromIndices(Enumerable.Range(0, 14).ToArray(), random)
-                : GradeIndexFor(grade);
-            gridHomes[random.Next(gridHomes.Count)].Children.Add(new SimChild(gradeIndex, isSpecialEducation));
+            var home = PickHomeByChildCount(gridHomes, preferSmallest: true, random);
+            home.Children.Add(new SimChild(gradeIndex, isSpecialEducation: false));
         }
     }
 
-    private static void RemoveBaselineChildren(List<SimHome> gridHomes, string grade, int count, Random random)
+    private static void RemoveBaselineChildrenFromLargestFamilies(List<SimHome> gridHomes, string grade, int count, Random random)
     {
         for (var i = 0; i < count; i++)
         {
-            var candidates = gridHomes
+            var homeCandidates = gridHomes
                 .Where(home => home.Children.Any(child => ChildMatchesGrade(child, grade)))
-                .ToList();
-            if (candidates.Count == 0) return;
+                .GroupBy(home => home.Children.Count)
+                .OrderByDescending(group => group.Key)
+                .FirstOrDefault()
+                ?.ToList() ?? [];
+            if (homeCandidates.Count == 0) return;
 
-            var home = candidates[random.Next(candidates.Count)];
+            var home = homeCandidates[random.Next(homeCandidates.Count)];
             var childIndexes = home.Children
                 .Select((child, index) => (child, index))
                 .Where(item => ChildMatchesGrade(item.child, grade))
@@ -867,6 +953,49 @@ public sealed class MonteCarloEnrollmentModel
                 .ToList();
             home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);
         }
+    }
+
+    private static void ReconcileSpecialEducationChildren(List<SimHome> gridHomes, Dictionary<string, double> grades, Random random)
+    {
+        var target = (int)Math.Round(Math.Max(0, grades.GetValueOrDefault("Sp. Ed.")));
+        var current = gridHomes.Sum(home => home.Children.Count(child => ChildMatchesGrade(child, "Sp. Ed.")));
+        var difference = target - current;
+        if (difference > 0)
+        {
+            AddSpecialEducationChildrenToSmallestFamilies(gridHomes, difference, random);
+        }
+        else if (difference < 0)
+        {
+            RemoveBaselineChildrenFromLargestFamilies(gridHomes, "Sp. Ed.", -difference, random);
+        }
+    }
+
+    private static void AddSpecialEducationChildrenToSmallestFamilies(List<SimHome> gridHomes, int count, Random random)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var home = PickHomeByChildCount(gridHomes, preferSmallest: true, random);
+            home.Children.Add(new SimChild(DrawFromIndices(Enumerable.Range(1, 13).ToArray(), random), isSpecialEducation: true));
+        }
+    }
+
+    private static SimHome PickHomeByChildCount(List<SimHome> homes, bool preferSmallest, Random random)
+    {
+        var candidates = (preferSmallest
+                ? homes.GroupBy(home => home.Children.Count).OrderBy(group => group.Key)
+                : homes.GroupBy(home => home.Children.Count).OrderByDescending(group => group.Key))
+            .First()
+            .ToList();
+        return candidates[random.Next(candidates.Count)];
+    }
+
+    private static List<(SimHome Home, SimChild Child)> ChildLocations(List<SimHome> homes, Func<SimChild, bool> predicate)
+    {
+        return homes
+            .SelectMany(home => home.Children
+                .Where(predicate)
+                .Select(child => (home, child)))
+            .ToList();
     }
 
     private Dictionary<string, double> AllocateGradesForGrid(string grid, double total, Dictionary<string, double> gradeShares)
@@ -1676,6 +1805,11 @@ public sealed class MonteCarloEnrollmentModel
         public string Grade => IsSpecialEducation ? "Sp. Ed." : GradeForIndex(GradeIndex);
 
         public static SimChild Newborn(bool isSpecialEducation) => new(-4, isSpecialEducation);
+
+        public void SetGradeIndex(int gradeIndex)
+        {
+            GradeIndex = gradeIndex;
+        }
 
         public void Advance()
         {
