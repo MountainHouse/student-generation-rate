@@ -281,9 +281,15 @@ window.schoolGrowthTools = (() => {
                 offsetX: 0,
                 offsetY: 0,
                 startX: 0,
-                startY: 0
+                startY: 0,
+                anchorInitialized: false,
+                anchorX: "right",
+                anchorY: "bottom",
+                anchorOffsetX: 14,
+                anchorOffsetY: 14
             };
             dragState.set(element, state);
+            window.requestAnimationFrame(() => initializeViewportAnchor(element));
 
             button.addEventListener("pointerdown", event => {
                 if (event.button !== undefined && event.button !== 0) return;
@@ -328,6 +334,7 @@ window.schoolGrowthTools = (() => {
 
                 state.dragging = false;
                 state.pointerId = null;
+                updateViewportAnchor(element);
                 button.releasePointerCapture?.(event.pointerId);
             });
 
@@ -379,6 +386,7 @@ window.schoolGrowthTools = (() => {
 
         panel.classList.add("tool-nav-panel-open");
         window.requestAnimationFrame(() => {
+            restoreViewportAnchor(element);
             chooseOpenDirection(element);
             clampVerticallyIntoViewport(element);
         });
@@ -473,10 +481,66 @@ window.schoolGrowthTools = (() => {
             viewport.top + margin,
             Math.min(top, viewport.bottom - Math.min(headerHeight, viewport.height - margin * 2) - margin));
 
+        setElementPosition(element, left, top);
+    }
+
+    function setElementPosition(element, left, top, updateAnchor = false) {
         element.style.left = `${left}px`;
         element.style.top = `${top}px`;
         element.style.right = "auto";
         element.style.bottom = "auto";
+        if (updateAnchor) {
+            updateViewportAnchor(element);
+        }
+    }
+
+    function updateViewportAnchor(element) {
+        const state = dragState.get(element);
+        if (!state) return;
+
+        const viewport = currentViewport();
+        const rect = element.getBoundingClientRect();
+        const margin = 8;
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        state.anchorX = centerX < viewport.left + viewport.width / 2 ? "left" : "right";
+        state.anchorY = centerY < viewport.top + viewport.height / 2 ? "top" : "bottom";
+        state.anchorOffsetX = state.anchorX === "left"
+            ? Math.max(margin, rect.left - viewport.left)
+            : Math.max(margin, viewport.right - rect.right);
+        state.anchorOffsetY = state.anchorY === "top"
+            ? Math.max(margin, rect.top - viewport.top)
+            : Math.max(margin, viewport.bottom - rect.bottom);
+        state.anchorInitialized = true;
+    }
+
+    function initializeViewportAnchor(element) {
+        const state = dragState.get(element);
+        if (!state || state.anchorInitialized) return;
+
+        updateViewportAnchor(element);
+    }
+
+    function restoreViewportAnchor(element) {
+        const state = dragState.get(element);
+        if (!state || state.dragging) return;
+
+        initializeViewportAnchor(element);
+        const viewport = currentViewport();
+        const rect = element.getBoundingClientRect();
+        const margin = 8;
+        const maxOffsetX = Math.max(margin, viewport.width - Math.min(rect.width, viewport.width - margin * 2) - margin);
+        const maxOffsetY = Math.max(margin, viewport.height - Math.min(rect.height, viewport.height - margin * 2) - margin);
+        const offsetX = Math.min(Math.max(margin, state.anchorOffsetX), maxOffsetX);
+        const offsetY = Math.min(Math.max(margin, state.anchorOffsetY), maxOffsetY);
+        const left = state.anchorX === "left"
+            ? viewport.left + offsetX
+            : viewport.right - rect.width - offsetX;
+        const top = state.anchorY === "top"
+            ? viewport.top + offsetY
+            : viewport.bottom - rect.height - offsetY;
+        setElementPosition(element, left, top, false);
     }
 
     function currentViewport() {
@@ -510,6 +574,7 @@ window.schoolGrowthTools = (() => {
         clampFrame = window.requestAnimationFrame(() => {
             clampFrame = 0;
             document.querySelectorAll(".tool-nav-float").forEach(element => {
+                restoreViewportAnchor(element);
                 chooseOpenDirection(element);
                 clampIntoViewport(element);
             });
