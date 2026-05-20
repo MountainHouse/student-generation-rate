@@ -372,7 +372,9 @@ button.icon {
 }
 
 .tool-header h2 {
+    min-width: 0;
     color: #33424d;
+    overflow-wrap: anywhere;
 }
 
 .tool-title-editable {
@@ -1067,6 +1069,52 @@ dd {
 }
 
 @media (max-width: 700px) {
+    .tool-header {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas:
+            "toggle title actions"
+            ". content content";
+        align-items: start;
+        gap: 8px 10px;
+    }
+
+    .tool-header .tool-toggle {
+        grid-area: toggle;
+    }
+
+    .tool-header h2,
+    .tool-header .tool-title-editable {
+        grid-area: title;
+        align-self: center;
+        line-height: 1.25;
+    }
+
+    .tool-header-content {
+        grid-area: content;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .tool-header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .tool-header-actions .compact-header-select,
+    .tool-header-actions .compact-header-input {
+        flex: 1 1 170px;
+        width: auto;
+        max-width: 100%;
+    }
+
+    .tool-actions {
+        grid-area: actions;
+        justify-self: end;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: 124px;
+    }
+
     .table-viz,
     .simulation-info-viz {
         grid-template-columns: minmax(0, 1fr);
