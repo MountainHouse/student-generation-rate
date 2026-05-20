@@ -257,6 +257,8 @@ window.schoolGrowthTables = (() => {
 window.schoolGrowthTools = (() => {
     const dragState = new WeakMap();
     let outsidePointerListenerAttached = false;
+    let viewportListenerAttached = false;
+    let clampFrame = 0;
 
     function scrollToTool(id) {
         const element = document.getElementById(`tool-${id}`);
@@ -306,13 +308,14 @@ window.schoolGrowthTools = (() => {
                     state.moved = true;
                 }
 
+                const viewport = currentViewport();
                 const rect = element.getBoundingClientRect();
                 const left = Math.min(
-                    Math.max(8, event.clientX - state.offsetX),
-                    window.innerWidth - rect.width - 8);
+                    Math.max(viewport.left + 8, event.clientX - state.offsetX),
+                    viewport.right - rect.width - 8);
                 const top = Math.min(
-                    Math.max(8, event.clientY - state.offsetY),
-                    window.innerHeight - rect.height - 8);
+                    Math.max(viewport.top + 8, event.clientY - state.offsetY),
+                    viewport.bottom - rect.height - 8);
 
                 element.style.left = `${left}px`;
                 element.style.top = `${top}px`;
@@ -341,6 +344,8 @@ window.schoolGrowthTools = (() => {
         });
 
         attachOutsidePointerListener();
+        attachViewportListener();
+        scheduleClampAll();
     }
 
     function setOpen(selector, open) {
@@ -403,10 +408,11 @@ window.schoolGrowthTools = (() => {
         const popupHeight = popupRect.height;
         const popupWidth = popupRect.width;
         const margin = 8;
-        const spaceBelow = window.innerHeight - headerRect.bottom - margin;
+        const viewport = currentViewport();
+        const spaceBelow = viewport.bottom - headerRect.bottom - margin;
         const spaceAbove = headerRect.top - margin;
         const spaceLeft = headerRect.right - margin;
-        const spaceRight = window.innerWidth - headerRect.left - margin;
+        const spaceRight = viewport.right - headerRect.left - margin;
 
         if (spaceBelow < popupHeight && spaceAbove > spaceBelow) {
             element.classList.add("tool-nav-open-above");
@@ -418,6 +424,10 @@ window.schoolGrowthTools = (() => {
     }
 
     function clampVerticallyIntoViewport(element) {
+        clampIntoViewport(element);
+    }
+
+    function clampIntoViewport(element) {
         const panel = element.querySelector(".tool-nav-panel");
         if (!panel) return;
 
@@ -425,6 +435,7 @@ window.schoolGrowthTools = (() => {
         const popup = panel.querySelector(".tool-nav-popup");
         if (!header) return;
 
+        const viewport = currentViewport();
         const headerRect = header.getBoundingClientRect();
         const popupRect = popup?.getBoundingClientRect();
 
@@ -434,34 +445,75 @@ window.schoolGrowthTools = (() => {
         const opensAbove = element.classList.contains("tool-nav-open-above");
 
         if (opensAbove) {
-            if (headerRect.bottom > window.innerHeight - margin) {
-                top -= headerRect.bottom - (window.innerHeight - margin);
+            if (headerRect.bottom > viewport.bottom - margin) {
+                top -= headerRect.bottom - (viewport.bottom - margin);
             }
-            if (headerRect.top < margin && (!popupRect || popupRect.top >= margin)) {
-                top += margin - headerRect.top;
+            if (headerRect.top < viewport.top + margin && (!popupRect || popupRect.top >= viewport.top + margin)) {
+                top += viewport.top + margin - headerRect.top;
             }
-            if (popup && popupRect && popupRect.top < margin) {
-                const maxPopupHeight = Math.max(120, headerRect.top - margin);
-                popup.style.maxHeight = `${Math.min(maxPopupHeight, window.innerHeight - margin * 2)}px`;
+            if (popup && popupRect && popupRect.top < viewport.top + margin) {
+                const maxPopupHeight = Math.max(120, headerRect.top - viewport.top - margin);
+                popup.style.maxHeight = `${Math.min(maxPopupHeight, viewport.height - margin * 2)}px`;
             }
         } else {
-            if (headerRect.top < margin) {
-                top += margin - headerRect.top;
+            if (headerRect.top < viewport.top + margin) {
+                top += viewport.top + margin - headerRect.top;
             }
-            if (popupRect && popupRect.bottom > window.innerHeight - margin) {
-                top -= popupRect.bottom - (window.innerHeight - margin);
+            if (popupRect && popupRect.bottom > viewport.bottom - margin) {
+                top -= popupRect.bottom - (viewport.bottom - margin);
             }
         }
 
         const headerWidth = headerRect.width || 120;
         const headerHeight = headerRect.height || 34;
-        left = Math.max(margin, Math.min(left, window.innerWidth - Math.min(headerWidth, window.innerWidth - margin * 2) - margin));
-        top = Math.max(margin, Math.min(top, window.innerHeight - Math.min(headerHeight, window.innerHeight - margin * 2) - margin));
+        left = Math.max(
+            viewport.left + margin,
+            Math.min(left, viewport.right - Math.min(headerWidth, viewport.width - margin * 2) - margin));
+        top = Math.max(
+            viewport.top + margin,
+            Math.min(top, viewport.bottom - Math.min(headerHeight, viewport.height - margin * 2) - margin));
 
         element.style.left = `${left}px`;
         element.style.top = `${top}px`;
         element.style.right = "auto";
         element.style.bottom = "auto";
+    }
+
+    function currentViewport() {
+        const visual = window.visualViewport;
+        const left = visual?.offsetLeft ?? 0;
+        const top = visual?.offsetTop ?? 0;
+        const width = visual?.width ?? window.innerWidth;
+        const height = visual?.height ?? window.innerHeight;
+        return {
+            left,
+            top,
+            right: left + width,
+            bottom: top + height,
+            width,
+            height
+        };
+    }
+
+    function attachViewportListener() {
+        if (viewportListenerAttached) return;
+        viewportListenerAttached = true;
+
+        window.addEventListener("resize", scheduleClampAll, { passive: true });
+        window.addEventListener("orientationchange", scheduleClampAll, { passive: true });
+        window.visualViewport?.addEventListener("resize", scheduleClampAll, { passive: true });
+        window.visualViewport?.addEventListener("scroll", scheduleClampAll, { passive: true });
+    }
+
+    function scheduleClampAll() {
+        if (clampFrame) return;
+        clampFrame = window.requestAnimationFrame(() => {
+            clampFrame = 0;
+            document.querySelectorAll(".tool-nav-float").forEach(element => {
+                chooseOpenDirection(element);
+                clampIntoViewport(element);
+            });
+        });
     }
 
     return { scrollToTool, attachDraggable, setOpen, close };

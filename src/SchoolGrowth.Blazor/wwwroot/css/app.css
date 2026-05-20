@@ -108,6 +108,8 @@ button.icon {
 }
 
 .band {
+    max-width: 100%;
+    min-width: 0;
     padding: 18px 0;
     border-bottom: 1px solid var(--line);
 }
@@ -362,6 +364,7 @@ button.icon {
 .tool-panel {
     display: grid;
     gap: 14px;
+    min-width: 0;
 }
 
 .tool-header {
@@ -571,6 +574,8 @@ button.icon {
 .tool-body {
     display: grid;
     gap: 14px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .settings-stack {
@@ -899,6 +904,8 @@ dd {
     border-radius: 8px;
     background: #ffffff;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .empty-table-note {
@@ -969,11 +976,21 @@ dd {
     grid-template-columns: minmax(720px, 1fr) minmax(440px, 34vw);
     gap: 18px;
     align-items: start;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .table-viz-no-chart {
     display: block;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.table-viz-no-chart > .table-wrap {
+    display: block;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .floating-table-head {
