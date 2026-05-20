@@ -674,6 +674,9 @@ window.schoolGrowthValidationChart = (() => {
             defaultLabel: label.dataset.defaultLabel || label.textContent || "",
             labels: readJson(label.dataset.labels, [])
         }));
+        if (state.lastIndex >= state.pointCount) {
+            state.lastIndex = -1;
+        }
 
         if (!state.attached) {
             state.onPointerMove = event => {
@@ -706,6 +709,11 @@ window.schoolGrowthValidationChart = (() => {
         }
 
         element.__schoolGrowthValidationHover = state;
+        if (state.lastIndex >= 0) {
+            updateHoverDom(element, state.lastIndex);
+        } else {
+            clearHoverDom(element);
+        }
     }
 
     function attachById(elementId, dotNet, pointCount, chartId) {

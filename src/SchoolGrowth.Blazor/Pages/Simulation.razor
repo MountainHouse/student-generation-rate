@@ -1289,27 +1289,42 @@ else
     </ToolPanel>
     }
 
+    @if (IsToolActive(ToolTutorial))
+    {
+    <ToolPanel Id="@ToolTutorial" Title="Tutorial" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolTutorial)"
+               Collapsed="@IsToolCollapsed(ToolTutorial)" CanMoveUp="@CanMoveToolUp(ToolTutorial)" CanMoveDown="@CanMoveToolDown(ToolTutorial)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <h2>What This Tool Does</h2>
+        <p>Household Simulation estimates how many Mountain House, CA students may live in the district as homes are built and households change over time. It runs many possible futures, averages them, and shows likely enrollment patterns rather than one exact future.</p>
+        <p>The model data includes Mountain House home construction by village and density from the first listed homes in 2003 through early 2026. District reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years. Model-fit comparisons focus on school-year reference counts and ignore TK because TK eligibility rules changed over time.</p>
+
+        <h2>Try This First</h2>
+        <ol>
+            <li>Open <strong>Simulation Parameters</strong> and change <strong>End year</strong>. A longer end year lets you see how the model behaves farther into the future.</li>
+            <li>Open <strong>Future Homes</strong>. You can add rows manually, or use the Future Homes selector in the floating Tools menu to load a tutorial scenario.</li>
+            <li>For a simple slow-build scenario, add 100 medium-density homes in Pombo for each year from 2026 through 2030. The built-in set named <strong>Tutorial: Pombo medium 100/year 2026-2030</strong> does this for you.</li>
+            <li>Compare that with a one-time wave: load <strong>Tutorial: Pombo medium 500 in 2026</strong>, then try <strong>Tutorial: Pombo medium 500 in 2030</strong>.</li>
+            <li>Repeat the comparison with the larger 300/year and 1500-home tutorial sets.</li>
+        </ol>
+
+        <h2>Reading The Chart</h2>
+        <p>The <strong>Simulation Summary</strong> chart can show total students, high-school students, individual grades, villages, densities, homes, generation rates, family profiles, and turnover. The default layout pins districtwide students and high-school students so you can see both together.</p>
+        <p>Use the dropdowns above the chart to choose what to show. Click <strong>+</strong> to keep the current line group and then choose another one. The legend shows the min/max range normally and switches to exact year values when you hover the chart.</p>
+
+        <h2>Tools Menu</h2>
+        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it to jump to tools, add tools, load parameter presets, load layouts, or load Future Homes sets.</p>
+        <p>Important configuration tools, including Run Setup and Model Fit Weights, are hidden by default. Add them from the Tools menu when you need more control.</p>
+    </ToolPanel>
+    }
+
     @if (IsToolActive(ToolRules))
     {
     <ToolPanel Id="@ToolRules" Title="Model Documentation" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
                Collapsed="@IsToolCollapsed(ToolRules)" CanMoveUp="@CanMoveToolUp(ToolRules)" CanMoveDown="@CanMoveToolDown(ToolRules)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-        <h2>What This Tool Does</h2>
-        <p>Household Simulation estimates how many students may live in the district as homes are built and households change over time. It starts from known school and housing data, then runs many possible futures and shows the average result. The goal is not to predict one exact family in one exact house, but to estimate the likely enrollment pattern.</p>
-        <p>The most useful first view is Simulation Summary. It can show district total students, high-school students, individual grades, villages, densities, homes, student generation rates, family profiles, and turnover.</p>
-
-        <h2>Quick Tutorial</h2>
-        <ol>
-            <li>Open Simulation Parameters and change End year. A longer end year lets you see how the model behaves farther into the future, even when no new reference data exists.</li>
-            <li>Open Future Homes and add 100 homes in Pombo, Low density, built in 2026. Add four more rows with the same village and density for 2027, 2028, 2029, and 2030.</li>
-            <li>Look at Simulation Summary. Use Students, All villages, All densities, All grades, Count to see total district students. Change All grades to HS to focus on high-school enrollment.</li>
-            <li>Click + on the chart to keep the current line, then change All grades to HS and click + again. Now the same chart can show district total and high school together.</li>
-            <li>Try a different growth shape: remove the five 100-home rows and add one row with 500 homes in 2026. Compare the result with the smoother 100-per-year scenario.</li>
-        </ol>
-
-        <h2>Tools Menu</h2>
-        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it to jump to an existing tool or add another tool, such as a Custom Chart. Important configuration tools, including Run Setup and Model Fit Weights, are hidden by default but can be added from this menu.</p>
-        <p>Use the Parameter preset selector to quickly load saved assumptions. After you manually edit a parameter, the preset changes to Custom so it is clear that you are no longer using the saved preset exactly.</p>
+        <h2>Data Scope</h2>
+        <p>This model is calibrated for Mountain House, CA. Housing data lists homes by village/neighborhood and density from 2003 through early 2026. School, village, and grade reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years.</p>
+        <p>Current fit scoring excludes TK because TK enrollment rules changed substantially. Lammersville, Inter-Districts, and MHESD are excluded from the main city validation comparison; MHESD contributes only high-school students when appropriate.</p>
 
         <h2>How The Model Works</h2>
         <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the fit window starts. If a reference village has students but no listed homes through the baseline year, the model creates synthetic played-back homes and reports them in Baseline Data Gaps.</p>
@@ -1402,7 +1417,7 @@ else
         ToolModelSettings,
         ToolScenarioHomes,
         ToolValidationSummary,
-        ToolRules
+        ToolTutorial
     ];
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
@@ -1421,6 +1436,7 @@ else
     private const string ToolModeledReference = "modeled-reference";
     private const string ToolGridDetail = "grid-detail";
     private const string ToolGradeDetail = "grade-detail";
+    private const string ToolTutorial = "tutorial";
     private const string ToolRules = "rules";
     private static readonly IReadOnlyList<MonteCarloToolDefinition> ToolDefinitions =
     [
@@ -1439,6 +1455,7 @@ else
         new(ToolModeledReference, "Reference Comparison"),
         new(ToolGridDetail, "Village Details"),
         new(ToolGradeDetail, "Grade Details"),
+        new(ToolTutorial, "Tutorial"),
         new(ToolRules, "Model Documentation")
     ];
     private static readonly HashSet<string> ResultToolIds =
@@ -1455,6 +1472,7 @@ else
         ToolModeledReference,
         ToolGridDetail,
         ToolGradeDetail,
+        ToolTutorial,
         ToolRules
     ];
 

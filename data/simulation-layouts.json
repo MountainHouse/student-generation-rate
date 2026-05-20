@@ -3,7 +3,7 @@
     "Name": "Default layout",
     "Layout": {
       "ActiveToolIds": [
-        "rules",        
+        "tutorial",
         "model-settings",
         "scenario-homes",
         "validation-summary",
@@ -11,7 +11,6 @@
         "cohorts"
       ],
       "CollapsedToolIds": [
-        "rules",        
         "grid-totals",
         "cohorts"        
       ],
