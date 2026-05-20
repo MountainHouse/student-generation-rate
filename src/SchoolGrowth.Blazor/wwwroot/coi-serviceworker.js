@@ -32,6 +32,8 @@
                 const shouldBypassCache =
                     requestUrl.origin === self.location.origin &&
                     (requestUrl.pathname.includes("/_framework/") ||
+                        requestUrl.pathname.includes("/data/") ||
+                        requestUrl.pathname.includes("/sample-data/") ||
                         requestUrl.pathname.endsWith("/coi-serviceworker.js") ||
                         requestUrl.pathname.endsWith("/service-worker-assets.js"));
 

@@ -319,10 +319,10 @@ else
     {
         try
         {
-            var homes = await Http.GetStringAsync("data/homes.csv");
-            var grid = await Http.GetStringAsync("data/grid.csv");
-            var grade = await Http.GetStringAsync("data/grade.csv");
-            var schools = await Http.GetStringAsync("data/schools.csv");
+            var homes = await Http.GetStringAsync(ClientAssets.DataUrl("data/homes.csv"));
+            var grid = await Http.GetStringAsync(ClientAssets.DataUrl("data/grid.csv"));
+            var grade = await Http.GetStringAsync(ClientAssets.DataUrl("data/grade.csv"));
+            var schools = await Http.GetStringAsync(ClientAssets.DataUrl("data/schools.csv"));
             Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
             Model = EnrollmentModel.Calibrate(Data);
             StartYear = Data.AugustYears.LastOrDefault(2025) + 1;

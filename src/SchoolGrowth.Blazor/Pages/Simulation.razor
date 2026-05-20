@@ -635,7 +635,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span style="@($"--legend-value-width:{CssCh(ChartLegendReserveWidthCh(series))}")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
+                            <span style="@($"--legend-value-width:{CssCh(ChartLegendReserveWidthCh(series))}")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@LegendSeriesDefaultLabel(series)" data-labels="@ChartLegendLabelsJson(series)">@LegendSeriesDefaultLabel(series)</span></span>
                         }
                     </span>
                 }
@@ -795,7 +795,7 @@ else
                         <strong>@group.Label</strong>
                         @foreach (var series in group.Series)
                         {
-                            <span style="@($"--legend-value-width:{CssCh(ChartLegendReserveWidthCh(series))}")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@series.Label" data-labels="@ChartLegendLabelsJson(series)">@series.Label</span></span>
+                            <span style="@($"--legend-value-width:{CssCh(ChartLegendReserveWidthCh(series))}")"><i style="@($"background:{series.Color}")"></i><span class="js-chart-hover-label" data-default-label="@LegendSeriesDefaultLabel(series)" data-labels="@ChartLegendLabelsJson(series)">@LegendSeriesDefaultLabel(series)</span></span>
                         }
                     </span>
                 }
@@ -1507,8 +1507,10 @@ else
     private int ValidationResultVersion { get; set; }
     private string? ValidationChartCacheKey { get; set; }
     private ValidationChartCache? ValidationChartCacheValue { get; set; }
+    private readonly ChartToolState ValidationSummaryChart = new(ToolValidationSummary, "Simulation Summary");
+    private readonly Dictionary<string, ValidationChartCache> ValidationChartCaches = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SegmentStats> ValidationSegmentStatsCache = new(StringComparer.OrdinalIgnoreCase);
-    private List<ValidationPinnedSelection> ValidationPinnedSelections { get; } = [];
+    private List<ChartPinnedSelection> ValidationPinnedSelections { get; } = [];
     private int NextValidationPinnedSelectionId { get; set; } = 1;
     private ElementReference ValidationChartSvg { get; set; }
     private DotNetObjectReference<Simulation>? ValidationHoverReference { get; set; }
@@ -1983,10 +1985,10 @@ else
     {
         try
         {
-            var homes = await Http.GetStringAsync("data/homes.csv");
-            var grid = await Http.GetStringAsync("data/grid.csv");
-            var grade = await Http.GetStringAsync("data/grade.csv");
-            var schools = await Http.GetStringAsync("data/schools.csv");
+            var homes = await Http.GetStringAsync(ClientAssets.DataUrl("data/homes.csv"));
+            var grid = await Http.GetStringAsync(ClientAssets.DataUrl("data/grid.csv"));
+            var grade = await Http.GetStringAsync(ClientAssets.DataUrl("data/grade.csv"));
+            var schools = await Http.GetStringAsync(ClientAssets.DataUrl("data/schools.csv"));
             Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
             Model = new MonteCarloEnrollmentModel(Data);
             await LoadPresetsAsync();
@@ -2069,7 +2071,7 @@ else
     {
         try
         {
-            var presets = await Http.GetFromJsonAsync<IReadOnlyList<MonteCarloParameterPreset>>("data/simulation-presets.json");
+            var presets = await Http.GetFromJsonAsync<IReadOnlyList<MonteCarloParameterPreset>>(ClientAssets.DataUrl("data/simulation-presets.json"));
             if (presets is not null && presets.Count > 0)
             {
                 BuiltInParameterPresets = presets;
@@ -2095,7 +2097,7 @@ else
     {
         try
         {
-            var text = await Http.GetStringAsync("data/simulation-layouts.json");
+            var text = await Http.GetStringAsync(ClientAssets.DataUrl("data/simulation-layouts.json"));
             var layouts = TryDeserialize<List<NamedSimulationLayout>>(text) ?? [];
             BuiltInLayouts = NormalizeNamedLayouts(layouts);
         }
@@ -2114,12 +2116,12 @@ else
     {
         try
         {
-            var text = await Http.GetStringAsync("data/future-home-sets.json");
+            var text = await Http.GetStringAsync(ClientAssets.DataUrl("data/future-home-sets.json"));
             var definitions = TryDeserialize<List<NamedScenarioHomesCsv>>(text) ?? [];
             var sets = new List<NamedScenarioHomes>();
             foreach (var definition in definitions.Where(item => !string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.File)))
             {
-                var csv = await Http.GetStringAsync($"data/future-home-sets/{definition.File}");
+                var csv = await Http.GetStringAsync(ClientAssets.DataUrl($"data/future-home-sets/{definition.File}"));
                 sets.Add(new NamedScenarioHomes(definition.Name.Trim(), ParseScenarioHomesCsv(csv)));
             }
 
@@ -2167,6 +2169,7 @@ else
             ValidationDensity: AllDensity,
             ValidationBreakdown: "Total",
             ValidationValueMode: "value",
+            ValidationPinnedSelections: [],
             ChartTools: [],
             ScenarioHomes: null);
 
@@ -2932,6 +2935,7 @@ else
             ValidationDensity,
             ValidationBreakdown,
             ValidationValueMode,
+            ValidationPinnedSelections.Select(SavedChartSelection.From).ToList(),
             ChartTools.Select(SavedChartTool.From).ToList(),
             includeScenarioHomes
                 ? ScenarioRows.Select(SavedScenarioHome.From).ToList()
@@ -2969,6 +2973,17 @@ else
         ValidationDensity = string.IsNullOrWhiteSpace(layout.ValidationDensity) ? AllDensity : layout.ValidationDensity;
         ValidationBreakdown = string.IsNullOrWhiteSpace(layout.ValidationBreakdown) ? "Total" : layout.ValidationBreakdown;
         ValidationValueMode = string.IsNullOrWhiteSpace(layout.ValidationValueMode) ? "value" : layout.ValidationValueMode;
+        ValidationPinnedSelections.Clear();
+        foreach (var pin in layout.ValidationPinnedSelections ?? [])
+        {
+            ValidationPinnedSelections.Add(new ChartPinnedSelection(
+                pin.Id,
+                new ChartSelection(pin.Measure, pin.Neighborhood, pin.Density, pin.Breakdown, pin.ValueMode)));
+        }
+
+        NextValidationPinnedSelectionId = Math.Max(
+            1,
+            ValidationPinnedSelections.Select(selection => selection.Id).DefaultIfEmpty(0).Max() + 1);
 
         if (includeScenarioHomes)
         {
@@ -3181,7 +3196,6 @@ else
 
         ValidationResultVersion++;
         InvalidateValidationChartCache();
-        ValidationPinnedSelections.Clear();
         foreach (var chart in ChartTools)
         {
             InvalidateChart(chart);
@@ -3942,10 +3956,13 @@ else
         get
         {
             var groups = ValidationPinnedSelections
-                .Select(selection => new ValidationLegendGroup(selection.Id, selection.Label, selection.Series))
+                .Select((selection, index) => new ValidationLegendGroup(
+                    selection.Id,
+                    ChartSelectionLabel(selection.Selection),
+                    BuildValidationChartCache(selection.Selection, index).Series))
                 .ToList();
 
-            if (!ValidationPinnedSelections.Any(selection => selection.Key.Equals(CurrentValidationSelectionKey, StringComparison.OrdinalIgnoreCase)))
+            if (!ValidationPinnedSelections.Any(selection => ChartSelectionKey(selection.Selection).Equals(CurrentValidationSelectionKey, StringComparison.OrdinalIgnoreCase)))
             {
                 groups.Add(new ValidationLegendGroup(null, ValidationChartSelectionLabel, CurrentValidationChart.Series));
             }
@@ -3959,7 +3976,10 @@ else
         .ToList();
 
     private string CurrentValidationSelectionKey =>
-        $"{ValidationMeasure}|{EffectiveValidationNeighborhood}|{EffectiveValidationDensity}|{EffectiveValidationBreakdown}|{EffectiveValidationValueMode}";
+        ChartSelectionKey(CurrentValidationSelection);
+
+    private ChartSelection CurrentValidationSelection =>
+        new(ValidationMeasure, EffectiveValidationNeighborhood, EffectiveValidationDensity, EffectiveValidationBreakdown, EffectiveValidationValueMode);
 
     private string ValidationModeledSeriesLabel => ValidationMeasure switch
     {
@@ -4028,21 +4048,14 @@ else
 
     private void PinValidationChartSelection()
     {
-        if (ValidationPinnedSelections.Any(selection => selection.Key.Equals(CurrentValidationSelectionKey, StringComparison.OrdinalIgnoreCase)))
+        var selection = CurrentValidationSelection;
+        var key = ChartSelectionKey(selection);
+        if (ValidationPinnedSelections.Any(pin => ChartSelectionKey(pin.Selection).Equals(key, StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
 
-        var cache = CurrentValidationChart;
-        var color = ValidationColorForIndex(ValidationPinnedSelections.Count);
-        var series = cache.Series
-            .Select(line => line with { Color = color })
-            .ToList();
-        ValidationPinnedSelections.Add(new ValidationPinnedSelection(
-            NextValidationPinnedSelectionId++,
-            CurrentValidationSelectionKey,
-            ValidationChartSelectionLabel,
-            series));
+        ValidationPinnedSelections.Add(new ChartPinnedSelection(NextValidationPinnedSelectionId++, selection));
         InvalidateValidationChartCache();
     }
 
@@ -4070,7 +4083,7 @@ else
             EffectiveValidationDensity,
             EffectiveValidationBreakdown,
             EffectiveValidationValueMode,
-            string.Join(';', ValidationPinnedSelections.Select(selection => $"{selection.Id}:{selection.Key}")));
+            string.Join(';', ValidationPinnedSelections.Select(selection => $"{selection.Id}:{ChartSelectionKey(selection.Selection)}")));
 
     private double ValidationChartMax
     {
@@ -4101,79 +4114,29 @@ else
     {
         get
         {
-            var key = $"{ValidationResultVersion}|{CurrentValidationSelectionKey}";
+            var key = $"{ValidationResultVersion}|{CurrentValidationSelectionKey}|{ValidationPinnedSelections.Count}";
             if (ValidationChartCacheValue is not null && ValidationChartCacheKey == key)
             {
                 return ValidationChartCacheValue;
             }
 
-            var modeledBase = ValidationModeledBaseValues;
-            var referenceBase = ValidationReferenceBaseValues;
-            var modeledValues = TransformValidationValues(modeledBase, reference: false);
-            var referenceValues = TransformValidationValues(referenceBase, reference: true);
-            var modeledStdDevs = TransformValidationStandardDeviations(ValidationModeledStandardDeviationBaseValues, modeledBase);
-            var absoluteErrors = referenceBase
-                .Zip(modeledBase, (reference, modeled) => reference.HasValue && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) : (double?)null)
-                .ToList();
-            var percentErrors = referenceBase
-                .Zip(modeledBase, (reference, modeled) => reference is > 0 && modeled.HasValue ? Math.Abs(modeled.Value - reference.Value) / reference.Value : (double?)null)
-                .ToList();
-            var hasReference = referenceBase.Any(value => value.HasValue);
-            var color = ValidationColorForIndex(ValidationPinnedSelections.Count);
-            var series = EffectiveValidationValueMode switch
-            {
-                "absolute-error" => new List<ValidationChartLine> { new("Absolute error", color, absoluteErrors, FormatCount, "") },
-                "percent-error" => new List<ValidationChartLine> { new("Percentage error", color, percentErrors, FormatPercent, "") },
-                _ => hasReference
-                    ?
-                    [
-                        new("Reference", color, referenceValues, ValidationFormatter, "7 5"),
-                        BuildModeledChartLine(ValidationModeledSeriesLabel, color, modeledValues, modeledStdDevs, ValidationFormatter)
-                    ]
-                    :
-                    [
-                        BuildModeledChartLine(ValidationModeledSeriesLabel, color, modeledValues, modeledStdDevs, ValidationFormatter)
-                    ]
-            };
-            var numbers = series
-                .SelectMany(item => item.Values
-                    .Concat(item.OneSigmaLowValues ?? [])
-                    .Concat(item.OneSigmaHighValues ?? [])
-                    .Concat(item.TwoSigmaLowValues ?? [])
-                    .Concat(item.TwoSigmaHighValues ?? []))
-                .Where(value => value.HasValue)
-                .Select(value => value!.Value)
-                .ToList();
-            var max = 1.0;
-            var min = 0.0;
-            if (numbers.Count > 0)
-            {
-                var rawMax = numbers.Max();
-                var rawMin = numbers.Min();
-                if (rawMin < 0)
-                {
-                    max = ChartAxis.NiceMaximum(Math.Max(Math.Abs(rawMin), Math.Abs(rawMax)) * 1.08);
-                    min = -max;
-                }
-                else
-                {
-                    max = ChartAxis.NiceMaximum(Math.Max(1, rawMax * 1.08));
-                }
-            }
-
-            ValidationChartCacheValue = new ValidationChartCache(
-                modeledValues,
-                referenceValues,
-                absoluteErrors,
-                percentErrors,
-                series,
-                numbers,
-                max,
-                min,
-                Math.Max(1, max - min));
+            ValidationChartCacheValue = BuildValidationChartCache(CurrentValidationSelection, ValidationPinnedSelections.Count);
             ValidationChartCacheKey = key;
             return ValidationChartCacheValue;
         }
+    }
+
+    private ValidationChartCache BuildValidationChartCache(ChartSelection selection, int colorIndex)
+    {
+        var key = $"{ValidationResultVersion}|{ChartSelectionKey(selection)}|{colorIndex}";
+        if (ValidationChartCaches.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var cache = BuildChartCache(ValidationSummaryChart, selection, colorIndex);
+        ValidationChartCaches[key] = cache;
+        return cache;
     }
 
     private double? ValidationModeledBaseValue(MonteCarloYearComparison comparison)
@@ -4664,7 +4627,11 @@ else
     {
         ValidationChartCacheValue = null;
         ValidationChartCacheKey = null;
+        ValidationChartCaches.Clear();
         ValidationSegmentStatsCache.Clear();
+        ValidationSummaryChart.CacheKey = null;
+        ValidationSummaryChart.CacheValue = null;
+        ValidationSummaryChart.SegmentStatsCache.Clear();
     }
 
     private IReadOnlyList<string> ChartNeighborhoodOptions(ChartToolState chart) => chart.Measure is "family" or "turnover"
@@ -5286,7 +5253,7 @@ else
     {
         if (!hoverIndex.HasValue)
         {
-            return series.Label;
+            return LegendSeriesDefaultLabel(series);
         }
 
         var value = series.Values.ElementAtOrDefault(hoverIndex.Value);
@@ -5300,6 +5267,27 @@ else
             ? $" ±{series.Formatter(deviation.Value)} σ, SE {series.Formatter(StandardError(deviation.Value, series.Runs))}"
             : "";
         return $"{series.Label}: {series.Formatter(value.Value)}{suffix}";
+    }
+
+    private static string LegendSeriesDefaultLabel(ValidationChartLine series)
+    {
+        var values = series.Values
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToList();
+        if (values.Count == 0)
+        {
+            return series.Label;
+        }
+
+        var min = values.Min();
+        var max = values.Max();
+        if (Math.Abs(max - min) < 0.0000001)
+        {
+            return $"{series.Label}: {series.Formatter(min)}";
+        }
+
+        return $"{series.Label}: min {series.Formatter(min)} / max {series.Formatter(max)}";
     }
 
     private string ChartYearsJson => JsonSerializer.Serialize(Result?.Comparisons.Select(item => item.Year.ToString(CultureInfo.InvariantCulture)).ToList() ?? []);
@@ -5316,12 +5304,13 @@ else
 
     private static double ChartLegendReserveWidthCh(ValidationChartLine series)
     {
+        var defaultLabel = LegendSeriesDefaultLabel(series);
         var maxLength = series.Values
             .Select((_, index) => LegendSeriesLabel(series, index).Length)
-            .Append(series.Label.Length)
-            .DefaultIfEmpty(series.Label.Length)
+            .Append(defaultLabel.Length)
+            .DefaultIfEmpty(defaultLabel.Length)
             .Max();
-        return Math.Max(series.Label.Length, maxLength) + 1;
+        return Math.Max(defaultLabel.Length, maxLength) + 1;
     }
 
     private double StandardError(double standardDeviation)
@@ -6082,6 +6071,7 @@ else
         string ValidationDensity,
         string ValidationBreakdown,
         string ValidationValueMode,
+        IReadOnlyList<SavedChartSelection>? ValidationPinnedSelections = null,
         IReadOnlyList<SavedChartTool>? ChartTools = null,
         IReadOnlyList<SavedScenarioHome>? ScenarioHomes = null);
 
@@ -6201,12 +6191,6 @@ else
         IReadOnlyList<double?>? OneSigmaHighValues = null,
         IReadOnlyList<double?>? TwoSigmaLowValues = null,
         IReadOnlyList<double?>? TwoSigmaHighValues = null);
-
-    private sealed record ValidationPinnedSelection(
-        int Id,
-        string Key,
-        string Label,
-        IReadOnlyList<ValidationChartLine> Series);
 
     private sealed record ValidationLegendGroup(
         int? PinnedId,

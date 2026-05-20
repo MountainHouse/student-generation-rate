@@ -168,6 +168,8 @@ static StaticFileOptions CreateBlazorStaticFileOptions(string root)
 static bool ShouldDisableBrowserCache(PathString path)
 {
     return path.StartsWithSegments("/_framework")
+        || path.StartsWithSegments("/data")
+        || path.StartsWithSegments("/sample-data")
         || path.StartsWithSegments("/css")
         || path.StartsWithSegments("/js")
         || path.StartsWithSegments("/lib")
