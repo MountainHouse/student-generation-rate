@@ -540,8 +540,8 @@ else
                Collapsed="@IsToolCollapsed(ToolValidationSummary)" CanMoveUp="@CanMoveToolUp(ToolValidationSummary)" CanMoveDown="@CanMoveToolDown(ToolValidationSummary)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <RenderGate Version="@ValidationSummaryRenderKey">
-    <div class="charts">
-        <div class="chart-box">
+    <div class="charts @(ValidationChartExpanded ? "charts-expanded" : "")">
+        <div id="@ValidationChartPanelElementId" class="chart-box @(ValidationChartExpanded ? "chart-box-expanded" : "")">
             <div class="chart-head">
                 <h2>Simulation Trend</h2>
                 <div class="chart-controls validation-chart-controls">
@@ -578,23 +578,27 @@ else
                         }
                     </select>
                     <button type="button" class="icon-button compact-icon-button" title="Pin current graph" @onclick="PinValidationChartSelection">+</button>
+                    <button type="button" class="icon-button compact-icon-button" title="@(ValidationChartExpanded ? "Collapse chart" : "Expand chart")" @onclick="ToggleValidationChartExpandedAsync">@(ValidationChartExpanded ? "↙" : "⛶")</button>
                 </div>
             </div>
             @{
                 var validationSeries = ValidationChartSeries;
+                var validationGeometry = ChartGeometryFor(ValidationChartExpanded);
             }
-            <svg @ref="ValidationChartSvg" viewBox="0 0 920 300" role="img">
+            <div class="@(ValidationChartExpanded ? "chart-panel-layout chart-expanded-layout" : "chart-panel-stack")">
+            <div class="chart-canvas">
+            <svg id="@ValidationChartSvgElementId" @ref="ValidationChartSvg" viewBox="@validationGeometry.ViewBox" role="img">
                 @foreach (var tick in ValidationYTicks)
                 {
                     <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
                     <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
                 }
-                <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
-                <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                <line x1="60" y1="@validationGeometry.Bottom" x2="860" y2="@validationGeometry.Bottom" class="chart-axis" />
+                <line x1="60" y1="@validationGeometry.Top" x2="60" y2="@validationGeometry.Bottom" class="chart-axis" />
                 @foreach (var tick in XTicks)
                 {
-                    <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
-                    <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                    <line x1="@tick.X" y1="@validationGeometry.Bottom" x2="@tick.X" y2="@validationGeometry.TickBottom" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="@validationGeometry.XLabelY" Anchor="middle" Label="@tick.Label" />
                 }
                 @foreach (var series in validationSeries)
                 {
@@ -610,14 +614,16 @@ else
                     }
                     <polyline points="@ValidationChartPoints(series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
                 }
-                <rect x="0" y="0" width="920" height="300" class="chart-pointer-capture" />
-                <line x1="60" y1="40" x2="60" y2="260" class="chart-hover-line js-chart-hover-line" style="display:none" />
+                <rect x="0" y="0" width="920" height="@validationGeometry.Height" class="chart-pointer-capture" />
+                <line x1="60" y1="@validationGeometry.Top" x2="60" y2="@validationGeometry.Bottom" class="chart-hover-line js-chart-hover-line" style="display:none" />
                 @foreach (var series in validationSeries)
                 {
-                    <circle cx="60" cy="260" r="4" fill="@series.Color" class="chart-hover-dot js-chart-hover-dot" data-y-values="@ChartYValuesJson(series.Values, TotalYForValue)" style="display:none" />
+                    <circle cx="60" cy="@validationGeometry.Bottom" r="4" fill="@series.Color" class="chart-hover-dot js-chart-hover-dot" data-y-values="@ChartYValuesJson(series.Values, TotalYForValue)" style="display:none" />
                 }
             </svg>
-            <div class="inline-legend validation-legend">
+            </div>
+            <aside class="chart-side-legend">
+            <div class="inline-legend validation-legend @(ValidationChartExpanded ? "chart-tool-legend" : "")">
                 <span class="legend-hover-year legend-hover-year-empty js-chart-hover-year" data-years="@ChartYearsJson">
                     Year
                 </span>
@@ -639,6 +645,8 @@ else
                         }
                     </span>
                 }
+            </div>
+            </aside>
             </div>
         </div>
         <div class="chart-box">
@@ -697,7 +705,7 @@ else
             }
         </TitleContent>
         <ChildContent>
-        <div class="chart-box">
+        <div id="@ChartPanelElementId(chartTool)" class="chart-box @(chartTool.ChartExpanded ? "chart-box-expanded" : "")">
             <div class="chart-head">
                 <h2>Trend</h2>
                 <div class="chart-controls validation-chart-controls">
@@ -734,25 +742,27 @@ else
                         }
                     </select>
                     <button type="button" class="icon-button compact-icon-button" title="Pin current graph" @onclick="() => PinChartSelection(chartTool)">+</button>
+                    <button type="button" class="icon-button compact-icon-button" title="@(chartTool.ChartExpanded ? "Collapse chart" : "Expand chart")" @onclick="() => ToggleChartExpandedAsync(chartTool)">@(chartTool.ChartExpanded ? "↙" : "⛶")</button>
                 </div>
             </div>
-            <div class="chart-panel-layout">
+            <div class="chart-panel-layout @(chartTool.ChartExpanded ? "chart-expanded-layout" : "")">
             <div class="chart-canvas">
             @{
                 var chartSeries = ChartSeries(chartTool);
+                var chartGeometry = ChartGeometryFor(chartTool.ChartExpanded);
             }
-            <svg id="@ChartSvgElementId(chartTool)" viewBox="0 0 920 300" role="img">
+            <svg id="@ChartSvgElementId(chartTool)" viewBox="@chartGeometry.ViewBox" role="img">
                 @foreach (var tick in ChartYTicks(chartTool))
                 {
                     <line x1="60" y1="@tick.Y" x2="860" y2="@tick.Y" class="chart-grid" />
                     <SvgText X="50" Y="@(tick.Y + 4)" Anchor="end" Label="@tick.Label" />
                 }
-                <line x1="60" y1="260" x2="860" y2="260" class="chart-axis" />
-                <line x1="60" y1="40" x2="60" y2="260" class="chart-axis" />
+                <line x1="60" y1="@chartGeometry.Bottom" x2="860" y2="@chartGeometry.Bottom" class="chart-axis" />
+                <line x1="60" y1="@chartGeometry.Top" x2="60" y2="@chartGeometry.Bottom" class="chart-axis" />
                 @foreach (var tick in XTicks)
                 {
-                    <line x1="@tick.X" y1="260" x2="@tick.X" y2="266" class="chart-axis" />
-                    <SvgText X="@tick.X" Y="284" Anchor="middle" Label="@tick.Label" />
+                    <line x1="@tick.X" y1="@chartGeometry.Bottom" x2="@tick.X" y2="@chartGeometry.TickBottom" class="chart-axis" />
+                    <SvgText X="@tick.X" Y="@chartGeometry.XLabelY" Anchor="middle" Label="@tick.Label" />
                 }
                 @foreach (var series in chartSeries)
                 {
@@ -768,11 +778,11 @@ else
                     }
                     <polyline points="@ChartPoints(chartTool, series.Values)" fill="none" stroke="@series.Color" stroke-width="4" stroke-dasharray="@series.DashArray" />
                 }
-                <rect x="0" y="0" width="920" height="300" class="chart-pointer-capture" />
-                <line x1="60" y1="40" x2="60" y2="260" class="chart-hover-line js-chart-hover-line" style="display:none" />
+                <rect x="0" y="0" width="920" height="@chartGeometry.Height" class="chart-pointer-capture" />
+                <line x1="60" y1="@chartGeometry.Top" x2="60" y2="@chartGeometry.Bottom" class="chart-hover-line js-chart-hover-line" style="display:none" />
                 @foreach (var series in chartSeries)
                 {
-                    <circle cx="60" cy="260" r="4" fill="@series.Color" class="chart-hover-dot js-chart-hover-dot" data-y-values="@ChartYValuesJson(series.Values, value => ChartYForValue(chartTool, value))" style="display:none" />
+                    <circle cx="60" cy="@chartGeometry.Bottom" r="4" fill="@series.Color" class="chart-hover-dot js-chart-hover-dot" data-y-values="@ChartYValuesJson(series.Values, value => ChartYForValue(chartTool, value))" style="display:none" />
                 }
             </svg>
             </div>
@@ -1606,6 +1616,7 @@ else
     private bool ShowIncreaseFromPreviousPercent { get; set; }
     private int? TotalChartHoverIndex { get; set; }
     private int? SimulationInfoHoverIndex { get; set; }
+    private bool ValidationChartExpanded { get; set; }
     private CancellationTokenSource? ValidationDebounce { get; set; }
     private string ExecutionMode { get; set; } = "Auto";
     private string ServerApiBaseAddress { get; set; } = "";
@@ -1628,6 +1639,7 @@ else
     private string? LastSavedLayoutJson { get; set; }
     private string? LastSavedScenarioHomesJson { get; set; }
     private string? LastSavedYearsJson { get; set; }
+    private string? PendingScrollElementId { get; set; }
     private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
         .Select(ToolDefinitionForId)
         .Where(tool => tool is not null)
@@ -1930,7 +1942,8 @@ else
             Neighborhood = string.IsNullOrWhiteSpace(saved?.Neighborhood) ? AllNeighborhood : saved!.Neighborhood,
             Density = string.IsNullOrWhiteSpace(saved?.Density) ? AllDensity : saved!.Density,
             Breakdown = string.IsNullOrWhiteSpace(saved?.Breakdown) ? "Total" : saved!.Breakdown,
-            ValueMode = string.IsNullOrWhiteSpace(saved?.ValueMode) ? "value" : saved!.ValueMode
+            ValueMode = string.IsNullOrWhiteSpace(saved?.ValueMode) ? "value" : saved!.ValueMode,
+            ChartExpanded = saved?.ChartExpanded ?? false
         };
 
         if (saved?.PinnedSelections is not null)
@@ -2082,6 +2095,13 @@ else
                         chart.Id);
                 }
             }
+
+            if (!string.IsNullOrWhiteSpace(PendingScrollElementId))
+            {
+                var elementId = PendingScrollElementId;
+                PendingScrollElementId = null;
+                await Js.InvokeVoidAsync("schoolGrowthTools.scrollToElement", elementId);
+            }
         }
     }
 
@@ -2188,6 +2208,7 @@ else
             ValidationBreakdown: "Total",
             ValidationValueMode: "value",
             ValidationPinnedSelections: [],
+            ValidationChartExpanded: false,
             ChartTools: [],
             ScenarioHomes: null);
 
@@ -2954,6 +2975,7 @@ else
             ValidationBreakdown,
             ValidationValueMode,
             ValidationPinnedSelections.Select(SavedChartSelection.From).ToList(),
+            ValidationChartExpanded,
             ChartTools.Select(SavedChartTool.From).ToList(),
             includeScenarioHomes
                 ? ScenarioRows.Select(SavedScenarioHome.From).ToList()
@@ -2991,6 +3013,7 @@ else
         ValidationDensity = string.IsNullOrWhiteSpace(layout.ValidationDensity) ? AllDensity : layout.ValidationDensity;
         ValidationBreakdown = string.IsNullOrWhiteSpace(layout.ValidationBreakdown) ? "Total" : layout.ValidationBreakdown;
         ValidationValueMode = string.IsNullOrWhiteSpace(layout.ValidationValueMode) ? "value" : layout.ValidationValueMode;
+        ValidationChartExpanded = layout.ValidationChartExpanded;
         ValidationPinnedSelections.Clear();
         foreach (var pin in layout.ValidationPinnedSelections ?? [])
         {
@@ -4101,6 +4124,7 @@ else
             EffectiveValidationDensity,
             EffectiveValidationBreakdown,
             EffectiveValidationValueMode,
+            ValidationChartExpanded.ToString(CultureInfo.InvariantCulture),
             string.Join(';', ValidationPinnedSelections.Select(selection => $"{selection.Id}:{ChartSelectionKey(selection.Selection)}")));
 
     private double ValidationChartMax
@@ -5244,6 +5268,27 @@ else
         InvalidateChart(chart);
     }
 
+    private async Task ToggleValidationChartExpandedAsync()
+    {
+        ValidationChartExpanded = !ValidationChartExpanded;
+        AttachedValidationSummaryRenderKey = null;
+        if (ValidationChartExpanded)
+        {
+            PendingScrollElementId = ValidationChartPanelElementId;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ToggleChartExpandedAsync(ChartToolState chart)
+    {
+        chart.ChartExpanded = !chart.ChartExpanded;
+        if (chart.ChartExpanded)
+        {
+            PendingScrollElementId = ChartPanelElementId(chart);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private static void InvalidateChart(ChartToolState chart)
     {
         chart.CacheKey = null;
@@ -5352,14 +5397,8 @@ else
     private IReadOnlyList<(double Y, string Label)> ChartYTicks(ChartToolState chart)
     {
         var bounds = ChartAxisBoundsFor(chart);
-        return Enumerable.Range(0, 5)
-            .Select(index =>
-            {
-                var value = bounds.Max - ((bounds.Max - bounds.Min) * index / 4);
-                var y = ChartYForValue(value, bounds);
-                return (y, ChartFormatter(CurrentChartSelection(chart))(value));
-            })
-            .ToList();
+        var geometry = ChartGeometryFor(chart.ChartExpanded);
+        return ChartYTicks(bounds, geometry, ChartFormatter(CurrentChartSelection(chart)));
     }
 
     private string ChartPoints(ChartToolState chart, IReadOnlyList<double?> values)
@@ -5369,7 +5408,7 @@ else
         {
             if (!value.HasValue) return null;
             var x = values.Count == 1 ? 60 : 60 + (index * 800.0 / (values.Count - 1));
-            var y = ChartYForValue(value.Value, ChartAxisBoundsFor(chart));
+            var y = ChartYForValue(value.Value, ChartAxisBoundsFor(chart), ChartGeometryFor(chart.ChartExpanded));
             return SvgPoint(x, y);
         }).Where(point => point is not null));
     }
@@ -5387,12 +5426,12 @@ else
 
     private double ChartYForValue(ChartToolState chart, double value)
     {
-        return ChartYForValue(value, ChartAxisBoundsFor(chart));
+        return ChartYForValue(value, ChartAxisBoundsFor(chart), ChartGeometryFor(chart.ChartExpanded));
     }
 
-    private static double ChartYForValue(double value, ChartAxisBounds bounds)
+    private static double ChartYForValue(double value, ChartAxisBounds bounds, ChartGeometry geometry)
     {
-        return 260 - ((value - bounds.Min) / bounds.Span * 220);
+        return geometry.Bottom - ((value - bounds.Min) / bounds.Span * geometry.PlotHeight);
     }
 
     private ChartAxisBounds ChartAxisBoundsFor(ChartToolState chart)
@@ -5430,7 +5469,12 @@ else
 
     private double ChartHoverPanelX(ChartToolState chart) => ChartHoverX(chart) > 650 ? 405 : 650;
 
+    private const string ValidationChartSvgElementId = "chart-svg-validation-summary";
+    private const string ValidationChartPanelElementId = "chart-panel-validation-summary";
+
     private static string ChartSvgElementId(ChartToolState chart) => $"chart-svg-{chart.Id}";
+
+    private static string ChartPanelElementId(ChartToolState chart) => $"chart-panel-{chart.Id}";
 
     private IReadOnlyList<(int Index, double X, double Width)> ChartHoverZones
     {
@@ -5619,7 +5663,8 @@ else
 
     private double TotalYForValue(double value)
     {
-        return 260 - ((value - ValidationChartMin) / ValidationChartSpan * 220);
+        var geometry = ChartGeometryFor(ValidationChartExpanded);
+        return geometry.Bottom - ((value - ValidationChartMin) / ValidationChartSpan * geometry.PlotHeight);
     }
 
     private double TotalHoverX => TotalChartHoverIndex.HasValue ? TotalXForIndex(TotalChartHoverIndex.Value) : 60;
@@ -5743,15 +5788,11 @@ else
     {
         get
         {
-            const int tickCount = 5;
-            return Enumerable.Range(0, tickCount)
-                .Select(index =>
-                {
-                    var value = ValidationChartMax - ((ValidationChartMax - ValidationChartMin) * index / Math.Max(1, tickCount - 1));
-                    var y = TotalYForValue(value);
-                    return (y, ValidationFormatter(value));
-                })
-                .ToList();
+            var geometry = ChartGeometryFor(ValidationChartExpanded);
+            return ChartYTicks(
+                new ChartAxisBounds(ValidationChartMax, ValidationChartMin, ValidationChartSpan),
+                geometry,
+                ValidationFormatter);
         }
     }
 
@@ -5761,13 +5802,11 @@ else
         {
             var points = Result?.Comparisons ?? [];
             if (points.Count == 0) return [];
-            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 8.0));
-            return points.Select((point, index) => new { point.Year, index })
-                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
-                .Select(item =>
+            return ChartTickIndexes(points.Count)
+                .Select(index =>
                 {
-                    var x = points.Count == 1 ? 60 : 60 + (item.index * 800.0 / (points.Count - 1));
-                    return (x, item.Year.ToString());
+                    var x = points.Count == 1 ? 60 : 60 + (index * 800.0 / (points.Count - 1));
+                    return (x, points[index].Year.ToString());
                 })
                 .ToList();
         }
@@ -5781,16 +5820,101 @@ else
         {
             var points = Result?.Comparisons ?? [];
             if (points.Count == 0) return [];
-            var step = Math.Max(1, (int)Math.Ceiling(points.Count / 8.0));
-            return points.Select((point, index) => new { point.Year, index })
-                .Where(item => item.index % step == 0 || item.index == points.Count - 1)
-                .Select(item =>
+            return ChartTickIndexes(points.Count)
+                .Select(index =>
                 {
-                    var x = points.Count == 1 ? 60 : 60 + (item.index * 800.0 / (points.Count - 1));
-                    return (x, item.Year.ToString());
+                    var x = points.Count == 1 ? 60 : 60 + (index * 800.0 / (points.Count - 1));
+                    return (x, points[index].Year.ToString());
                 })
                 .ToList();
         }
+    }
+
+    private static IReadOnlyList<int> ChartTickIndexes(int pointCount)
+    {
+        if (pointCount <= 0) return [];
+        if (pointCount == 1) return [0];
+
+        var step = Math.Max(1, (int)Math.Ceiling(pointCount / 8.0));
+        var indexes = Enumerable.Range(0, pointCount)
+            .Where(index => index % step == 0)
+            .ToList();
+        var last = pointCount - 1;
+        if (indexes[^1] != last)
+        {
+            var minimumLastGap = Math.Max(2, (int)Math.Ceiling(step / 2.0));
+            if (last - indexes[^1] < minimumLastGap)
+            {
+                indexes[^1] = last;
+            }
+            else
+            {
+                indexes.Add(last);
+            }
+        }
+
+        return indexes;
+    }
+
+    private static ChartGeometry ChartGeometryFor(bool expanded) => expanded ? ExpandedChartGeometry : NormalChartGeometry;
+
+    private static IReadOnlyList<(double Y, string Label)> ChartYTicks(
+        ChartAxisBounds bounds,
+        ChartGeometry geometry,
+        Func<double, string> formatter)
+    {
+        var targetTickCount = ChartTargetYTickCount(geometry);
+        var step = ChartNiceStep(bounds.Span / Math.Max(1, targetTickCount - 1));
+        var firstValue = Math.Ceiling(bounds.Min / step) * step;
+        var values = new List<double>();
+
+        for (var value = firstValue; value <= bounds.Max + step * 0.0001; value += step)
+        {
+            if (value < bounds.Min - step * 0.0001)
+            {
+                continue;
+            }
+
+            values.Add(Math.Abs(value) < step * 0.000001 ? 0 : value);
+        }
+
+        if (values.Count < 2)
+        {
+            values = [bounds.Min, bounds.Max];
+        }
+
+        return values
+            .OrderByDescending(value => value)
+            .Select(value => (ChartYForValue(value, bounds, geometry), formatter(value)))
+            .ToList();
+    }
+
+    private static int ChartTargetYTickCount(ChartGeometry geometry)
+    {
+        var targetSpacing = geometry.Expanded ? 18.0 : 62.0;
+        var maxTicks = geometry.Expanded ? 42 : 13;
+        return Math.Clamp((int)Math.Round(geometry.PlotHeight / targetSpacing) + 1, 5, maxTicks);
+    }
+
+    private static double ChartNiceStep(double rawStep)
+    {
+        if (rawStep <= 0) return 1;
+
+        var exponent = Math.Floor(Math.Log10(rawStep));
+        var magnitude = Math.Pow(10, exponent);
+        var scaled = rawStep / magnitude;
+        var niceScaled = scaled switch
+        {
+            <= 1 => 1,
+            <= 2 => 2,
+            <= 2.5 => 2.5,
+            <= 3 => 3,
+            <= 4 => 4,
+            <= 5 => 5,
+            _ => 10
+        };
+
+        return niceScaled * magnitude;
     }
 
     private IReadOnlyList<(double Y, string Label)> SimulationInfoYTicks => ChartAxis.YTicks(SimulationInfoChartMax, 28, 220);
@@ -6090,6 +6214,7 @@ else
         string ValidationBreakdown,
         string ValidationValueMode,
         IReadOnlyList<SavedChartSelection>? ValidationPinnedSelections = null,
+        bool ValidationChartExpanded = false,
         IReadOnlyList<SavedChartTool>? ChartTools = null,
         IReadOnlyList<SavedScenarioHome>? ScenarioHomes = null);
 
@@ -6123,7 +6248,8 @@ else
         string Density,
         string Breakdown,
         string ValueMode,
-        IReadOnlyList<SavedChartSelection> PinnedSelections)
+        IReadOnlyList<SavedChartSelection> PinnedSelections,
+        bool ChartExpanded = false)
     {
         public static SavedChartTool From(ChartToolState chart) =>
             new(
@@ -6134,7 +6260,8 @@ else
                 chart.Density,
                 chart.Breakdown,
                 chart.ValueMode,
-                chart.PinnedSelections.Select(SavedChartSelection.From).ToList());
+                chart.PinnedSelections.Select(SavedChartSelection.From).ToList(),
+                chart.ChartExpanded);
     }
 
     private sealed record SavedChartSelection(
@@ -6168,6 +6295,15 @@ else
 
     private sealed record ChartPinnedSelection(int Id, ChartSelection Selection);
 
+    private static readonly ChartGeometry NormalChartGeometry = new(300, 40, 260, 266, 284, false);
+    private static readonly ChartGeometry ExpandedChartGeometry = new(700, 40, 660, 666, 688, true);
+
+    private sealed record ChartGeometry(double Height, double Top, double Bottom, double TickBottom, double XLabelY, bool Expanded)
+    {
+        public double PlotHeight => Bottom - Top;
+        public string ViewBox => FormattableString.Invariant($"0 0 920 {Height}");
+    }
+
     private sealed record ChartAxisBounds(double Max, double Min, double Span);
 
     private sealed class ScenarioHomeInput(string neighborhood, string density, int year, double homes)
@@ -6187,6 +6323,7 @@ else
         public string Density { get; set; } = AllDensity;
         public string Breakdown { get; set; } = "Total";
         public string ValueMode { get; set; } = "value";
+        public bool ChartExpanded { get; set; }
         public List<ChartPinnedSelection> PinnedSelections { get; } = [];
         public int NextPinnedSelectionId { get; set; } = 1;
         public string? CacheKey { get; set; }

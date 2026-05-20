@@ -262,6 +262,15 @@ window.schoolGrowthTools = (() => {
 
     function scrollToTool(id) {
         const element = document.getElementById(`tool-${id}`);
+        scrollToElementNode(element);
+    }
+
+    function scrollToElement(id) {
+        const element = document.getElementById(id);
+        scrollToElementNode(element);
+    }
+
+    function scrollToElementNode(element) {
         if (!element) return;
 
         element.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
@@ -581,7 +590,7 @@ window.schoolGrowthTools = (() => {
         });
     }
 
-    return { scrollToTool, attachDraggable, setOpen, close };
+    return { scrollToTool, scrollToElement, attachDraggable, setOpen, close };
 })();
 
 window.schoolGrowthStorage = (() => {
@@ -686,7 +695,7 @@ window.schoolGrowthValidationChart = (() => {
                 const rect = element.getBoundingClientRect();
                 if (!rect.width) return;
 
-                const viewX = clientXToViewBoxX(event.clientX, rect);
+                const viewX = clientXToViewBoxX(element, event.clientX, rect);
                 const clamped = Math.max(60, Math.min(860, viewX));
                 const index = indexForChartX(clamped, current.pointCount);
 
@@ -784,9 +793,10 @@ window.schoolGrowthValidationChart = (() => {
         }
     }
 
-    function clientXToViewBoxX(clientX, rect) {
-        const viewWidth = 920;
-        const viewHeight = 300;
+    function clientXToViewBoxX(element, clientX, rect) {
+        const viewBox = element.viewBox?.baseVal;
+        const viewWidth = viewBox?.width || 920;
+        const viewHeight = viewBox?.height || 300;
         const scale = Math.min(rect.width / viewWidth, rect.height / viewHeight);
         if (!Number.isFinite(scale) || scale <= 0) return 0;
 
@@ -794,7 +804,7 @@ window.schoolGrowthValidationChart = (() => {
         // have horizontal letterboxing. Remove that offset before mapping.
         const renderedViewWidth = viewWidth * scale;
         const offsetX = (rect.width - renderedViewWidth) / 2;
-        return (clientX - rect.left - offsetX) / scale;
+        return (clientX - rect.left - offsetX) / scale + (viewBox?.x || 0);
     }
 
     function indexForChartX(viewX, pointCount) {
