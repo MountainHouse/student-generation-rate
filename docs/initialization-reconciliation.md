@@ -29,23 +29,33 @@ If the requested start year has reference grid and grade data, that year is the 
 
 When baseline reference data exists, reconciliation is same-village only. Students from one village are not moved into another village to make the counts fit.
 
-TK is ignored for reconciliation and scoring because TK policy and eligibility changed enough to make it unreliable as a stable cohort signal. Preschool children are also preserved by reconciliation because they are the future K pipeline.
+TK reference data is ignored for reconciliation and scoring because TK policy and eligibility changed enough to make it unreliable as a stable cohort signal. The model still creates a TK-age hidden bucket, but that bucket is targeted from the same early-cohort estimate used for preschool ages, not from observed TK.
 
 The current reconciliation target is:
 
 ```text
+hidden age -4, -3, -2, -1, 0
 K, 1st, 2nd, ..., 12th
 ```
+
+The hidden-age target is same-village and start-year-only:
+
+```text
+hidden_age_target[grid] =
+    average(reference K, reference 1st, reference 2nd)
+```
+
+That means every hidden age bucket from `-4` through `0` is nudged toward the current early elementary cohort size. This does not use future K counts and does not use TK reference data.
 
 Special education is still handled as a separate reporting bucket and may need a richer future design because it is an attribute, not a true age/grade.
 
 ## Safer Reconciliation Order
 
-For each village, the model should use the least disruptive edits first.
+For each village, the model should use the least disruptive edits first. When several deficits and surpluses exist at the same time, it chooses the closest source/target age pair available rather than fully processing one bucket before moving to the next.
 
-### 1. Retarget Existing School-Age Children
+### 1. Retarget Existing Children Across Target Buckets
 
-If one grade has too many students and another grade has too few, first change the grade index of existing school-age children in the same village.
+If one target bucket has too many children and another bucket has too few, first change the grade index of existing non-special-education children in the same village.
 
 Retargeting should choose the closest possible source grade:
 
@@ -57,6 +67,18 @@ target 6th:
   ...
 ```
 
+The same idea applies to hidden ages:
+
+```text
+target -2:
+  prefer -3 or -1 surplus
+  then -4 or 0
+  then K
+  ...
+```
+
+This applies across the whole target range from hidden ages through 12th grade. For example, a surplus hidden `0` bucket may repair a K deficit before the model considers a surplus 3rd grade bucket.
+
 This preserves:
 
 - number of children in each home
@@ -67,7 +89,7 @@ It changes only the child age/grade.
 
 ### 2. Convert Post-School Children
 
-If a grade is still short, convert older-than-school children in the same village into the needed school grade.
+If a target bucket is still short, convert older-than-school children in the same village into the needed age/grade bucket.
 
 This preserves family child count, but it changes a hidden older child into an enrolled student. It is less disruptive than adding a new child to a household.
 
@@ -103,8 +125,7 @@ This reduces the chance that reconciliation creates unrealistically large famili
 Reconciliation must not:
 
 - move students between villages
-- use TK as a target or source
-- spend preschool children to fix K or early-grade counts in the current implementation
+- use TK reference data as a target
 - use future reference data in normal forecast mode
 
 ## Future Preschool Back-Inference

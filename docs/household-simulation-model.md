@@ -10,7 +10,7 @@ The final enrollment forecast is the average of many simulated futures.
 
 The implemented model simulates homes, household episodes, children, school enrollment, and historical validation. It is the primary model path for the app.
 
-Children track a grade index rather than only a current grade name. That allows the model to create newborn/pre-school children who enter TK several years later, and to keep post-school children in the household count without adding them to enrollment.
+Children track a grade index rather than only a current grade name. That allows the model to create newborn/pre-school children who enter school several years later, and to keep post-school children in the household count without adding them to enrollment.
 
 The model supports:
 
@@ -101,7 +101,7 @@ Validation behavior:
 6. Initialize homes from `homes.csv`; back-play pre-window construction to the baseline year.
 7. Generate synthetic played-back homes for reference grids that have students but no listed homes.
 8. Reconcile baseline children to actual adjusted grade distribution, excluding TK.
-9. Do not use TK or future K reference counts to seed hidden pre-K children; preschool/TK-age state comes from household back-play and model parameters.
+9. Do not use TK or future K reference counts to seed hidden pre-K children; hidden ages `-4..0` are normalized from the same-year K/1st/2nd average after home back-play.
 10. Add actual homes built during the validation window.
    Each newly built home is assigned to either the same school year or the next school year using `same_school_year_probability`.
 11. Simulate ownership changes, density-adjusted move-in families, density-adjusted new children, student exits, and grade progression.
@@ -250,7 +250,7 @@ high_school_grade_mape =
         abs(modeled_grade - smoothed_adjusted_actual_grade) / smoothed_adjusted_actual_grade
 ```
 
-`TK` is ignored for calibration and baseline anchoring because TK eligibility and enrollment rules changed substantially. TK remains visible in detailed output, but it should not steer calibration or be used to repair hidden pre-K household state.
+`TK` is ignored for calibration and baseline anchoring because TK eligibility and enrollment rules changed substantially. The internal `0` grade-index bucket is treated as a hidden TK-age pipeline bucket, not as enrolled students. It should not steer calibration or be used as reference data.
 
 `grade_total_mape` is still reported as a diagnostic reconciliation check, but it is not part of the optimizer score.
 
@@ -338,7 +338,7 @@ Current mapping:
 
 ```text
 index -4..-1 -> preschool / not enrolled
-index 0      -> TK
+index 0      -> TK-age hidden pipeline / not enrolled
 index 1      -> K
 index 2      -> 1st
 ...
@@ -431,7 +431,7 @@ The current implemented move-in age distribution uses band weights:
 
 ```text
 move_in_preschool_weight   -> pre-school, not counted yet, ages into TK later
-move_in_tk_k_weight        -> TK/K
+move_in_tk_k_weight        -> TK-age/K
 move_in_elementary_weight  -> grades 1-5
 move_in_middle_weight      -> grades 6-8
 move_in_high_weight        -> grades 9-12
@@ -637,13 +637,13 @@ sibling grouping inside homes
 household / ownership age and turnover state
 ```
 
-This means anchored forecasts start from a solid enrolled-student count, but hidden preschool/TK-age children and household composition are still model assumptions.
+This means anchored forecasts start from a solid enrolled-student count. Hidden preschool and TK-age children are normalized from the same-year K/1st/2nd average, while detailed household composition remains a model assumption.
 
 If the requested start year does not have actual reference data, the model uses the latest prior reference year as a baseline and simulates forward from there. If there is no earlier reference year, the model must not use future reference data. It plays every listed home forward from its construction year, including ownership changes, move-in households, births/new children, exits, and aging. This makes a direct pre-reference start, such as 2015 when the first reference year is 2016, comparable to running the full homes-only history from 2003 through 2015.
 
 Before the validation window, homes from `homes.csv` are added in their construction years and advanced to the baseline year. That lets older baseline homes already have turnover episodes and younger households. If a reference grid has students but no listed homes, synthetic homes are created and played back so the model has homes to hold the reference children.
 
-Baseline children are reconciled to the adjusted actual grade distribution, excluding TK. TK is not used for baseline reconciliation, and future K reference counts are not used to seed hidden pre-K children. Hidden preschool/TK-age state is produced by home back-play, move-in age weights, and birth/new-child probabilities.
+Baseline children are reconciled to the adjusted actual grade distribution, excluding TK reference data. The reconciliation target includes hidden age buckets `-4..0`; each hidden bucket uses the same-village average of same-year K, 1st, and 2nd grade as its target. Future K reference counts are not used to seed hidden pre-K children. This keeps the early pipeline smooth without using TK or future data.
 
 Future improvement: anchored starts could infer richer household histories for the homes that receive observed students. That would mean allocating observed students into plausible sibling groups, then inferring likely younger preschool siblings, older post-school siblings, and household tenure. A later reference-assisted preschool inference layer could use future K/TK-like signals only after subtracting students from new homes, later move-ins, and later births. This is intentionally not implemented yet because it is a separate inference layer and must preserve the exact observed grade/grid counts without leaking future data into normal forecasts.
 
