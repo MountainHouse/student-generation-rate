@@ -2,5 +2,29 @@
   {
     "Name": "No future homes",
     "File": "no-future-homes.csv"
+  },
+  {
+    "Name": "Tutorial: Pombo medium 100/year 2026-2030",
+    "File": "pombo-medium-100-per-year-2026-2030.csv"
+  },
+  {
+    "Name": "Tutorial: Pombo medium 500 in 2026",
+    "File": "pombo-medium-500-in-2026.csv"
+  },
+  {
+    "Name": "Tutorial: Pombo medium 500 in 2030",
+    "File": "pombo-medium-500-in-2030.csv"
+  },
+  {
+    "Name": "Tutorial: Pombo medium 300/year 2026-2030",
+    "File": "pombo-medium-300-per-year-2026-2030.csv"
+  },
+  {
+    "Name": "Tutorial: Pombo medium 1500 in 2026",
+    "File": "pombo-medium-1500-in-2026.csv"
+  },
+  {
+    "Name": "Tutorial: Pombo medium 1500 in 2030",
+    "File": "pombo-medium-1500-in-2030.csv"
   }
 ]
