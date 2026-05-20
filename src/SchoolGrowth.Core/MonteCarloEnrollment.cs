@@ -54,7 +54,9 @@ public sealed record MonteCarloParameters(
     double DensityHighFourthChildFactor = 1.0,
     double AnchorYearWeight = 0.25,
     double YearWeightSlope = 0.15,
-    double YearWeightCap = 2.0);
+    double YearWeightCap = 2.0,
+    double HiddenPipelineFutureBlend = 0.65,
+    double HiddenPipelineMaxAdjustmentShare = 0.35);
 
 public sealed record MonteCarloMoveInChildShares(
     double Zero,
@@ -288,6 +290,7 @@ public sealed class MonteCarloEnrollmentModel
 {
     private const int PostSchoolChildIndex = 200;
     private const int ForcedOwnershipTurnoverYears = 50;
+    private const int HiddenPipelineFutureWindow = 1;
     private static readonly string[] DirectDensityCodes = ["RL", "RM", "RMH", "RH", "Existing"];
     private static readonly HashSet<string> ExcludedValidationGrids = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -356,8 +359,14 @@ public sealed class MonteCarloEnrollmentModel
                 var homes = InitializeHomes(baselineYear, scenarioHomes, parameters, random);
                 for (var year = baselineYear + 1; year < startYear; year++)
                 {
-                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random);
-                    AdvanceHomes(homes, year, parameters, random);
+                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random, SimChildOrigin.PostBaselineNewHome);
+                    AdvanceHomes(
+                        homes,
+                        year,
+                        parameters,
+                        random,
+                        turnoverChildOrigin: SimChildOrigin.PostBaselineMoveIn,
+                        newChildOrigin: SimChildOrigin.PostBaselineBirth);
                 }
 
                 for (var year = startYear; year <= endYear; year++)
@@ -368,12 +377,14 @@ public sealed class MonteCarloEnrollmentModel
                         continue;
                     }
 
-                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random);
+                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random, SimChildOrigin.PostBaselineNewHome);
                     AdvanceHomes(
                         homes,
                         year,
                         parameters,
                         random,
+                        turnoverChildOrigin: SimChildOrigin.PostBaselineMoveIn,
+                        newChildOrigin: SimChildOrigin.PostBaselineBirth,
                         segmentTurnoverObserver: (home, longevity) => localAccumulators[year].AddTurnover(home, longevity),
                         turnoverObserver: () => { });
                     localAccumulators[year].Add(homes, year);
@@ -575,7 +586,12 @@ public sealed class MonteCarloEnrollmentModel
             for (var i = 0; i < homesPerRun; i++)
             {
                 var home = new SimHome(request.Grid, request.Density, 0, 0, 0);
-                home.Children.AddRange(GenerateHouseholdChildren(request.Grid, request.Density, parameters, random));
+                home.Children.AddRange(GenerateHouseholdChildren(
+                    request.Grid,
+                    request.Density,
+                    parameters,
+                    random,
+                    SimChildOrigin.BaselineExisting));
                 initialDistribution.Add(home.Children.Count);
                 homes.Add(home);
             }
@@ -671,7 +687,15 @@ public sealed class MonteCarloEnrollmentModel
                 AddPlayedBackSyntheticHomes(homes, grid, baselineYear, syntheticHomes, parameters, random);
             }
 
-            ReconcileBaselineChildren(homes, grid, baselineYear, grades, random);
+            var hiddenPipelineTargets = BuildHiddenPipelineTargets(
+                homes,
+                grid,
+                baselineYear,
+                grades,
+                scenarioHomes,
+                parameters,
+                random);
+            ReconcileBaselineChildren(homes, grid, baselineYear, grades, hiddenPipelineTargets, random);
         }
 
         return homes;
@@ -701,19 +725,20 @@ public sealed class MonteCarloEnrollmentModel
         int year,
         IReadOnlyList<ScenarioHome> scenarioHomes,
         MonteCarloParameters parameters,
-        Random random)
+        Random random,
+        SimChildOrigin childOrigin = SimChildOrigin.BaselineExisting)
     {
         foreach (var homeRow in data.HomeRows)
         {
             if (IsExcludedValidationGrid(homeRow.Neighborhood)) continue;
 
             var count = homeRow.HomesByYear.GetValueOrDefault(year);
-            AddHomes(homes, homeRow.Neighborhood, homeRow.Density, year, count, generateChildren: true, parameters, random);
+            AddHomes(homes, homeRow.Neighborhood, homeRow.Density, year, count, generateChildren: true, parameters, random, childOrigin);
         }
 
         foreach (var home in scenarioHomes.Where(home => home.Year == year))
         {
-            AddHomes(homes, home.Neighborhood, home.Density, year, home.Homes, generateChildren: true, parameters, random);
+            AddHomes(homes, home.Neighborhood, home.Density, year, home.Homes, generateChildren: true, parameters, random, childOrigin);
         }
     }
 
@@ -725,7 +750,8 @@ public sealed class MonteCarloEnrollmentModel
         double count,
         bool generateChildren,
         MonteCarloParameters parameters,
-        Random random)
+        Random random,
+        SimChildOrigin childOrigin = SimChildOrigin.BaselineExisting)
     {
         var wholeHomes = (int)Math.Floor(Math.Max(0, count));
         var fractional = Math.Max(0, count) - wholeHomes;
@@ -739,7 +765,7 @@ public sealed class MonteCarloEnrollmentModel
             var home = new SimHome(grid, density, year, activeSchoolYear, activeSchoolYear);
             if (generateChildren)
             {
-                home.Children.AddRange(GenerateHouseholdChildren(grid, density, parameters, random));
+                home.Children.AddRange(GenerateHouseholdChildren(grid, density, parameters, random, childOrigin));
             }
 
             homes.Add(home);
@@ -754,7 +780,9 @@ public sealed class MonteCarloEnrollmentModel
         Action<int>? turnoverChildCountObserver = null,
         Action<int>? turnoverLongevityObserver = null,
         Action<SimHome, int>? segmentTurnoverObserver = null,
-        Action? turnoverObserver = null)
+        Action? turnoverObserver = null,
+        SimChildOrigin turnoverChildOrigin = SimChildOrigin.BaselineExisting,
+        SimChildOrigin newChildOrigin = SimChildOrigin.BaselineExisting)
     {
         foreach (var home in homes)
         {
@@ -767,7 +795,7 @@ public sealed class MonteCarloEnrollmentModel
                 turnoverLongevityObserver?.Invoke(longevity);
                 segmentTurnoverObserver?.Invoke(home, longevity);
                 home.Children.Clear();
-                home.Children.AddRange(GenerateHouseholdChildren(home.Grid, home.Density, parameters, random));
+                home.Children.AddRange(GenerateHouseholdChildren(home.Grid, home.Density, parameters, random, turnoverChildOrigin));
                 turnoverChildCountObserver?.Invoke(home.Children.Count);
                 home.OwnershipStartYear = home.CurrentYear;
                 home.CurrentYear++;
@@ -789,23 +817,140 @@ public sealed class MonteCarloEnrollmentModel
             var newChildProbability = NewChildProbability(home, parameters);
             if (random.NextDouble() < newChildProbability)
             {
-                home.Children.Add(SimChild.Newborn(DrawSpecialEducation(parameters, random)));
+                home.Children.Add(SimChild.Newborn(DrawSpecialEducation(parameters, random), newChildOrigin));
             }
 
             home.CurrentYear++;
         }
     }
 
-    private IEnumerable<SimChild> GenerateHouseholdChildren(string grid, string density, MonteCarloParameters parameters, Random random)
+    private IEnumerable<SimChild> GenerateHouseholdChildren(
+        string grid,
+        string density,
+        MonteCarloParameters parameters,
+        Random random,
+        SimChildOrigin origin)
     {
         var childCount = DrawMoveInChildCount(density, parameters, random);
         for (var i = 0; i < childCount; i++)
         {
-            yield return new SimChild(DrawGradeIndex(grid, parameters, random), DrawSpecialEducation(parameters, random));
+            yield return new SimChild(DrawGradeIndex(grid, parameters, random), DrawSpecialEducation(parameters, random), origin);
         }
     }
 
-    private void ReconcileBaselineChildren(List<SimHome> homes, string grid, int baselineYear, Dictionary<string, double> grades, Random random)
+    private Dictionary<int, int> BuildHiddenPipelineTargets(
+        List<SimHome> homes,
+        string grid,
+        int baselineYear,
+        Dictionary<string, double> grades,
+        IReadOnlyList<ScenarioHome> scenarioHomes,
+        MonteCarloParameters parameters,
+        Random random)
+    {
+        var targetBuckets = Enumerable.Range(-4, 5).ToArray();
+        var baseTarget = EarlyHiddenAgeTarget(grades);
+        var targets = targetBuckets.ToDictionary(bucket => bucket, _ => baseTarget);
+        var inferredTargets = EstimateFutureAssistedHiddenTargets(
+            homes,
+            grid,
+            baselineYear,
+            scenarioHomes,
+            parameters,
+            random);
+
+        foreach (var bucket in targetBuckets)
+        {
+            var horizon = 1 - bucket;
+            var nearbyTargets = Enumerable
+                .Range(horizon - HiddenPipelineFutureWindow, HiddenPipelineFutureWindow * 2 + 1)
+                .Where(item => item > 0)
+                .Select(item => inferredTargets.GetValueOrDefault(item))
+                .Where(value => value.HasValue)
+                .Select(value => value!.Value)
+                .ToList();
+            if (nearbyTargets.Count == 0) continue;
+
+            var futureTarget = nearbyTargets.Average();
+            var capped = CapHiddenPipelineTarget(baseTarget, futureTarget, parameters);
+            targets[bucket] = (int)Math.Round(baseTarget + (capped - baseTarget) * parameters.HiddenPipelineFutureBlend);
+        }
+
+        return targets;
+    }
+
+    private Dictionary<int, double?> EstimateFutureAssistedHiddenTargets(
+        List<SimHome> homes,
+        string grid,
+        int baselineYear,
+        IReadOnlyList<ScenarioHome> scenarioHomes,
+        MonteCarloParameters parameters,
+        Random random)
+    {
+        var maxHorizon = 5;
+        var result = Enumerable.Range(1, maxHorizon).ToDictionary(horizon => horizon, _ => (double?)null);
+        if (!HasFutureReferenceData(baselineYear + 1, baselineYear + maxHorizon)) return result;
+
+        var probeHomes = homes.Select(home => home.Clone()).ToList();
+        var probeRandom = new Random(random.Next());
+        for (var year = baselineYear + 1; year <= baselineYear + maxHorizon; year++)
+        {
+            AddBuiltHomes(probeHomes, year, scenarioHomes, parameters, probeRandom, SimChildOrigin.PostBaselineNewHome);
+            AdvanceHomes(
+                probeHomes,
+                year,
+                parameters,
+                probeRandom,
+                turnoverChildOrigin: SimChildOrigin.PostBaselineMoveIn,
+                newChildOrigin: SimChildOrigin.PostBaselineBirth);
+
+            var referenceK = ReferenceGradeEstimateForGrid(grid, year, "K");
+            if (!referenceK.HasValue) continue;
+
+            var postBaselineK = probeHomes
+                .Where(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase))
+                .Where(home => home.IsActive(year))
+                .SelectMany(home => home.Children)
+                .Count(child => !child.IsSpecialEducation
+                    && child.GradeIndex == GradeIndexFor("K")
+                    && child.Origin != SimChildOrigin.BaselineExisting);
+            result[year - baselineYear] = Math.Max(0, referenceK.Value - postBaselineK);
+        }
+
+        return result;
+    }
+
+    private bool HasFutureReferenceData(int startYear, int endYear)
+    {
+        return data.AugustYears.Any(year => year >= startYear && year <= endYear);
+    }
+
+    private double? ReferenceGradeEstimateForGrid(string grid, int year, string grade)
+    {
+        if (!HasActualGradeData(year) || !HasActualGridData(year)) return null;
+
+        var gridTotal = ActualGridValue(grid, year);
+        if (gridTotal <= 0) return 0;
+
+        var shares = BuildDistrictGradeShares(data, year);
+        return gridTotal * shares.GetValueOrDefault(grade);
+    }
+
+    private static double CapHiddenPipelineTarget(int baseTarget, double futureTarget, MonteCarloParameters parameters)
+    {
+        if (baseTarget <= 0) return Math.Max(0, futureTarget);
+
+        var min = baseTarget * (1 - parameters.HiddenPipelineMaxAdjustmentShare);
+        var max = baseTarget * (1 + parameters.HiddenPipelineMaxAdjustmentShare);
+        return Math.Clamp(futureTarget, min, max);
+    }
+
+    private void ReconcileBaselineChildren(
+        List<SimHome> homes,
+        string grid,
+        int baselineYear,
+        Dictionary<string, double> grades,
+        Dictionary<int, int> hiddenPipelineTargets,
+        Random random)
     {
         var gridHomes = homes
             .Where(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase))
@@ -816,7 +961,7 @@ public sealed class MonteCarloEnrollmentModel
         var targetBuckets = ReconciliationTargetBuckets(grades);
         var targets = targetBuckets.ToDictionary(
             bucket => bucket,
-            bucket => ReconciliationTargetForBucket(bucket, grades));
+            bucket => ReconciliationTargetForBucket(bucket, grades, hiddenPipelineTargets));
         var current = targetBuckets.ToDictionary(
             bucket => bucket,
             bucket => CountRegularBucket(gridHomes, bucket));
@@ -873,11 +1018,14 @@ public sealed class MonteCarloEnrollmentModel
         return [.. Enumerable.Range(-4, 5), .. ValidationGrades.Select(GradeIndexFor)];
     }
 
-    private static int ReconciliationTargetForBucket(int bucket, Dictionary<string, double> grades)
+    private static int ReconciliationTargetForBucket(
+        int bucket,
+        Dictionary<string, double> grades,
+        IReadOnlyDictionary<int, int> hiddenPipelineTargets)
     {
         if (bucket <= 0)
         {
-            return EarlyHiddenAgeTarget(grades);
+            return hiddenPipelineTargets.GetValueOrDefault(bucket, EarlyHiddenAgeTarget(grades));
         }
 
         return (int)Math.Round(Math.Max(0, grades.GetValueOrDefault(GradeForIndex(bucket))));
@@ -958,7 +1106,7 @@ public sealed class MonteCarloEnrollmentModel
         for (var i = 0; i < count; i++)
         {
             var home = PickHomeByChildCount(gridHomes, preferSmallest: true, random);
-            home.Children.Add(new SimChild(bucket, isSpecialEducation: false));
+            home.Children.Add(new SimChild(bucket, isSpecialEducation: false, SimChildOrigin.BaselineExisting));
         }
     }
 
@@ -1026,7 +1174,10 @@ public sealed class MonteCarloEnrollmentModel
         for (var i = 0; i < count; i++)
         {
             var home = PickHomeByChildCount(gridHomes, preferSmallest: true, random);
-            home.Children.Add(new SimChild(DrawFromIndices(Enumerable.Range(1, 13).ToArray(), random), isSpecialEducation: true));
+            home.Children.Add(new SimChild(
+                DrawFromIndices(Enumerable.Range(1, 13).ToArray(), random),
+                isSpecialEducation: true,
+                SimChildOrigin.BaselineExisting));
         }
     }
 
@@ -1539,7 +1690,9 @@ public sealed class MonteCarloEnrollmentModel
             DensityHighFirstChildFactor = Math.Clamp(parameters.DensityHighFirstChildFactor, 0.2, 2.0),
             DensityHighSecondChildFactor = Math.Clamp(parameters.DensityHighSecondChildFactor, 0.0, 2.0),
             DensityHighThirdChildFactor = Math.Clamp(parameters.DensityHighThirdChildFactor, 0.0, 2.0),
-            DensityHighFourthChildFactor = Math.Clamp(parameters.DensityHighFourthChildFactor, 0.0, 2.0)
+            DensityHighFourthChildFactor = Math.Clamp(parameters.DensityHighFourthChildFactor, 0.0, 2.0),
+            HiddenPipelineFutureBlend = ClampProbability(parameters.HiddenPipelineFutureBlend),
+            HiddenPipelineMaxAdjustmentShare = Math.Clamp(parameters.HiddenPipelineMaxAdjustmentShare, 0, 2)
         };
     }
 
@@ -1835,6 +1988,14 @@ public sealed class MonteCarloEnrollmentModel
         };
     }
 
+    private enum SimChildOrigin
+    {
+        BaselineExisting,
+        PostBaselineNewHome,
+        PostBaselineMoveIn,
+        PostBaselineBirth
+    }
+
     private sealed class SimHome(string grid, string density, int builtYear, int activeSchoolYear, int ownershipStartYear)
     {
         public string Grid { get; } = grid;
@@ -1846,16 +2007,32 @@ public sealed class MonteCarloEnrollmentModel
         public List<SimChild> Children { get; } = [];
 
         public bool IsActive(int year) => year >= ActiveSchoolYear;
+
+        public SimHome Clone()
+        {
+            var clone = new SimHome(Grid, Density, BuiltYear, ActiveSchoolYear, OwnershipStartYear)
+            {
+                CurrentYear = CurrentYear
+            };
+            clone.Children.AddRange(Children.Select(child => child.Clone()));
+            return clone;
+        }
     }
 
-    private sealed class SimChild(int gradeIndex, bool isSpecialEducation)
+    private sealed class SimChild(int gradeIndex, bool isSpecialEducation, SimChildOrigin origin)
     {
         public int GradeIndex { get; private set; } = gradeIndex;
         public bool IsSpecialEducation { get; } = isSpecialEducation;
+        public SimChildOrigin Origin { get; } = origin;
         public bool IsStudent => GradeIndex is >= 1 and <= 13;
         public string Grade => IsSpecialEducation ? "Sp. Ed." : GradeForIndex(GradeIndex);
 
-        public static SimChild Newborn(bool isSpecialEducation) => new(-4, isSpecialEducation);
+        public static SimChild Newborn(bool isSpecialEducation, SimChildOrigin origin) => new(-4, isSpecialEducation, origin);
+
+        public SimChild Clone()
+        {
+            return new SimChild(GradeIndex, IsSpecialEducation, Origin);
+        }
 
         public void SetGradeIndex(int gradeIndex)
         {

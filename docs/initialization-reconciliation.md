@@ -38,14 +38,55 @@ hidden age -4, -3, -2, -1, 0
 K, 1st, 2nd, ..., 12th
 ```
 
-The hidden-age target is same-village and start-year-only:
+The base hidden-age target is same-village and start-year-only:
 
 ```text
 hidden_age_target[grid] =
     average(reference K, reference 1st, reference 2nd)
 ```
 
-That means every hidden age bucket from `-4` through `0` is nudged toward the current early elementary cohort size. This does not use future K counts and does not use TK reference data.
+That means every hidden age bucket from `-4` through `0` starts near the current early elementary cohort size. This does not use TK reference data.
+
+When future reference data is available, the model can refine those hidden-age targets without using future data directly as a raw answer. It first simulates expected future K students that should come from post-baseline sources:
+
+```text
+expected future K from homes built after baseline
+expected future K from later ownership changes / move-ins
+expected future K from later births / new children
+```
+
+Because the CSVs do not contain true grade-by-village data, future reference K by village is estimated the same way as other grade-by-grid work: future village total multiplied by the district-wide future K share.
+
+Then the model subtracts expected later sources from that estimated future reference K:
+
+```text
+inferred baseline hidden child for future K year =
+    future reference K
+  - expected K from post-baseline new homes
+  - expected K from post-baseline move-ins
+  - expected K from post-baseline births/new children
+```
+
+The inferred value is mapped backward into the matching hidden bucket:
+
+```text
+future K in baseline + 1 -> hidden bucket 0
+future K in baseline + 2 -> hidden bucket -1
+future K in baseline + 3 -> hidden bucket -2
+future K in baseline + 4 -> hidden bucket -3
+future K in baseline + 5 -> hidden bucket -4
+```
+
+The implementation smooths this with nearby available future years and blends it with the same-year K/1st/2nd target. The adjustment is capped so a single unusual future K count cannot create an unrealistic drop or spike in the preschool pipeline. If future reference data is unavailable, the model falls back to the same-year K/1st/2nd target only.
+
+The model-code fallback trust settings are:
+
+```text
+hidden_pipeline_future_blend = 0.65
+hidden_pipeline_max_adjustment_share = 0.35
+```
+
+That means the model gives substantial weight to future K evidence, but only after limiting that evidence to a `+/-35%` band around the same-year early-cohort estimate. Named presets can override these values; the current default `2016-2025 balanced` preset uses `0.85` blend and `0.55` cap. CLI experiments can override these with `--hidden-blend` and `--hidden-cap`.
 
 Special education is still handled as a separate reporting bucket and may need a richer future design because it is an attribute, not a true age/grade.
 
@@ -126,11 +167,11 @@ Reconciliation must not:
 
 - move students between villages
 - use TK reference data as a target
-- use future reference data in normal forecast mode
+- use future reference data outside the reference-assisted hidden-pipeline calculation
 
 ## Future Preschool Back-Inference
 
-A future validation-only inference layer may use future reference data to infer hidden baseline preschool children, but it needs careful accounting.
+The current implementation includes a conservative reference-assisted hidden-pipeline inference layer. A richer future version may use more detailed future reference data, but it needs careful accounting.
 
 For example:
 
@@ -150,6 +191,6 @@ K at +2 -> younger preschool
 K at +3/+4/+5 -> toddler/newborn range
 ```
 
-This should remain optional and clearly labeled as reference-assisted validation. It must not leak future data into normal forecasts.
+This should remain clearly labeled as reference-assisted validation. It must not leak future data into normal forecasts.
 
 Any future preschool adjustment should also be capped so the model does not create a cliff in future K cohorts. The remaining preschool pipeline should stay smooth and plausible across years.

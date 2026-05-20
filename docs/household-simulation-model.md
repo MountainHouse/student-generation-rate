@@ -101,7 +101,7 @@ Validation behavior:
 6. Initialize homes from `homes.csv`; back-play pre-window construction to the baseline year.
 7. Generate synthetic played-back homes for reference grids that have students but no listed homes.
 8. Reconcile baseline children to actual adjusted grade distribution, excluding TK.
-9. Do not use TK or future K reference counts to seed hidden pre-K children; hidden ages `-4..0` are normalized from the same-year K/1st/2nd average after home back-play.
+9. Do not use TK reference counts to seed hidden pre-K children. Hidden ages `-4..0` start from the same-year K/1st/2nd average after home back-play. When future K reference data exists, the model may refine those hidden targets by subtracting expected future K children from post-baseline new homes, move-ins, and births/new children, then applying a capped blend.
 10. Add actual homes built during the validation window.
    Each newly built home is assigned to either the same school year or the next school year using `same_school_year_probability`.
 11. Simulate ownership changes, density-adjusted move-in families, density-adjusted new children, student exits, and grade progression.
@@ -643,7 +643,7 @@ If the requested start year does not have actual reference data, the model uses 
 
 Before the validation window, homes from `homes.csv` are added in their construction years and advanced to the baseline year. That lets older baseline homes already have turnover episodes and younger households. If a reference grid has students but no listed homes, synthetic homes are created and played back so the model has homes to hold the reference children.
 
-Baseline children are reconciled to the adjusted actual grade distribution, excluding TK reference data. The reconciliation target includes hidden age buckets `-4..0`; each hidden bucket uses the same-village average of same-year K, 1st, and 2nd grade as its target. Future K reference counts are not used to seed hidden pre-K children. This keeps the early pipeline smooth without using TK or future data.
+Baseline children are reconciled to the adjusted actual grade distribution, excluding TK reference data. The reconciliation target includes hidden age buckets `-4..0`; each hidden bucket starts from the same-village average of same-year K, 1st, and 2nd grade. If future reference years exist, the model simulates how many future K students are expected from post-baseline new homes, move-ins, and births/new children, subtracts those from future K reference, and applies a capped blend into the matching hidden bucket. This keeps the early pipeline smoother than same-year-only anchoring while avoiding raw future-data leakage.
 
 Future improvement: anchored starts could infer richer household histories for the homes that receive observed students. That would mean allocating observed students into plausible sibling groups, then inferring likely younger preschool siblings, older post-school siblings, and household tenure. A later reference-assisted preschool inference layer could use future K/TK-like signals only after subtracting students from new homes, later move-ins, and later births. This is intentionally not implemented yet because it is a separate inference layer and must preserve the exact observed grade/grid counts without leaking future data into normal forecasts.
 

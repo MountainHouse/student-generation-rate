@@ -1424,6 +1424,8 @@ else
     private double AnchorYearWeight { get; set; } = DefaultParameters.AnchorYearWeight;
     private double YearWeightSlope { get; set; } = DefaultParameters.YearWeightSlope;
     private double YearWeightCap { get; set; } = DefaultParameters.YearWeightCap;
+    private double HiddenPipelineFutureBlend { get; set; } = DefaultParameters.HiddenPipelineFutureBlend;
+    private double HiddenPipelineMaxAdjustmentShare { get; set; } = DefaultParameters.HiddenPipelineMaxAdjustmentShare;
     private double DensityLowFactor { get; set; } = DefaultParameters.DensityLowFactor;
     private double DensityMediumFactor { get; set; } = DefaultParameters.DensityMediumFactor;
     private double DensityMediumHighFactor { get; set; } = DefaultParameters.DensityMediumHighFactor;
@@ -2467,6 +2469,8 @@ else
         AnchorYearWeight = parameters.AnchorYearWeight;
         YearWeightSlope = parameters.YearWeightSlope;
         YearWeightCap = parameters.YearWeightCap;
+        HiddenPipelineFutureBlend = parameters.HiddenPipelineFutureBlend;
+        HiddenPipelineMaxAdjustmentShare = parameters.HiddenPipelineMaxAdjustmentShare;
         DensityLowFactor = parameters.DensityLowFactor;
         DensityMediumFactor = parameters.DensityMediumFactor;
         DensityMediumHighFactor = parameters.DensityMediumHighFactor;
@@ -2526,6 +2530,8 @@ else
             AnchorYearWeight: AnchorYearWeight,
             YearWeightSlope: YearWeightSlope,
             YearWeightCap: YearWeightCap,
+            HiddenPipelineFutureBlend: HiddenPipelineFutureBlend,
+            HiddenPipelineMaxAdjustmentShare: HiddenPipelineMaxAdjustmentShare,
             DensityLowFactor: DensityLowFactor,
             DensityMediumFactor: DensityMediumFactor,
             DensityMediumHighFactor: DensityMediumHighFactor,

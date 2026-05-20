@@ -552,6 +552,8 @@ static IEnumerable<OptimizeVariable> BuildOptimizeVariables(CliOptions options)
     yield return new OptimizeVariable("high-2nd", 0.10, 0.20, 1.20, p => p.DensityHighSecondChildFactor, (p, value) => p with { DensityHighSecondChildFactor = value });
     yield return new OptimizeVariable("high-3rd", 0.05, 0.00, 0.60, p => p.DensityHighThirdChildFactor, (p, value) => p with { DensityHighThirdChildFactor = value });
     yield return new OptimizeVariable("high-4th", 0.05, 0.00, 0.60, p => p.DensityHighFourthChildFactor, (p, value) => p with { DensityHighFourthChildFactor = value });
+    yield return new OptimizeVariable("hidden-blend", 0.10, 0.00, 1.00, p => p.HiddenPipelineFutureBlend, (p, value) => p with { HiddenPipelineFutureBlend = value });
+    yield return new OptimizeVariable("hidden-cap", 0.05, 0.00, 0.75, p => p.HiddenPipelineMaxAdjustmentShare, (p, value) => p with { HiddenPipelineMaxAdjustmentShare = value });
 }
 
 static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails = false)
@@ -563,6 +565,7 @@ static void PrintResult(MonteCarloValidationResult result, bool showGradeDetails
     Console.WriteLine($"  grade win:  +/-{result.Parameters.GradeSmoothingWindow:N0} years");
     Console.WriteLine($"  score wts:  total {result.Parameters.ScoreTotalWeight:N2}, grid {result.Parameters.ScoreGridWeight:N2}, grade {result.Parameters.ScoreGradeWeight:N2}, HS total {result.Parameters.ScoreHighSchoolTotalWeight:N2}, HS grade {result.Parameters.ScoreHighSchoolGradeWeight:N2}");
     Console.WriteLine($"  year wts:   anchor {result.Parameters.AnchorYearWeight:N2}, slope {result.Parameters.YearWeightSlope:N2}/yr, cap {result.Parameters.YearWeightCap:N2}");
+    Console.WriteLine($"  hidden K:   blend {result.Parameters.HiddenPipelineFutureBlend:N2}, cap +/-{result.Parameters.HiddenPipelineMaxAdjustmentShare:P0}");
     Console.WriteLine($"  density:    low {result.Parameters.DensityLowFactor:N2}, medium {result.Parameters.DensityMediumFactor:N2}, med-high {result.Parameters.DensityMediumHighFactor:N2}, high {result.Parameters.DensityHighFactor:N2}");
     Console.WriteLine($"  density 1:  low {result.Parameters.DensityLowFirstChildFactor:N2}, medium {result.Parameters.DensityMediumFirstChildFactor:N2}, med-high {result.Parameters.DensityMediumHighFirstChildFactor:N2}, high {result.Parameters.DensityHighFirstChildFactor:N2}");
     Console.WriteLine($"  density 2:  low {result.Parameters.DensityLowSecondChildFactor:N2}, medium {result.Parameters.DensityMediumSecondChildFactor:N2}, med-high {result.Parameters.DensityMediumHighSecondChildFactor:N2}, high {result.Parameters.DensityHighSecondChildFactor:N2}");
@@ -979,7 +982,9 @@ sealed class CliOptions
                 ReadDouble(values, "density-high-4th", 1.0),
                 ReadDouble(values, "anchor-weight", 0.25),
                 ReadDouble(values, "year-weight-slope", 0.15),
-                ReadDouble(values, "year-weight-cap", 2.0)),
+                ReadDouble(values, "year-weight-cap", 2.0),
+                ReadDouble(values, "hidden-blend", 0.65),
+                ReadDouble(values, "hidden-cap", 0.35)),
             OwnershipCandidates = ReadDoubles(values, "turnovers"),
             ZeroChildCandidates = ReadDoubles(values, "zero-children"),
             OneChildCandidates = ReadDoubles(values, "one-children", "firsts"),
