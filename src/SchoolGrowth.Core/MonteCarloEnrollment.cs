@@ -306,6 +306,14 @@ public sealed class MonteCarloEnrollmentModel
 
     private static readonly string[] ValidationGrades = GradeOrder.Skip(1).Take(13).ToArray();
     private static readonly string[] HighSchoolGrades = ["9th", "10th", "11th", "12th"];
+    private static readonly int[] PreschoolGradeIndices = [-4, -3, -2, -1];
+    private static readonly int[] TkKGradeIndices = [0, 1];
+    private static readonly int[] ElementaryGradeIndices = [2, 3, 4, 5, 6];
+    private static readonly int[] MiddleGradeIndices = [7, 8, 9];
+    private static readonly int[] HighSchoolGradeIndices = [10, 11, 12, 13];
+    private static readonly int[] StudentGradeIndices = Enumerable.Range(0, 14).ToArray();
+    private static readonly int[] SpecialEducationGradeIndices = Enumerable.Range(1, 13).ToArray();
+    private static readonly int[] ReconciliationBuckets = [.. Enumerable.Range(-4, 5), .. GradeOrder.Skip(1).Take(13).Select(GradeIndexFor)];
     private readonly EnrollmentData data;
     public MonteCarloEnrollmentModel(EnrollmentData data)
     {
@@ -339,6 +347,7 @@ public sealed class MonteCarloEnrollmentModel
                 .Select(year => (int?)year)
                 .Max() ?? startYear - 1;
         var parameters = Sanitize(request.Parameters);
+        var parameterCache = new SimulationParameterCache(parameters);
         var accumulators = CreateYearAccumulators(startYear, endYear);
         var mergeLock = new object();
         var parallelOptions = new ParallelOptions
@@ -356,14 +365,14 @@ public sealed class MonteCarloEnrollmentModel
             (run, _, localAccumulators) =>
             {
                 var random = new Random(parameters.Seed + run);
-                var homes = InitializeHomes(baselineYear, scenarioHomes, parameters, random);
+                var homes = InitializeHomes(baselineYear, scenarioHomes, parameterCache, random);
                 for (var year = baselineYear + 1; year < startYear; year++)
                 {
-                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random, SimChildOrigin.PostBaselineNewHome);
+                    AddBuiltHomes(homes, year, scenarioHomes, parameterCache, random, SimChildOrigin.PostBaselineNewHome);
                     AdvanceHomes(
                         homes,
                         year,
-                        parameters,
+                        parameterCache,
                         random,
                         turnoverChildOrigin: SimChildOrigin.PostBaselineMoveIn,
                         newChildOrigin: SimChildOrigin.PostBaselineBirth);
@@ -377,11 +386,11 @@ public sealed class MonteCarloEnrollmentModel
                         continue;
                     }
 
-                    AddBuiltHomes(homes, year, scenarioHomes, parameters, random, SimChildOrigin.PostBaselineNewHome);
+                    AddBuiltHomes(homes, year, scenarioHomes, parameterCache, random, SimChildOrigin.PostBaselineNewHome);
                     AdvanceHomes(
                         homes,
                         year,
-                        parameters,
+                        parameterCache,
                         random,
                         turnoverChildOrigin: SimChildOrigin.PostBaselineMoveIn,
                         newChildOrigin: SimChildOrigin.PostBaselineBirth,
@@ -570,6 +579,7 @@ public sealed class MonteCarloEnrollmentModel
         var runs = Math.Clamp(request.Runs, 1, 10000);
         var homesPerRun = Math.Clamp(request.HomesPerRun, 1, 100000);
         var parameters = Sanitize(request.Parameters with { Runs = runs });
+        var parameterCache = new SimulationParameterCache(parameters);
         var accumulators = Enumerable.Range(0, years + 1)
             .ToDictionary(year => year, _ => new LifecycleAccumulator());
         var initialDistribution = new ChildCountDistributionAccumulator();
@@ -586,12 +596,13 @@ public sealed class MonteCarloEnrollmentModel
             for (var i = 0; i < homesPerRun; i++)
             {
                 var home = new SimHome(request.Grid, request.Density, 0, 0, 0);
-                home.Children.AddRange(GenerateHouseholdChildren(
+                AddHouseholdChildren(
+                    home.Children,
                     request.Grid,
                     request.Density,
-                    parameters,
+                    parameterCache,
                     random,
-                    SimChildOrigin.BaselineExisting));
+                    SimChildOrigin.BaselineExisting);
                 initialDistribution.Add(home.Children.Count);
                 homes.Add(home);
             }
@@ -605,7 +616,7 @@ public sealed class MonteCarloEnrollmentModel
                     AdvanceHomes(
                         homes,
                         year,
-                        parameters,
+                        parameterCache,
                         random,
                         turnoverDistribution.Add,
                         completedFamilyLongevity.Add,
@@ -640,9 +651,10 @@ public sealed class MonteCarloEnrollmentModel
     private List<SimHome> InitializeHomes(
         int baselineYear,
         IReadOnlyList<ScenarioHome> scenarioHomes,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random)
     {
+        var parameters = parameterCache.Parameters;
         var homes = new List<SimHome>();
         var baselineGradeShares = BuildDistrictGradeShares(data, baselineYear);
         var baselineGrades = data.GridRows.ToDictionary(
@@ -660,16 +672,16 @@ public sealed class MonteCarloEnrollmentModel
 
         for (var year = firstBuildYear; year <= baselineYear; year++)
         {
-            AddBuiltHomes(homes, year, scenarioHomes, parameters, random);
+            AddBuiltHomes(homes, year, scenarioHomes, parameterCache, random);
             if (year < baselineYear)
             {
-                AdvanceHomes(homes, year, parameters, random);
+                AdvanceHomes(homes, year, parameterCache, random);
             }
         }
 
         if (!HasActualGradeData(baselineYear) || !HasActualGridData(baselineYear))
         {
-            AdvanceHomes(homes, baselineYear, parameters, random);
+            AdvanceHomes(homes, baselineYear, parameterCache, random);
             return homes;
         }
 
@@ -684,17 +696,24 @@ public sealed class MonteCarloEnrollmentModel
             {
                 var expectedStudentsPerHome = Math.Max(0.25, ExpectedStudentsPerNewHousehold(parameters));
                 var syntheticHomes = Math.Ceiling(grades.Values.Sum() / expectedStudentsPerHome);
-                AddPlayedBackSyntheticHomes(homes, grid, baselineYear, syntheticHomes, parameters, random);
+                AddPlayedBackSyntheticHomes(homes, grid, baselineYear, syntheticHomes, parameterCache, random);
             }
+        }
 
-            var hiddenPipelineTargets = BuildHiddenPipelineTargets(
-                homes,
-                grid,
-                baselineYear,
-                grades,
-                scenarioHomes,
-                parameters,
-                random);
+        var hiddenPipelineTargetsByGrid = BuildHiddenPipelineTargetsByGrid(
+            homes,
+            baselineYear,
+            baselineGrades,
+            scenarioHomes,
+            parameterCache,
+            random);
+
+        foreach (var (grid, grades) in baselineGrades)
+        {
+            if (IsExcludedValidationGrid(grid)) continue;
+
+            var hiddenPipelineTargets = hiddenPipelineTargetsByGrid.GetValueOrDefault(grid)
+                ?? BuildHiddenPipelineTargets(grades, new Dictionary<int, double?>(), parameters);
             ReconcileBaselineChildren(homes, grid, baselineYear, grades, hiddenPipelineTargets, random);
         }
 
@@ -706,17 +725,17 @@ public sealed class MonteCarloEnrollmentModel
         string grid,
         int baselineYear,
         double count,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random)
     {
         var syntheticBuildYear = Math.Max(data.AugustYears.First(), baselineYear - 20);
         var startIndex = homes.Count;
-        AddHomes(homes, grid, "Existing", syntheticBuildYear, count, generateChildren: true, parameters, random);
+        AddHomes(homes, grid, "Existing", syntheticBuildYear, count, generateChildren: true, parameterCache, random);
         var syntheticHomes = homes.Skip(startIndex).ToList();
 
         for (var year = syntheticBuildYear; year < baselineYear; year++)
         {
-            AdvanceHomes(syntheticHomes, year, parameters, random);
+            AdvanceHomes(syntheticHomes, year, parameterCache, random);
         }
     }
 
@@ -724,7 +743,7 @@ public sealed class MonteCarloEnrollmentModel
         List<SimHome> homes,
         int year,
         IReadOnlyList<ScenarioHome> scenarioHomes,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random,
         SimChildOrigin childOrigin = SimChildOrigin.BaselineExisting)
     {
@@ -733,12 +752,12 @@ public sealed class MonteCarloEnrollmentModel
             if (IsExcludedValidationGrid(homeRow.Neighborhood)) continue;
 
             var count = homeRow.HomesByYear.GetValueOrDefault(year);
-            AddHomes(homes, homeRow.Neighborhood, homeRow.Density, year, count, generateChildren: true, parameters, random, childOrigin);
+            AddHomes(homes, homeRow.Neighborhood, homeRow.Density, year, count, generateChildren: true, parameterCache, random, childOrigin);
         }
 
         foreach (var home in scenarioHomes.Where(home => home.Year == year))
         {
-            AddHomes(homes, home.Neighborhood, home.Density, year, home.Homes, generateChildren: true, parameters, random, childOrigin);
+            AddHomes(homes, home.Neighborhood, home.Density, year, home.Homes, generateChildren: true, parameterCache, random, childOrigin);
         }
     }
 
@@ -749,10 +768,11 @@ public sealed class MonteCarloEnrollmentModel
         int year,
         double count,
         bool generateChildren,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random,
         SimChildOrigin childOrigin = SimChildOrigin.BaselineExisting)
     {
+        var parameters = parameterCache.Parameters;
         var wholeHomes = (int)Math.Floor(Math.Max(0, count));
         var fractional = Math.Max(0, count) - wholeHomes;
         if (random.NextDouble() < fractional) wholeHomes++;
@@ -765,7 +785,7 @@ public sealed class MonteCarloEnrollmentModel
             var home = new SimHome(grid, density, year, activeSchoolYear, activeSchoolYear);
             if (generateChildren)
             {
-                home.Children.AddRange(GenerateHouseholdChildren(grid, density, parameters, random, childOrigin));
+                AddHouseholdChildren(home.Children, grid, density, parameterCache, random, childOrigin);
             }
 
             homes.Add(home);
@@ -775,7 +795,7 @@ public sealed class MonteCarloEnrollmentModel
     private void AdvanceHomes(
         List<SimHome> homes,
         int year,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random,
         Action<int>? turnoverChildCountObserver = null,
         Action<int>? turnoverLongevityObserver = null,
@@ -784,6 +804,7 @@ public sealed class MonteCarloEnrollmentModel
         SimChildOrigin turnoverChildOrigin = SimChildOrigin.BaselineExisting,
         SimChildOrigin newChildOrigin = SimChildOrigin.BaselineExisting)
     {
+        var parameters = parameterCache.Parameters;
         foreach (var home in homes)
         {
             if (!home.IsActive(year)) continue;
@@ -795,7 +816,7 @@ public sealed class MonteCarloEnrollmentModel
                 turnoverLongevityObserver?.Invoke(longevity);
                 segmentTurnoverObserver?.Invoke(home, longevity);
                 home.Children.Clear();
-                home.Children.AddRange(GenerateHouseholdChildren(home.Grid, home.Density, parameters, random, turnoverChildOrigin));
+                AddHouseholdChildren(home.Children, home.Grid, home.Density, parameterCache, random, turnoverChildOrigin);
                 turnoverChildCountObserver?.Invoke(home.Children.Count);
                 home.OwnershipStartYear = home.CurrentYear;
                 home.CurrentYear++;
@@ -814,7 +835,7 @@ public sealed class MonteCarloEnrollmentModel
                 child.Advance();
             }
 
-            var newChildProbability = NewChildProbability(home, parameters);
+            var newChildProbability = NewChildProbability(home, parameterCache);
             if (random.NextDouble() < newChildProbability)
             {
                 home.Children.Add(SimChild.Newborn(DrawSpecialEducation(parameters, random), newChildOrigin));
@@ -824,39 +845,59 @@ public sealed class MonteCarloEnrollmentModel
         }
     }
 
-    private IEnumerable<SimChild> GenerateHouseholdChildren(
+    private static void AddHouseholdChildren(
+        List<SimChild> children,
         string grid,
         string density,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random,
         SimChildOrigin origin)
     {
-        var childCount = DrawMoveInChildCount(density, parameters, random);
+        var childCount = DrawMoveInChildCount(density, parameterCache, random);
         for (var i = 0; i < childCount; i++)
         {
-            yield return new SimChild(DrawGradeIndex(grid, parameters, random), DrawSpecialEducation(parameters, random), origin);
+            children.Add(new SimChild(
+                DrawGradeIndex(grid, parameterCache.Parameters, random),
+                DrawSpecialEducation(parameterCache.Parameters, random),
+                origin));
         }
     }
 
-    private Dictionary<int, int> BuildHiddenPipelineTargets(
+    private Dictionary<string, Dictionary<int, int>> BuildHiddenPipelineTargetsByGrid(
         List<SimHome> homes,
-        string grid,
         int baselineYear,
-        Dictionary<string, double> grades,
+        Dictionary<string, Dictionary<string, double>> baselineGrades,
         IReadOnlyList<ScenarioHome> scenarioHomes,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random)
+    {
+        var inferredTargetsByGrid = EstimateFutureAssistedHiddenTargetsByGrid(
+            homes,
+            baselineYear,
+            baselineGrades.Keys.Where(grid => !IsExcludedValidationGrid(grid)),
+            scenarioHomes,
+            parameterCache,
+            random);
+
+        return baselineGrades
+            .Where(kvp => !IsExcludedValidationGrid(kvp.Key))
+            .ToDictionary(
+                kvp => kvp.Key,
+                kvp => BuildHiddenPipelineTargets(
+                    kvp.Value,
+                    inferredTargetsByGrid.GetValueOrDefault(kvp.Key) ?? [],
+                    parameterCache.Parameters),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static Dictionary<int, int> BuildHiddenPipelineTargets(
+        Dictionary<string, double> grades,
+        IReadOnlyDictionary<int, double?> inferredTargets,
+        MonteCarloParameters parameters)
     {
         var targetBuckets = Enumerable.Range(-4, 5).ToArray();
         var baseTarget = EarlyHiddenAgeTarget(grades);
         var targets = targetBuckets.ToDictionary(bucket => bucket, _ => baseTarget);
-        var inferredTargets = EstimateFutureAssistedHiddenTargets(
-            homes,
-            grid,
-            baselineYear,
-            scenarioHomes,
-            parameters,
-            random);
 
         foreach (var bucket in targetBuckets)
         {
@@ -878,42 +919,70 @@ public sealed class MonteCarloEnrollmentModel
         return targets;
     }
 
-    private Dictionary<int, double?> EstimateFutureAssistedHiddenTargets(
+    private Dictionary<string, Dictionary<int, double?>> EstimateFutureAssistedHiddenTargetsByGrid(
         List<SimHome> homes,
-        string grid,
         int baselineYear,
+        IEnumerable<string> grids,
         IReadOnlyList<ScenarioHome> scenarioHomes,
-        MonteCarloParameters parameters,
+        SimulationParameterCache parameterCache,
         Random random)
     {
         var maxHorizon = 5;
-        var result = Enumerable.Range(1, maxHorizon).ToDictionary(horizon => horizon, _ => (double?)null);
+        var gridList = grids
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var result = gridList.ToDictionary(
+            grid => grid,
+            _ => Enumerable.Range(1, maxHorizon).ToDictionary(horizon => horizon, _ => (double?)null),
+            StringComparer.OrdinalIgnoreCase);
         if (!HasFutureReferenceData(baselineYear + 1, baselineYear + maxHorizon)) return result;
 
         var probeHomes = homes.Select(home => home.Clone()).ToList();
         var probeRandom = new Random(random.Next());
         for (var year = baselineYear + 1; year <= baselineYear + maxHorizon; year++)
         {
-            AddBuiltHomes(probeHomes, year, scenarioHomes, parameters, probeRandom, SimChildOrigin.PostBaselineNewHome);
+            AddBuiltHomes(probeHomes, year, scenarioHomes, parameterCache, probeRandom, SimChildOrigin.PostBaselineNewHome);
             AdvanceHomes(
                 probeHomes,
                 year,
-                parameters,
+                parameterCache,
                 probeRandom,
                 turnoverChildOrigin: SimChildOrigin.PostBaselineMoveIn,
                 newChildOrigin: SimChildOrigin.PostBaselineBirth);
 
-            var referenceK = ReferenceGradeEstimateForGrid(grid, year, "K");
-            if (!referenceK.HasValue) continue;
+            var postBaselineKByGrid = CountPostBaselineKindergartenByGrid(probeHomes, year);
+            var horizon = year - baselineYear;
+            foreach (var grid in gridList)
+            {
+                var referenceK = ReferenceGradeEstimateForGrid(grid, year, "K");
+                if (!referenceK.HasValue) continue;
 
-            var postBaselineK = probeHomes
-                .Where(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase))
-                .Where(home => home.IsActive(year))
-                .SelectMany(home => home.Children)
-                .Count(child => !child.IsSpecialEducation
-                    && child.GradeIndex == GradeIndexFor("K")
-                    && child.Origin != SimChildOrigin.BaselineExisting);
-            result[year - baselineYear] = Math.Max(0, referenceK.Value - postBaselineK);
+                result[grid][horizon] = Math.Max(0, referenceK.Value - postBaselineKByGrid.GetValueOrDefault(grid));
+            }
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, int> CountPostBaselineKindergartenByGrid(List<SimHome> homes, int year)
+    {
+        var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var kindergartenIndex = GradeIndexFor("K");
+        foreach (var home in homes)
+        {
+            if (!home.IsActive(year)) continue;
+
+            foreach (var child in home.Children)
+            {
+                if (child.IsSpecialEducation
+                    || child.GradeIndex != kindergartenIndex
+                    || child.Origin == SimChildOrigin.BaselineExisting)
+                {
+                    continue;
+                }
+
+                result[home.Grid] = result.GetValueOrDefault(home.Grid) + 1;
+            }
         }
 
         return result;
@@ -958,13 +1027,14 @@ public sealed class MonteCarloEnrollmentModel
             .ToList();
         if (gridHomes.Count == 0) return;
 
-        var targetBuckets = ReconciliationTargetBuckets(grades);
+        var targetBuckets = ReconciliationTargetBuckets();
         var targets = targetBuckets.ToDictionary(
             bucket => bucket,
             bucket => ReconciliationTargetForBucket(bucket, grades, hiddenPipelineTargets));
+        var regularChildrenByBucket = BuildRegularChildBuckets(gridHomes, targetBuckets);
         var current = targetBuckets.ToDictionary(
             bucket => bucket,
-            bucket => CountRegularBucket(gridHomes, bucket));
+            bucket => regularChildrenByBucket.GetValueOrDefault(bucket)?.Count ?? 0);
         var deficits = targets.ToDictionary(
             kvp => kvp.Key,
             kvp => Math.Max(0, kvp.Value - current.GetValueOrDefault(kvp.Key)));
@@ -972,13 +1042,8 @@ public sealed class MonteCarloEnrollmentModel
             kvp => kvp.Key,
             kvp => Math.Max(0, current.GetValueOrDefault(kvp.Key) - kvp.Value));
 
-        while (TryRetargetClosestSurplusChild(gridHomes, deficits, surplus, random))
-        {
-        }
-
-        while (TryConvertPostSchoolChild(gridHomes, deficits, random))
-        {
-        }
+        RetargetClosestSurplusChildren(regularChildrenByBucket, deficits, surplus, random);
+        ConvertPostSchoolChildren(gridHomes, deficits, random);
 
         foreach (var bucket in targetBuckets)
         {
@@ -1008,14 +1073,9 @@ public sealed class MonteCarloEnrollmentModel
             : !child.IsSpecialEducation && child.Grade.Equals(grade, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static int CountRegularBucket(List<SimHome> gridHomes, int bucket)
+    private static IReadOnlyList<int> ReconciliationTargetBuckets()
     {
-        return gridHomes.Sum(home => home.Children.Count(child => !child.IsSpecialEducation && child.GradeIndex == bucket));
-    }
-
-    private static IReadOnlyList<int> ReconciliationTargetBuckets(Dictionary<string, double> grades)
-    {
-        return [.. Enumerable.Range(-4, 5), .. ValidationGrades.Select(GradeIndexFor)];
+        return ReconciliationBuckets;
     }
 
     private static int ReconciliationTargetForBucket(
@@ -1040,8 +1100,26 @@ public sealed class MonteCarloEnrollmentModel
         return (int)Math.Round(earlyTotal / 3.0);
     }
 
-    private static bool TryRetargetClosestSurplusChild(
+    private static Dictionary<int, List<ChildLocation>> BuildRegularChildBuckets(
         List<SimHome> gridHomes,
+        IReadOnlyList<int> targetBuckets)
+    {
+        var bucketSet = targetBuckets.ToHashSet();
+        var buckets = targetBuckets.ToDictionary(bucket => bucket, _ => new List<ChildLocation>());
+        foreach (var home in gridHomes)
+        {
+            foreach (var child in home.Children)
+            {
+                if (child.IsSpecialEducation || !bucketSet.Contains(child.GradeIndex)) continue;
+                buckets[child.GradeIndex].Add(new ChildLocation(home, child));
+            }
+        }
+
+        return buckets;
+    }
+
+    private static void RetargetClosestSurplusChildren(
+        Dictionary<int, List<ChildLocation>> childrenByBucket,
         Dictionary<int, int> deficits,
         Dictionary<int, int> surplus,
         Random random)
@@ -1063,73 +1141,59 @@ public sealed class MonteCarloEnrollmentModel
 
         foreach (var pair in pairs)
         {
-            var candidates = ChildLocations(gridHomes, child => !child.IsSpecialEducation && child.GradeIndex == pair.SourceBucket);
-            if (candidates.Count == 0) continue;
+            if (!childrenByBucket.TryGetValue(pair.SourceBucket, out var sourceChildren) || sourceChildren.Count == 0) continue;
 
-            var candidate = candidates[random.Next(candidates.Count)];
-            candidate.Child.SetGradeIndex(pair.TargetBucket);
-            deficits[pair.TargetBucket]--;
-            surplus[pair.SourceBucket]--;
-            return true;
+            var moveCount = Math.Min(Math.Min(deficits[pair.TargetBucket], surplus[pair.SourceBucket]), sourceChildren.Count);
+            for (var i = 0; i < moveCount; i++)
+            {
+                var candidate = PopRandom(sourceChildren, random);
+                candidate.Child.SetGradeIndex(pair.TargetBucket);
+                deficits[pair.TargetBucket]--;
+                surplus[pair.SourceBucket]--;
+            }
         }
-
-        return false;
     }
 
-    private static bool TryConvertPostSchoolChild(List<SimHome> gridHomes, Dictionary<int, int> deficits, Random random)
+    private static void ConvertPostSchoolChildren(List<SimHome> gridHomes, Dictionary<int, int> deficits, Random random)
     {
-        var candidates = deficits
+        var postSchoolChildren = ChildLocations(gridHomes, child => !child.IsSpecialEducation && child.GradeIndex > 13);
+        foreach (var target in deficits
             .Where(target => target.Value > 0)
-            .SelectMany(target => ChildLocations(
-                    gridHomes,
-                    child => !child.IsSpecialEducation && child.GradeIndex > 13)
-                .Select(candidate => new
-                {
-                    TargetBucket = target.Key,
-                    Candidate = candidate,
-                    Distance = Math.Abs(candidate.Child.GradeIndex - target.Key)
-                }))
-            .GroupBy(item => item.Distance)
-            .OrderBy(group => group.Key)
-            .FirstOrDefault()
-            ?.ToList() ?? [];
-        if (candidates.Count == 0) return false;
+            .OrderBy(target => Math.Abs(PostSchoolChildIndex - target.Key))
+            .ThenByDescending(target => target.Key)
+            .Select(target => target.Key)
+            .ToList())
+        {
+            var moveCount = Math.Min(deficits[target], postSchoolChildren.Count);
+            for (var i = 0; i < moveCount; i++)
+            {
+                var candidate = PopRandom(postSchoolChildren, random);
+                candidate.Child.SetGradeIndex(target);
+                deficits[target]--;
+            }
 
-        var item = candidates[random.Next(candidates.Count)];
-        item.Candidate.Child.SetGradeIndex(item.TargetBucket);
-        deficits[item.TargetBucket]--;
-        return true;
+            if (postSchoolChildren.Count == 0) return;
+        }
     }
 
     private static void AddBaselineChildrenToSmallestFamilies(List<SimHome> gridHomes, int bucket, int count, Random random)
     {
+        var homesByChildCount = BuildHomesByChildCount(gridHomes);
         for (var i = 0; i < count; i++)
         {
-            var home = PickHomeByChildCount(gridHomes, preferSmallest: true, random);
+            var home = PopHomeByChildCount(homesByChildCount, preferSmallest: true, random);
             home.Children.Add(new SimChild(bucket, isSpecialEducation: false, SimChildOrigin.BaselineExisting));
+            AddHomeByChildCount(homesByChildCount, home);
         }
     }
 
     private static void RemoveBaselineChildrenFromLargestFamilies(List<SimHome> gridHomes, int bucket, int count, Random random)
     {
-        for (var i = 0; i < count; i++)
-        {
-            var homeCandidates = gridHomes
-                .Where(home => home.Children.Any(child => !child.IsSpecialEducation && child.GradeIndex == bucket))
-                .GroupBy(home => home.Children.Count)
-                .OrderByDescending(group => group.Key)
-                .FirstOrDefault()
-                ?.ToList() ?? [];
-            if (homeCandidates.Count == 0) return;
-
-            var home = homeCandidates[random.Next(homeCandidates.Count)];
-            var childIndexes = home.Children
-                .Select((child, index) => (child, index))
-                .Where(item => !item.child.IsSpecialEducation && item.child.GradeIndex == bucket)
-                .Select(item => item.index)
-                .ToList();
-            home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);
-        }
+        RemoveChildrenFromLargestFamilies(
+            gridHomes,
+            child => !child.IsSpecialEducation && child.GradeIndex == bucket,
+            count,
+            random);
     }
 
     private static void ReconcileSpecialEducationChildren(List<SimHome> gridHomes, Dictionary<string, double> grades, Random random)
@@ -1149,46 +1213,121 @@ public sealed class MonteCarloEnrollmentModel
 
     private static void RemoveSpecialEducationChildrenFromLargestFamilies(List<SimHome> gridHomes, int count, Random random)
     {
-        for (var i = 0; i < count; i++)
-        {
-            var homeCandidates = gridHomes
-                .Where(home => home.Children.Any(child => ChildMatchesGrade(child, "Sp. Ed.")))
-                .GroupBy(home => home.Children.Count)
-                .OrderByDescending(group => group.Key)
-                .FirstOrDefault()
-                ?.ToList() ?? [];
-            if (homeCandidates.Count == 0) return;
-
-            var home = homeCandidates[random.Next(homeCandidates.Count)];
-            var childIndexes = home.Children
-                .Select((child, index) => (child, index))
-                .Where(item => ChildMatchesGrade(item.child, "Sp. Ed."))
-                .Select(item => item.index)
-                .ToList();
-            home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);
-        }
+        RemoveChildrenFromLargestFamilies(
+            gridHomes,
+            child => ChildMatchesGrade(child, "Sp. Ed."),
+            count,
+            random);
     }
 
     private static void AddSpecialEducationChildrenToSmallestFamilies(List<SimHome> gridHomes, int count, Random random)
     {
+        var homesByChildCount = BuildHomesByChildCount(gridHomes);
         for (var i = 0; i < count; i++)
         {
-            var home = PickHomeByChildCount(gridHomes, preferSmallest: true, random);
+            var home = PopHomeByChildCount(homesByChildCount, preferSmallest: true, random);
             home.Children.Add(new SimChild(
-                DrawFromIndices(Enumerable.Range(1, 13).ToArray(), random),
+                DrawFromIndices(SpecialEducationGradeIndices, random),
                 isSpecialEducation: true,
                 SimChildOrigin.BaselineExisting));
+            AddHomeByChildCount(homesByChildCount, home);
         }
     }
 
-    private static SimHome PickHomeByChildCount(List<SimHome> homes, bool preferSmallest, Random random)
+    private static void RemoveChildrenFromLargestFamilies(
+        List<SimHome> gridHomes,
+        Func<SimChild, bool> childPredicate,
+        int count,
+        Random random)
     {
-        var candidates = (preferSmallest
-                ? homes.GroupBy(home => home.Children.Count).OrderBy(group => group.Key)
-                : homes.GroupBy(home => home.Children.Count).OrderByDescending(group => group.Key))
-            .First()
-            .ToList();
-        return candidates[random.Next(candidates.Count)];
+        var childrenByHomeChildCount = new SortedDictionary<int, List<ChildLocation>>();
+        foreach (var home in gridHomes)
+        {
+            foreach (var child in home.Children)
+            {
+                if (!childPredicate(child)) continue;
+                AddChildLocationByHomeChildCount(childrenByHomeChildCount, new ChildLocation(home, child));
+            }
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            var candidate = PopChildFromLargestFamily(childrenByHomeChildCount, random);
+            if (candidate is null) return;
+            candidate.Home.Children.Remove(candidate.Child);
+        }
+    }
+
+    private static SortedDictionary<int, List<SimHome>> BuildHomesByChildCount(List<SimHome> homes)
+    {
+        var homesByChildCount = new SortedDictionary<int, List<SimHome>>();
+        foreach (var home in homes)
+        {
+            AddHomeByChildCount(homesByChildCount, home);
+        }
+
+        return homesByChildCount;
+    }
+
+    private static void AddHomeByChildCount(SortedDictionary<int, List<SimHome>> homesByChildCount, SimHome home)
+    {
+        if (!homesByChildCount.TryGetValue(home.Children.Count, out var homes))
+        {
+            homes = [];
+            homesByChildCount[home.Children.Count] = homes;
+        }
+
+        homes.Add(home);
+    }
+
+    private static SimHome PopHomeByChildCount(SortedDictionary<int, List<SimHome>> homesByChildCount, bool preferSmallest, Random random)
+    {
+        var key = preferSmallest ? homesByChildCount.First().Key : homesByChildCount.Last().Key;
+        var homes = homesByChildCount[key];
+        var home = PopRandom(homes, random);
+        if (homes.Count == 0)
+        {
+            homesByChildCount.Remove(key);
+        }
+
+        return home;
+    }
+
+    private static void AddChildLocationByHomeChildCount(
+        SortedDictionary<int, List<ChildLocation>> childrenByHomeChildCount,
+        ChildLocation childLocation)
+    {
+        var childCount = childLocation.Home.Children.Count;
+        if (!childrenByHomeChildCount.TryGetValue(childCount, out var children))
+        {
+            children = [];
+            childrenByHomeChildCount[childCount] = children;
+        }
+
+        children.Add(childLocation);
+    }
+
+    private static ChildLocation? PopChildFromLargestFamily(
+        SortedDictionary<int, List<ChildLocation>> childrenByHomeChildCount,
+        Random random)
+    {
+        while (childrenByHomeChildCount.Count > 0)
+        {
+            var key = childrenByHomeChildCount.Last().Key;
+            var children = childrenByHomeChildCount[key];
+            var child = PopRandom(children, random);
+            if (children.Count == 0)
+            {
+                childrenByHomeChildCount.Remove(key);
+            }
+
+            if (child.Home.Children.Contains(child.Child))
+            {
+                return child;
+            }
+        }
+
+        return null;
     }
 
     private static List<(SimHome Home, SimChild Child)> ChildLocations(List<SimHome> homes, Func<SimChild, bool> predicate)
@@ -1198,6 +1337,16 @@ public sealed class MonteCarloEnrollmentModel
                 .Where(predicate)
                 .Select(child => (home, child)))
             .ToList();
+    }
+
+    private static T PopRandom<T>(List<T> items, Random random)
+    {
+        var index = random.Next(items.Count);
+        var item = items[index];
+        var lastIndex = items.Count - 1;
+        items[index] = items[lastIndex];
+        items.RemoveAt(lastIndex);
+        return item;
     }
 
     private Dictionary<string, double> AllocateGradesForGrid(string grid, double total, Dictionary<string, double> gradeShares)
@@ -1222,11 +1371,11 @@ public sealed class MonteCarloEnrollmentModel
         return new Dictionary<string, double>(gradeShares, StringComparer.OrdinalIgnoreCase);
     }
 
-    private int DrawGradeIndex(string grid, MonteCarloParameters parameters, Random random)
+    private static int DrawGradeIndex(string grid, MonteCarloParameters parameters, Random random)
     {
         if (grid.Equals("MHESD", StringComparison.OrdinalIgnoreCase))
         {
-            return DrawFromIndices([10, 11, 12, 13], random);
+            return DrawFromIndices(HighSchoolGradeIndices, random);
         }
 
         var tkK = Math.Max(0, parameters.MoveInTkKWeight);
@@ -1238,21 +1387,21 @@ public sealed class MonteCarloEnrollmentModel
         var total = preschool + tkK + elementary + middle + high + postSchool;
         if (total <= 0)
         {
-            return DrawFromIndices(Enumerable.Range(0, 14).ToArray(), random);
+            return DrawFromIndices(StudentGradeIndices, random);
         }
 
         var roll = random.NextDouble();
         var cumulative = 0.0;
         cumulative += preschool / total;
-        if (roll <= cumulative) return DrawFromIndices([-4, -3, -2, -1], random);
+        if (roll <= cumulative) return DrawFromIndices(PreschoolGradeIndices, random);
         cumulative += tkK / total;
-        if (roll <= cumulative) return DrawFromIndices([0, 1], random);
+        if (roll <= cumulative) return DrawFromIndices(TkKGradeIndices, random);
         cumulative += elementary / total;
-        if (roll <= cumulative) return DrawFromIndices([2, 3, 4, 5, 6], random);
+        if (roll <= cumulative) return DrawFromIndices(ElementaryGradeIndices, random);
         cumulative += middle / total;
-        if (roll <= cumulative) return DrawFromIndices([7, 8, 9], random);
+        if (roll <= cumulative) return DrawFromIndices(MiddleGradeIndices, random);
         cumulative += high / total;
-        if (roll <= cumulative) return DrawFromIndices([10, 11, 12, 13], random);
+        if (roll <= cumulative) return DrawFromIndices(HighSchoolGradeIndices, random);
         return PostSchoolChildIndex;
     }
 
@@ -1771,10 +1920,10 @@ public sealed class MonteCarloEnrollmentModel
             : (0.25, 0.35, 0.15, 0.15, 0.10);
     }
 
-    private static double NewChildProbability(SimHome home, MonteCarloParameters parameters)
+    private static double NewChildProbability(SimHome home, SimulationParameterCache parameterCache)
     {
         var nextChildNumber = home.Children.Count + 1;
-        return DensityDirectParametersFor(home.Density, parameters)
+        return parameterCache.DensityDirectParametersForNormalized(home.DensityCode)
             .BirthRates
             .ForNextChildNumber(nextChildNumber);
     }
@@ -1833,9 +1982,9 @@ public sealed class MonteCarloEnrollmentModel
         return random.NextDouble() < parameters.SpecialEducationProbability;
     }
 
-    private static int DrawMoveInChildCount(string density, MonteCarloParameters parameters, Random random)
+    private static int DrawMoveInChildCount(string density, SimulationParameterCache parameterCache, Random random)
     {
-        var childShares = DensityDirectParametersFor(density, parameters).MoveInChildShares;
+        var childShares = parameterCache.DensityDirectParametersFor(density).MoveInChildShares;
         var roll = random.NextDouble();
         var cumulative = childShares.Zero;
         if (roll <= cumulative) return 0;
@@ -1996,14 +2145,56 @@ public sealed class MonteCarloEnrollmentModel
         PostBaselineBirth
     }
 
-    private sealed class SimHome(string grid, string density, int builtYear, int activeSchoolYear, int ownershipStartYear)
+    private sealed class SimulationParameterCache
     {
-        public string Grid { get; } = grid;
-        public string Density { get; } = density;
-        public int BuiltYear { get; } = builtYear;
-        public int ActiveSchoolYear { get; } = activeSchoolYear;
-        public int OwnershipStartYear { get; set; } = ownershipStartYear;
-        public int CurrentYear { get; set; } = activeSchoolYear;
+        private readonly Dictionary<string, MonteCarloDensityDirectParameters> densityParameters;
+
+        public SimulationParameterCache(MonteCarloParameters parameters)
+        {
+            Parameters = parameters;
+            densityParameters = DirectDensityCodes
+                .ToDictionary(
+                    density => NormalizeDensity(density),
+                    density => BuildDensityDirectParameters(density, parameters),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        public MonteCarloParameters Parameters { get; }
+
+        public MonteCarloDensityDirectParameters DensityDirectParametersFor(string? density)
+        {
+            var densityName = NormalizeDensity(density);
+            return DensityDirectParametersForNormalized(densityName);
+        }
+
+        public MonteCarloDensityDirectParameters DensityDirectParametersForNormalized(string densityName)
+        {
+            return densityParameters.GetValueOrDefault(densityName)
+                ?? densityParameters.GetValueOrDefault("EXISTING")
+                ?? BuildDensityDirectParameters("Existing", Parameters);
+        }
+    }
+
+    private sealed class SimHome
+    {
+        public SimHome(string grid, string density, int builtYear, int activeSchoolYear, int ownershipStartYear)
+        {
+            Grid = grid;
+            Density = density;
+            DensityCode = NormalizeDensity(density);
+            BuiltYear = builtYear;
+            ActiveSchoolYear = activeSchoolYear;
+            OwnershipStartYear = ownershipStartYear;
+            CurrentYear = activeSchoolYear;
+        }
+
+        public string Grid { get; }
+        public string Density { get; }
+        public string DensityCode { get; }
+        public int BuiltYear { get; }
+        public int ActiveSchoolYear { get; }
+        public int OwnershipStartYear { get; set; }
+        public int CurrentYear { get; set; }
         public List<SimChild> Children { get; } = [];
 
         public bool IsActive(int year) => year >= ActiveSchoolYear;
@@ -2045,6 +2236,8 @@ public sealed class MonteCarloEnrollmentModel
             GradeIndex++;
         }
     }
+
+    private sealed record ChildLocation(SimHome Home, SimChild Child);
 
     private sealed class YearAccumulator
     {
@@ -2120,31 +2313,29 @@ public sealed class MonteCarloEnrollmentModel
                 foreach (var child in home.Children)
                 {
                     if (!child.IsStudent) continue;
+                    var grade = child.Grade;
                     GridTotals[home.Grid] = GridTotals.GetValueOrDefault(home.Grid) + 1;
                     if (!GridGrades.TryGetValue(home.Grid, out var gridGrades))
                     {
                         gridGrades = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
                         GridGrades[home.Grid] = gridGrades;
                     }
-                    gridGrades[child.Grade] = gridGrades.GetValueOrDefault(child.Grade) + 1;
-                    GradeTotals[child.Grade] = GradeTotals.GetValueOrDefault(child.Grade) + 1;
+                    gridGrades[grade] = gridGrades.GetValueOrDefault(grade) + 1;
+                    GradeTotals[grade] = GradeTotals.GetValueOrDefault(grade) + 1;
                     runGridTotals[home.Grid] = runGridTotals.GetValueOrDefault(home.Grid) + 1;
                     if (!runGridGrades.TryGetValue(home.Grid, out var runGradesForGrid))
                     {
                         runGradesForGrid = GradeTotals.Keys.ToDictionary(grade => grade, _ => 0.0, StringComparer.OrdinalIgnoreCase);
                         runGridGrades[home.Grid] = runGradesForGrid;
                     }
-                    runGradesForGrid[child.Grade] = runGradesForGrid.GetValueOrDefault(child.Grade) + 1;
-                    runGradeTotals[child.Grade] = runGradeTotals.GetValueOrDefault(child.Grade) + 1;
+                    runGradesForGrid[grade] = runGradesForGrid.GetValueOrDefault(grade) + 1;
+                    runGradeTotals[grade] = runGradeTotals.GetValueOrDefault(grade) + 1;
                     if (!IsExcludedValidationGrid(home.Grid))
                     {
                         runGridTotal++;
                     }
-                    if (GradeOrder.Contains(child.Grade))
-                    {
-                        runGradeTotal++;
-                    }
-                    if (HighSchoolGrades.Contains(child.Grade))
+                    runGradeTotal++;
+                    if (child.GradeIndex is >= 10 and <= 13)
                     {
                         runHighSchoolTotal++;
                     }
@@ -2290,7 +2481,7 @@ public sealed class MonteCarloEnrollmentModel
 
         private SegmentAccumulator SegmentFor(SimHome home)
         {
-            var density = DensityLabel(home.Density);
+            var density = DensityLabel(home.DensityCode);
             var key = $"{home.Grid}|{density}";
             if (!Segments.TryGetValue(key, out var segment))
             {
@@ -2306,7 +2497,7 @@ public sealed class MonteCarloEnrollmentModel
             TotalHomes++;
             ChildCountBuckets[Math.Min(Math.Max(0, home.Children.Count), 4)]++;
 
-            switch (NormalizeDensity(home.Density))
+            switch (home.DensityCode)
             {
                 case "RL":
                     LowDensityHomes++;
@@ -2332,7 +2523,7 @@ public sealed class MonteCarloEnrollmentModel
             var isK12 = child.GradeIndex is >= 1 and <= 13;
             var isK8 = child.GradeIndex is >= 1 and <= 9;
             var isHighSchool = child.GradeIndex is >= 10 and <= 13;
-            var density = NormalizeDensity(home.Density);
+            var density = home.DensityCode;
             var isMediumHighHigh = density is "RMH" or "RH";
 
             if (isTk) TkStudents++;
