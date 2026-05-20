@@ -9,8 +9,8 @@ The Household Simulation page is organized as a set of tools:
 - tools are collapsible, removable, and reorderable
 - custom Chart tools can be added more than once, renamed in the panel header, and grouped by the user
 - settings are grouped into subpanels
-- initially visible tools should focus on model settings, scenario homes, and validation summary
-- tool panels can expose panel-specific header controls, such as `Add Row` in Scenario Homes
+- initially visible tools should focus on simulation parameters, future homes, and simulation summary
+- tool panels can expose panel-specific header controls, such as `Add Row` in Future Homes
 - other details can be added through the tool menu
 
 ## Tables and Charts
@@ -32,7 +32,7 @@ Tables and charts should use the shared patterns:
 - reserve legend space for the hovered x-value/year so the legend does not jump when hover starts
 - hover-only changes must be implemented with JavaScript DOM updates, not Blazor state changes or component re-renders; Blazor hover callbacks have repeatedly caused visible lag on charts
 - SVG coordinate strings and CSS numeric fragments must use invariant culture formatting; regional decimal commas can corrupt `points`, polygons, paths, and inline lengths
-- repeatable Chart tools should use the same selector model as Validation Summary where practical
+- repeatable Chart tools should use the same selector model as Simulation Summary where practical
 - custom Chart panels place the legend to the right of the chart on wide screens and below it on narrow screens
 - custom Chart panel titles are editable from the panel header; the displayed title should match normal tool header typography
 - when multiple lines are visible, the y-axis scale must use the maximum/minimum across all rendered lines, including pinned lines
@@ -43,11 +43,11 @@ Tables and charts should use the shared patterns:
 - Use controls that match their task: checkboxes for line visibility, inputs/sliders for numeric parameters, selects for option sets.
 - Keep parameter formulas and explanations on validation/model pages where they support tuning.
 
-## Model Settings Organization
+## Simulation Parameters Organization
 
 Household Simulation settings are grouped roughly as:
 
-- Run Environment
+- Run Setup
 - Planning Window
 - Move-In Kids Count
 - Move-In Kids Age
@@ -55,6 +55,6 @@ Household Simulation settings are grouped roughly as:
 - Density Factors
 - Exit Probabilities
 - Other Settings
-- Model Scoring
+- Model Fit Weights
 
 The exact layout can evolve, but related parameters should remain grouped and easy to compare.

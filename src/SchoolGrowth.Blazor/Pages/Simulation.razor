@@ -13,7 +13,7 @@
 <header class="topbar">
     <div>
         <h1>Household Simulation</h1>
-        <p>Validate a household-style simulation against grid and grade reference data.</p>
+        <p>Compare a household-style simulation against village and grade reference data.</p>
     </div>
 </header>
 
@@ -83,7 +83,7 @@ else
     <div class="tool-board">
     @if (IsToolActive(ToolRunEnvironment))
     {
-    <ToolPanel Id="@ToolRunEnvironment" Title="Run Environment" Style="@ToolStyle(ToolRunEnvironment)"
+    <ToolPanel Id="@ToolRunEnvironment" Title="Run Setup" Style="@ToolStyle(ToolRunEnvironment)"
                Collapsed="@IsToolCollapsed(ToolRunEnvironment)" CanMoveUp="@CanMoveToolUp(ToolRunEnvironment)" CanMoveDown="@CanMoveToolDown(ToolRunEnvironment)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="controls monte-controls">
@@ -130,7 +130,7 @@ else
 
     @if (IsToolActive(ToolModelSettings))
     {
-    <ToolPanel Id="@ToolModelSettings" Title="Model Settings" Style="@ToolStyle(ToolModelSettings)"
+    <ToolPanel Id="@ToolModelSettings" Title="Simulation Parameters" Style="@ToolStyle(ToolModelSettings)"
                Collapsed="@IsToolCollapsed(ToolModelSettings)" CanMoveUp="@CanMoveToolUp(ToolModelSettings)" CanMoveDown="@CanMoveToolDown(ToolModelSettings)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="settings-stack">
@@ -142,7 +142,7 @@ else
                 <input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="StartYear" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span class="label-with-help">End year <HelpTip Text="Last school year shown in validation and charts. Future years can be explored even when no reference data exists." /></span>
+                <span class="label-with-help">End year <HelpTip Text="Last school year shown in model-fit views and charts. Future years can be explored even when no reference data exists." /></span>
                 <input type="number" min="@StartYear" max="@MaxSimulationEndYear" @bind="EndYear" @bind:after="RunValidationAsync" />
             </label>
             <label>
@@ -333,7 +333,7 @@ else
 
     @if (IsToolActive(ToolScenarioHomes))
     {
-    <ToolPanel Id="@ToolScenarioHomes" Title="Scenario Homes" Style="@ToolStyle(ToolScenarioHomes)"
+    <ToolPanel Id="@ToolScenarioHomes" Title="Future Homes" Style="@ToolStyle(ToolScenarioHomes)"
                Collapsed="@IsToolCollapsed(ToolScenarioHomes)" CanMoveUp="@CanMoveToolUp(ToolScenarioHomes)" CanMoveDown="@CanMoveToolDown(ToolScenarioHomes)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <HeaderContent>
@@ -344,7 +344,7 @@ else
             <table class="scenario-homes-table">
                 <thead>
                     <tr>
-                        <th><span class="label-with-help">Neighborhood <HelpTip Text="Residence grid/village receiving the additional scenario homes." /></span></th>
+                        <th><span class="label-with-help">Village <HelpTip Text="Residence village receiving the additional future homes." /></span></th>
                         <th><span class="label-with-help">Density <HelpTip Text="Zoning density bucket for the added homes. Density changes move-in and birth probabilities." /></span></th>
                         <th><span class="label-with-help">Built year <HelpTip Text="School year when the added homes become available. Same-school-year probability decides whether students appear in this year or the next." /></span></th>
                         <th><span class="label-with-help">Homes <HelpTip Text="Additional dwelling units. Rows with the same neighborhood, density, and built year are added together." /></span></th>
@@ -355,7 +355,7 @@ else
                     @if (ScenarioRows.Count == 0)
                     {
                         <tr>
-                            <td colspan="5" class="empty-table-note">No scenario homes added.</td>
+                            <td colspan="5" class="empty-table-note">No future homes added.</td>
                         </tr>
                     }
                     @foreach (var row in ScenarioRows)
@@ -391,24 +391,24 @@ else
 
     @if (IsToolActive(ToolModelScoring))
     {
-    <ToolPanel Id="@ToolModelScoring" Title="Model Scoring" Style="@ToolStyle(ToolModelScoring)"
+    <ToolPanel Id="@ToolModelScoring" Title="Model Fit Weights" Style="@ToolStyle(ToolModelScoring)"
                Collapsed="@IsToolCollapsed(ToolModelScoring)" CanMoveUp="@CanMoveToolUp(ToolModelScoring)" CanMoveDown="@CanMoveToolDown(ToolModelScoring)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="controls monte-controls">
             <label>
-                <span class="label-with-help">Total score weight <HelpTip Text="Relative importance of district total error in the combined validation/optimizer score. Score weights are normalized together." /></span>
+                <span class="label-with-help">Total score weight <HelpTip Text="Relative importance of district total error in the combined model-fit/optimizer score. Score weights are normalized together." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreTotalWeight" @oninput="value => ScoreTotalWeight = ParseInputDouble(value, ScoreTotalWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[0])</output></span>
             </label>
             <label>
-                <span class="label-with-help">Grid score weight <HelpTip Text="Relative importance of per-neighborhood/grid error in the combined validation/optimizer score." /></span>
+                <span class="label-with-help">Village score weight <HelpTip Text="Relative importance of per-neighborhood/village error in the combined model-fit/optimizer score." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreGridWeight" @oninput="value => ScoreGridWeight = ParseInputDouble(value, ScoreGridWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[1])</output></span>
             </label>
             <label>
-                <span class="label-with-help">Grade score weight <HelpTip Text="Relative importance of grade-by-grade error in the combined validation/optimizer score." /></span>
+                <span class="label-with-help">Grade score weight <HelpTip Text="Relative importance of grade-by-grade error in the combined model-fit/optimizer score." /></span>
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreGradeWeight" @oninput="value => ScoreGradeWeight = ParseInputDouble(value, ScoreGradeWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[2])</output></span>
             </label>
             <label>
-                <span class="label-with-help">Grade smoothing window <HelpTip Text="Allows grade validation to match nearby cohort years within plus/minus this window. This softens timing noise from build dates and enrollment reporting." /></span>
+                <span class="label-with-help">Grade smoothing window <HelpTip Text="Allows grade fit checks to match nearby cohort years within plus/minus this window. This softens timing noise from build dates and enrollment reporting." /></span>
                 <input type="number" min="0" max="4" step="1" @bind="GradeSmoothingWindow" @bind:after="RunValidationAsync" />
             </label>
             <label>
@@ -420,7 +420,7 @@ else
                 <span class="normalized-input"><input type="number" min="0" step="0.1" value="@ScoreHighSchoolGradeWeight" @oninput="value => ScoreHighSchoolGradeWeight = ParseInputDouble(value, ScoreHighSchoolGradeWeight)" @onchange="RunValidationAsync" /><output>@FormatNormalized(ScoreWeightNormalizers[4])</output></span>
             </label>
             <label>
-                <span class="label-with-help">Year weight slope <HelpTip Text="How quickly later validation years receive more score weight after the start year. Higher values emphasize accumulated forecast accuracy." /></span>
+                <span class="label-with-help">Year weight slope <HelpTip Text="How quickly later fit years receive more score weight after the start year. Higher values emphasize accumulated forecast accuracy." /></span>
                 <input type="number" min="0" step="0.05" @bind="YearWeightSlope" @bind:after="RunValidationAsync" />
             </label>
             <label>
@@ -437,20 +437,20 @@ else
 
     @if (Result is null && ActiveToolIds.Any(IsResultToolId))
     {
-        <section class="band">Choose parameters or wait for the first validation run.</section>
+        <section class="band">Choose parameters or wait for the first simulation run.</section>
     }
     else
     {
     @if (IsToolActive(ToolValidationSummary))
     {
-    <ToolPanel Id="@ToolValidationSummary" Title="Validation Summary" CssClass="band tool-panel charts-tool" Style="@ToolStyle(ToolValidationSummary)"
+    <ToolPanel Id="@ToolValidationSummary" Title="Simulation Summary" CssClass="band tool-panel charts-tool" Style="@ToolStyle(ToolValidationSummary)"
                Collapsed="@IsToolCollapsed(ToolValidationSummary)" CanMoveUp="@CanMoveToolUp(ToolValidationSummary)" CanMoveDown="@CanMoveToolDown(ToolValidationSummary)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <RenderGate Version="@ValidationSummaryRenderKey">
     <div class="charts">
         <div class="chart-box">
             <div class="chart-head">
-                <h2>Validation Trend</h2>
+                <h2>Simulation Trend</h2>
                 <div class="chart-controls validation-chart-controls">
                     <select value="@ValidationMeasure" @onchange="OnValidationMeasureChanged">
                         <option value="students">Students</option>
@@ -549,15 +549,15 @@ else
             </div>
         </div>
         <div class="chart-box">
-            <h2>Validation Error</h2>
+            <h2>Model Fit Error</h2>
             <dl>
                 <dt>Total MAE</dt>
                 <dd>@Result!.GridMeanAbsoluteError.ToString("N0")</dd>
                 <dt>Total MAPE</dt>
                 <dd>@Result.GridMeanAbsolutePercentageError.ToString("P1")</dd>
-                <dt>Grid/year MAE</dt>
+                <dt>Village/year MAE</dt>
                 <dd>@Result.GridLevelMeanAbsoluteError.ToString("N1")</dd>
-                <dt>Grid/year MAPE</dt>
+                <dt>Village/year MAPE</dt>
                 <dd>@Result.GridLevelMeanAbsolutePercentageError.ToString("P1")</dd>
                 <dt>Grade total MAE</dt>
                 <dd>@Result.GradeMeanAbsoluteError.ToString("N0")</dd>
@@ -716,7 +716,7 @@ else
 
     @if (IsToolActive(ToolSimulationInfo))
     {
-    <ToolPanel Id="@ToolSimulationInfo" Title="Simulation Info" Style="@ToolStyle(ToolSimulationInfo)"
+    <ToolPanel Id="@ToolSimulationInfo" Title="Simulation Diagnostics" Style="@ToolStyle(ToolSimulationInfo)"
                Collapsed="@IsToolCollapsed(ToolSimulationInfo)" CanMoveUp="@CanMoveToolUp(ToolSimulationInfo)" CanMoveDown="@CanMoveToolDown(ToolSimulationInfo)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="table-viz simulation-info-viz @(SelectedSimulationInfoChartRows.Count == 0 ? "table-viz-no-chart" : "")">
@@ -827,12 +827,12 @@ else
 
     @if (IsToolActive(ToolDataGaps))
     {
-    <ToolPanel Id="@ToolDataGaps" Title="Data Gaps" Style="@ToolStyle(ToolDataGaps)"
+    <ToolPanel Id="@ToolDataGaps" Title="Baseline Data Gaps" Style="@ToolStyle(ToolDataGaps)"
                Collapsed="@IsToolCollapsed(ToolDataGaps)" CanMoveUp="@CanMoveToolUp(ToolDataGaps)" CanMoveDown="@CanMoveToolDown(ToolDataGaps)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         @if (Result!.SyntheticHomeDiagnostics.Count == 0)
         {
-            <p>No baseline grids needed synthetic played-back homes.</p>
+            <p>No baseline villages needed synthetic played-back homes.</p>
         }
         else
         {
@@ -840,7 +840,7 @@ else
                 <table>
                     <thead>
                         <tr>
-                            <th>Grid</th>
+                            <th>Village</th>
                             <th>Baseline year</th>
                             <th>Adjusted baseline students</th>
                             <th>Listed homes through baseline</th>
@@ -869,7 +869,7 @@ else
 
     @if (IsToolActive(ToolTableDetails))
     {
-    <ToolPanel Id="@ToolTableDetails" Title="Table Details" Style="@ToolStyle(ToolTableDetails)"
+    <ToolPanel Id="@ToolTableDetails" Title="Table View Settings" Style="@ToolStyle(ToolTableDetails)"
                Collapsed="@IsToolCollapsed(ToolTableDetails)" CanMoveUp="@CanMoveToolUp(ToolTableDetails)" CanMoveDown="@CanMoveToolDown(ToolTableDetails)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <div class="metric-options">
@@ -895,10 +895,10 @@ else
 
     @if (IsToolActive(ToolCohorts))
     {
-    <ToolPanel Id="@ToolCohorts" Title="Simulation Progressing Cohorts" Style="@ToolStyle(ToolCohorts)"
+    <ToolPanel Id="@ToolCohorts" Title="Enrollment by Student Cohorts" Style="@ToolStyle(ToolCohorts)"
                Collapsed="@IsToolCollapsed(ToolCohorts)" CanMoveUp="@CanMoveToolUp(ToolCohorts)" CanMoveDown="@CanMoveToolDown(ToolCohorts)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <CohortProgressTable Title="Simulation Progressing Cohorts" Cohorts="MonteCarloProgressingCohorts" Projection="MonteCarloModeledProjection"
+    <CohortProgressTable Title="Enrollment by Student Cohorts" Cohorts="MonteCarloProgressingCohorts" Projection="MonteCarloModeledProjection"
                          ReferenceProjection="MonteCarloReferenceProjection"
                          ProgressionGrades="VisibleCohortGrades"
                          ShowIncreaseFromStart="ShowIncreaseFromStart"
@@ -909,10 +909,10 @@ else
     }
     @if (IsToolActive(ToolGrades))
     {
-    <ToolPanel Id="@ToolGrades" Title="Simulation Grades" Style="@ToolStyle(ToolGrades)"
+    <ToolPanel Id="@ToolGrades" Title="Enrollment by Grade" Style="@ToolStyle(ToolGrades)"
                Collapsed="@IsToolCollapsed(ToolGrades)" CanMoveUp="@CanMoveToolUp(ToolGrades)" CanMoveDown="@CanMoveToolDown(ToolGrades)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <ProjectionTable Title="Simulation Grades" TableClass="grades-table" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
+    <ProjectionTable Title="Enrollment by Grade" TableClass="grades-table" Names="VisibleGradeOrder" Projection="MonteCarloModeledProjection" ValueSelector="GradeValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GradeValue"
                      Subtotals="GradeSubtotals"
@@ -924,10 +924,10 @@ else
     }
     @if (IsToolActive(ToolGridTotals))
     {
-    <ToolPanel Id="@ToolGridTotals" Title="Simulation Grid Totals" Style="@ToolStyle(ToolGridTotals)"
+    <ToolPanel Id="@ToolGridTotals" Title="Enrollment by Village" Style="@ToolStyle(ToolGridTotals)"
                Collapsed="@IsToolCollapsed(ToolGridTotals)" CanMoveUp="@CanMoveToolUp(ToolGridTotals)" CanMoveDown="@CanMoveToolDown(ToolGridTotals)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-    <ProjectionTable Title="Simulation Grid Totals" TableClass="grid-table" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
+    <ProjectionTable Title="Enrollment by Village" TableClass="grid-table" Names="MonteCarloGridNames" Projection="MonteCarloModeledProjection" ValueSelector="GridValue"
                      ReferenceProjection="MonteCarloReferenceProjection"
                      ReferenceValueSelector="GridValue"
                      ShowIncreaseFromStart="ShowIncreaseFromStart"
@@ -939,13 +939,13 @@ else
 
     @if (IsToolActive(ToolParameterSearch))
     {
-    <ToolPanel Id="@ToolParameterSearch" Title="Parameter Search" Style="@ToolStyle(ToolParameterSearch)"
+    <ToolPanel Id="@ToolParameterSearch" Title="Parameter Optimizer" Style="@ToolStyle(ToolParameterSearch)"
                Collapsed="@IsToolCollapsed(ToolParameterSearch)" CanMoveUp="@CanMoveToolUp(ToolParameterSearch)" CanMoveDown="@CanMoveToolDown(ToolParameterSearch)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
     <div class="split">
         <div>
             <div class="section-head">
-                <h2>Parameter Search</h2>
+                <h2>Parameter Optimizer</h2>
                 <button @onclick="FindBest" disabled="@SearchRunning">@(SearchRunning ? "Searching..." : "Find Best")</button>
             </div>
             <div class="controls search-controls">
@@ -983,7 +983,7 @@ else
             <h2>Best Candidate</h2>
             @if (SearchResult is null)
             {
-                <p>Run parameter search to compare candidate probabilities.</p>
+                <p>Run the parameter optimizer to compare candidate probabilities.</p>
             }
             else
             {
@@ -1010,7 +1010,7 @@ else
 
     @if (IsToolActive(ToolModeledReference))
     {
-    <ToolPanel Id="@ToolModeledReference" Title="Modeled vs Reference Totals" Style="@ToolStyle(ToolModeledReference)"
+    <ToolPanel Id="@ToolModeledReference" Title="Reference Comparison" Style="@ToolStyle(ToolModeledReference)"
                Collapsed="@IsToolCollapsed(ToolModeledReference)" CanMoveUp="@CanMoveToolUp(ToolModeledReference)" CanMoveDown="@CanMoveToolDown(ToolModeledReference)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <div class="table-viz">
@@ -1019,13 +1019,13 @@ else
                     <thead>
                         <tr>
                             <th>Year</th>
-                            <th>Actual Grid</th>
-                            <th>Modeled Grid</th>
-                            <th>Grid σ</th>
-                            <th>Grid SE</th>
-                            <th>Grid Error</th>
-                            <th>Grid Error %</th>
-                            <th>Grid/Year Error %</th>
+                            <th>Actual Village</th>
+                            <th>Modeled Village</th>
+                            <th>Village σ</th>
+                            <th>Village SE</th>
+                            <th>Village Error</th>
+                            <th>Village Error %</th>
+                            <th>Village/Year Error %</th>
                             <th>Adjusted Grade</th>
                             <th>Modeled Grade</th>
                             <th>Grade σ</th>
@@ -1077,7 +1077,7 @@ else
                     <div class="chart-controls">
                         <select @bind="ComparisonChartMode">
                             <option value="total">Total</option>
-                            <option value="grid">Grid</option>
+                            <option value="grid">Village</option>
                             <option value="grade">Grade</option>
                         </select>
                         <select @bind="ComparisonChartEntity">
@@ -1115,7 +1115,7 @@ else
 
     @if (IsToolActive(ToolGridDetail))
     {
-    <ToolPanel Id="@ToolGridDetail" Title="@($"Grid Detail for {SelectedComparisonYear}")" Style="@ToolStyle(ToolGridDetail)"
+    <ToolPanel Id="@ToolGridDetail" Title="@($"Village Details for {SelectedComparisonYear}")" Style="@ToolStyle(ToolGridDetail)"
                Collapsed="@IsToolCollapsed(ToolGridDetail)" CanMoveUp="@CanMoveToolUp(ToolGridDetail)" CanMoveDown="@CanMoveToolDown(ToolGridDetail)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <label class="compact-select">
@@ -1131,7 +1131,7 @@ else
             <table>
                 <thead>
                     <tr>
-                        <th>Grid</th>
+                        <th>Village</th>
                         <th>Actual</th>
                         <th>Modeled</th>
                         <th>σ</th>
@@ -1198,19 +1198,41 @@ else
 
     @if (IsToolActive(ToolRules))
     {
-    <ToolPanel Id="@ToolRules" Title="Simulation Rules" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
+    <ToolPanel Id="@ToolRules" Title="Model Documentation" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
                Collapsed="@IsToolCollapsed(ToolRules)" CanMoveUp="@CanMoveToolUp(ToolRules)" CanMoveDown="@CanMoveToolDown(ToolRules)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-        <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the validation window starts. If a reference grid has students but no listed homes through the baseline year, the model creates synthetic played-back homes and reports them in Data Gaps.</p>
-        <p><strong>Special grids:</strong> Lammersville and Inter-Districts use fair grade shares; MHESD uses grades 9-12 only.</p>
-        <p><strong>Ownership change:</strong> each home has a yearly chance to replace its household, with lower early-year turnover and forced turnover by year 50.</p>
-        <p><strong>Children at move-in:</strong> the model draws a household child count from explicit 0, 1, 2, 3, and 4 child shares. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
-        <p><strong>Density:</strong> low, medium, medium-high, and high density homes apply common density factors plus child-number factors for 1st, 2nd, 3rd, and 4th+ children.</p>
+        <h2>What This Tool Does</h2>
+        <p>Household Simulation estimates how many students may live in the district as homes are built and households change over time. It starts from known school and housing data, then runs many possible futures and shows the average result. The goal is not to predict one exact family in one exact house, but to estimate the likely enrollment pattern.</p>
+        <p>The most useful first view is Simulation Summary. It can show district total students, high-school students, individual grades, villages, densities, homes, student generation rates, family profiles, and turnover.</p>
+
+        <h2>Quick Tutorial</h2>
+        <ol>
+            <li>Open Simulation Parameters and change End year. A longer end year lets you see how the model behaves farther into the future, even when no new reference data exists.</li>
+            <li>Open Future Homes and add 100 homes in Pombo, Low density, built in 2026. Add four more rows with the same village and density for 2027, 2028, 2029, and 2030.</li>
+            <li>Look at Simulation Summary. Use Students, All villages, All densities, All grades, Count to see total district students. Change All grades to HS to focus on high-school enrollment.</li>
+            <li>Click + on the chart to keep the current line, then change All grades to HS and click + again. Now the same chart can show district total and high school together.</li>
+            <li>Try a different growth shape: remove the five 100-home rows and add one row with 500 homes in 2026. Compare the result with the smoother 100-per-year scenario.</li>
+        </ol>
+
+        <h2>Tools Menu</h2>
+        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it to jump to an existing tool or add another tool, such as a Custom Chart. Important configuration tools, including Run Setup and Model Fit Weights, are hidden by default but can be added from this menu.</p>
+        <p>Use the Parameter preset selector to quickly load saved assumptions. After you manually edit a parameter, the preset changes to Custom so it is clear that you are no longer using the saved preset exactly.</p>
+
+        <h2>How The Model Works</h2>
+        <p><strong>Baseline:</strong> homes are back-played from construction year into <code>start year - 1</code>, so old homes may already have changed households before the fit window starts. If a reference village has students but no listed homes through the baseline year, the model creates synthetic played-back homes and reports them in Baseline Data Gaps.</p>
+        <p><strong>Special source areas:</strong> Lammersville and Inter-Districts use fair grade shares; MHESD uses grades 9-12 only.</p>
+        <p><strong>Ownership change:</strong> each home has a yearly chance to replace its household. In this model, turnover means more than a home sale: it also represents renter changes and next-generation families living in the same home.</p>
+        <p><strong>Children at move-in:</strong> the model chooses whether a household arrives with 0, 1, 2, 3, or 4 children. Move-in age weights place those children into preschool, TK/K, elementary, middle, high school, or post-school bands.</p>
+        <p><strong>Density:</strong> low, medium, medium-high, and high density homes can have different child patterns. These settings affect both how many children families have when they move in and how likely they are to add children later.</p>
+        <p><strong>Build timing:</strong> a newly built home may add students in the same school year or the next school year. This matters because homes are completed throughout the year, not all before school starts.</p>
+        <p><strong>New children after move-in:</strong> annual 1st, 2nd, 3rd, and 4th+ child probabilities control births or new preschool children after the household arrives.</p>
+        <p><strong>Student exit:</strong> students can leave district enrollment without a household turnover. TK-8, high school, and special education students have separate exit probabilities.</p>
         <p><strong>Special education:</strong> every child has a probability of receiving a special education attribute. Special education children keep their underlying age/grade for aging, but are counted in the Sp. Ed. reporting bucket while enrolled.</p>
-        <p><strong>Build timing:</strong> each newly built home joins either the same school year or the next school year, controlled by the same-school-year probability.</p>
-        <p><strong>New children after move-in:</strong> annual 1st, 2nd, 3rd, and 4th+ child probabilities control births/new preschool children after the household arrives.</p>
-        <p><strong>Student exit:</strong> each enrolled student can leave district enrollment without a home ownership change; TK-8, high school, and special education students use separate exit probabilities.</p>
-        <p><strong>Validation:</strong> results are averaged over all runs and compared year-over-year against total enrollment, grid spread, and smoothed grade-by-grade error. TK is excluded from grade validation.</p>
+
+        <h2>How To Tune Parameters</h2>
+        <p>Probabilities are chances that something happens. For example, a 0.05 ownership change probability means about 5 out of 100 homes change household in a year. Weights are relative preferences; they are normalized with nearby weights, so doubling one weight makes that choice more likely compared with the others.</p>
+        <p>Move-In Kids Count changes how many children families tend to bring when they arrive. Move-In Kids Age changes whether those children are preschool, elementary, middle, high school, or older. Birth/New Child Rates change how many new young children appear after move-in. Density Factors let different housing types behave differently.</p>
+        <p>Model Fit Weights control what the optimizer cares about when comparing simulation results to reference data. Total weight cares about district-wide enrollment, village weight cares about where students live, grade weight cares about grade-by-grade shape, and HS weights add extra attention to high school.</p>
     </ToolPanel>
     }
 
@@ -1272,7 +1294,8 @@ else
     [
         ToolModelSettings,
         ToolScenarioHomes,
-        ToolValidationSummary
+        ToolValidationSummary,
+        ToolRules
     ];
     private const string ToolRunEnvironment = "run-environment";
     private const string ToolModelSettings = "model-settings";
@@ -1294,22 +1317,22 @@ else
     private const string ToolRules = "rules";
     private static readonly IReadOnlyList<MonteCarloToolDefinition> ToolDefinitions =
     [
-        new(ToolRunEnvironment, "Run Environment"),
-        new(ToolModelSettings, "Model Settings"),
-        new(ToolScenarioHomes, "Scenario Homes"),
-        new(ToolModelScoring, "Model Scoring"),
-        new(ToolValidationSummary, "Validation Summary"),
-        new(ToolSimulationInfo, "Simulation Info"),
-        new(ToolDataGaps, "Data Gaps"),
-        new(ToolTableDetails, "Table Details"),
-        new(ToolCohorts, "Progressing Cohorts"),
-        new(ToolGrades, "Grades"),
-        new(ToolGridTotals, "Grid Totals"),
-        new(ToolParameterSearch, "Parameter Search"),
-        new(ToolModeledReference, "Modeled vs Reference Totals"),
-        new(ToolGridDetail, "Grid Detail"),
-        new(ToolGradeDetail, "Grade Detail"),
-        new(ToolRules, "Simulation Rules")
+        new(ToolRunEnvironment, "Run Setup"),
+        new(ToolModelSettings, "Simulation Parameters"),
+        new(ToolScenarioHomes, "Future Homes"),
+        new(ToolModelScoring, "Model Fit Weights"),
+        new(ToolValidationSummary, "Simulation Summary"),
+        new(ToolSimulationInfo, "Simulation Diagnostics"),
+        new(ToolDataGaps, "Baseline Data Gaps"),
+        new(ToolTableDetails, "Table View Settings"),
+        new(ToolCohorts, "Enrollment by Student Cohorts"),
+        new(ToolGrades, "Enrollment by Grade"),
+        new(ToolGridTotals, "Enrollment by Village"),
+        new(ToolParameterSearch, "Parameter Optimizer"),
+        new(ToolModeledReference, "Reference Comparison"),
+        new(ToolGridDetail, "Village Details"),
+        new(ToolGradeDetail, "Grade Details"),
+        new(ToolRules, "Model Documentation")
     ];
     private static readonly HashSet<string> ResultToolIds =
     [
@@ -1368,7 +1391,7 @@ else
     private bool ValidationHoverRenderPending { get; set; }
     private bool ChartHoverRenderPending { get; set; }
     private string ComparisonChartMode { get; set; } = "total";
-    private string ComparisonChartEntity { get; set; } = "Validation total";
+    private string ComparisonChartEntity { get; set; } = "Total";
     private int MaxDegreeOfParallelism { get; set; } = DefaultParameters.MaxDegreeOfParallelism;
     private int GradeSmoothingWindow { get; set; } = DefaultParameters.GradeSmoothingWindow;
     private double OwnershipChangeProbability { get; set; } = DefaultParameters.OwnershipChangeProbability;
@@ -1460,7 +1483,7 @@ else
         .ToList();
     private IReadOnlyList<MonteCarloToolDefinition> InactiveTools => ToolDefinitions
         .Where(tool => !ActiveToolIds.Contains(tool.Id))
-        .Concat([new MonteCarloToolDefinition(ToolChartPrototype, "Chart")])
+        .Concat([new MonteCarloToolDefinition(ToolChartPrototype, "Custom Chart")])
         .ToList();
     private int MinStartYear => Data is null
         ? 2003
@@ -1722,10 +1745,10 @@ else
         {
             var number = NextChartToolNumber++;
             id = $"{ToolChartPrefix}{number}";
-            saved ??= new SavedChartTool(id, $"Chart {number}", "students", AllNeighborhood, AllDensity, "Total", "value", []);
+            saved ??= new SavedChartTool(id, $"Custom Chart {number}", "students", AllNeighborhood, AllDensity, "Total", "value", []);
         }
 
-        var title = string.IsNullOrWhiteSpace(saved?.Title) ? $"Chart {NextChartToolNumber}" : saved!.Title;
+        var title = string.IsNullOrWhiteSpace(saved?.Title) ? $"Custom Chart {NextChartToolNumber}" : saved!.Title;
         var chart = new ChartToolState(id, title)
         {
             Measure = string.IsNullOrWhiteSpace(saved?.Measure) ? "students" : saved!.Measure,
@@ -2127,7 +2150,7 @@ else
         {
             PendingValidation = false;
             var executionLabel = ShouldUseServer() ? "server" : "browser";
-            StatusMessage = $"Running simulation validation on {executionLabel}: {Runs:N0} runs...";
+            StatusMessage = $"Running simulation fit check on {executionLabel}: {Runs:N0} runs...";
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
 
@@ -2138,13 +2161,13 @@ else
                 stopwatch.Stop();
                 var elapsed = FormatElapsed(stopwatch.Elapsed);
                 StatusMessage = ran
-                    ? $"Validation complete on {LastExecutionLabel}: {Runs:N0} runs in {elapsed}, score {Result?.CombinedScore:P2}. {ServerApiStatus}"
+                    ? $"Simulation fit check complete on {LastExecutionLabel}: {Runs:N0} runs in {elapsed}, score {Result?.CombinedScore:P2}. {ServerApiStatus}"
                     : $"{ServerApiStatus} ({elapsed})";
             }
             catch (Exception ex)
             {
                 stopwatch.Stop();
-                StatusMessage = $"Validation failed after {FormatElapsed(stopwatch.Elapsed)}: {ex.Message}";
+                StatusMessage = $"Simulation fit check failed after {FormatElapsed(stopwatch.Elapsed)}: {ex.Message}";
             }
             await InvokeAsync(StateHasChanged);
             await RestoreScrollPositionAsync(scrollPosition);
@@ -2209,7 +2232,7 @@ else
             {
                 ServerApiAvailable = false;
                 LastExecutionLabel = "none";
-                ServerApiStatus = $"Server unavailable; validation was not run in the browser automatically ({ex.Message}). Select Browser only, or restart the server API.";
+                ServerApiStatus = $"Server unavailable; fit check was not run in the browser automatically ({ex.Message}). Select Browser only, or restart the server API.";
                 return false;
             }
         }
@@ -2241,7 +2264,7 @@ else
 
         if (!ComparisonChartEntities.Contains(ComparisonChartEntity))
         {
-            ComparisonChartEntity = ComparisonChartEntities.FirstOrDefault() ?? "Validation total";
+            ComparisonChartEntity = ComparisonChartEntities.FirstOrDefault() ?? "Total";
         }
 
         NormalizeValidationChartSelections();
@@ -4309,7 +4332,7 @@ else
     private static void FinishChartTitleEdit(ChartToolState chart)
     {
         chart.Title = string.IsNullOrWhiteSpace(chart.Title)
-            ? "Chart"
+            ? "Custom Chart"
             : chart.Title.Trim();
         chart.EditingTitle = false;
     }
@@ -4609,13 +4632,13 @@ else
             .Order()
             .ToList() ?? [],
         "grade" => VisibleGradeOrder,
-        _ => ["Validation total"]
+        _ => ["Total"]
     };
 
     private string EffectiveComparisonChartEntity =>
         ComparisonChartEntities.Contains(ComparisonChartEntity)
             ? ComparisonChartEntity
-            : ComparisonChartEntities.FirstOrDefault() ?? "Validation total";
+            : ComparisonChartEntities.FirstOrDefault() ?? "Total";
 
     private IReadOnlyList<double?> ComparisonActualValues => Result?.Comparisons
         .Select(comparison => ComparisonChartMode switch

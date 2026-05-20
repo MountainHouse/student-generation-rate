@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.StaticFiles;
 using SchoolGrowth.Core;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,12 +41,24 @@ if (enableCrossOriginIsolationHeaders)
         await next();
     });
 }
+app.Use((context, next) =>
+{
+    if (ShouldDisableBrowserCache(context.Request.Path))
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers.Expires = "0";
+            return Task.CompletedTask;
+        });
+    }
+
+    return next();
+});
 if (blazorGeneratedWwwroot is not null)
 {
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new PhysicalFileProvider(blazorGeneratedWwwroot)
-    });
+    app.UseStaticFiles(CreateBlazorStaticFileOptions(blazorGeneratedWwwroot));
 }
 app.UseBlazorFrameworkFiles();
 app.UseDefaultFiles();
@@ -136,4 +149,31 @@ static string? ResolveBlazorGeneratedWwwroot(string contentRoot, string baseDire
         "wwwroot"));
 
     return Directory.Exists(candidate) ? candidate : null;
+}
+
+static StaticFileOptions CreateBlazorStaticFileOptions(string root)
+{
+    var provider = new FileExtensionContentTypeProvider();
+    provider.Mappings[".pdb"] = "application/octet-stream";
+
+    return new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(root),
+        ContentTypeProvider = provider,
+        ServeUnknownFileTypes = true,
+        DefaultContentType = "application/octet-stream"
+    };
+}
+
+static bool ShouldDisableBrowserCache(PathString path)
+{
+    return path.StartsWithSegments("/_framework")
+        || path.StartsWithSegments("/css")
+        || path.StartsWithSegments("/js")
+        || path.StartsWithSegments("/lib")
+        || path == "/"
+        || path == "/index.html"
+        || path == "/coi-serviceworker.js"
+        || path == "/service-worker-assets.js"
+        || path.Value?.EndsWith(".styles.css", StringComparison.OrdinalIgnoreCase) == true;
 }

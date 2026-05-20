@@ -8,16 +8,32 @@ General note: use quick non-AOT builds for ordinary development. AOT/threaded pu
 
 ## Product Direction
 
+### Integrate Table View Settings into table tools
+
+Current behavior: Table View Settings is a standalone tool that controls table display metrics globally.
+
+Goal: move table display controls into each table tool, or into a shared table header/settings pattern used by each table tool, then remove the standalone Table View Settings tool.
+
+Acceptance criteria:
+
+- Each table exposes the value/increase display controls where the user is reading that table.
+- The standalone Table View Settings tool is no longer needed.
+- Shared UI behavior is extracted into reusable components where practical.
+- Saved layout/settings are reset or migrated intentionally; there is no backward compatibility requirement for old local UI layout state.
+
 ### Improve anchored household hidden-state inference
 
 Current behavior: when a start year has actual grid and grade reference data, Household Simulation reconciles enrolled K-12 students to the observed grade/grid counts. That is correct for known enrollment, but hidden household state is approximate: preschool siblings, post-school siblings, sibling grouping, and household tenure are generated from general model probabilities.
+
+TK is intentionally ignored for anchoring/scoring because it is not stable enough as reference data. The current implementation also avoids using future K counts to seed hidden pre-K children, so normal forecasts do not leak future reference data.
 
 Goal: design an optional inference layer for anchored starts that allocates observed students into plausible households and infers hidden family context without changing the known grade/grid counts.
 
 Acceptance criteria:
 
 - Observed anchored grade/grid student counts remain preserved.
-- The inferred preschool pipeline improves K/early-grade forecasts without using future reference data.
+- The inferred preschool pipeline improves K/early-grade forecasts without using future reference data in normal forecast mode.
+- Any reference-assisted preschool back-inference is explicitly labeled as validation-only and subtracts children from new homes, later move-ins, and later births before assigning hidden baseline preschool children.
 - The inferred high-school/post-school tail improves HS forecasts and family child-count diagnostics.
 - The method is documented as inference, not observed data.
 

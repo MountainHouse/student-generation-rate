@@ -674,8 +674,6 @@ public sealed class MonteCarloEnrollmentModel
             ReconcileBaselineChildren(homes, grid, baselineYear, grades, random);
         }
 
-        SeedBaselineKindergartenPipeline(homes, baselineYear, random);
-
         return homes;
     }
 
@@ -865,93 +863,6 @@ public sealed class MonteCarloEnrollmentModel
             var childIndexes = home.Children
                 .Select((child, index) => (child, index))
                 .Where(item => ChildMatchesGrade(item.child, grade))
-                .Select(item => item.index)
-                .ToList();
-            home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);
-        }
-    }
-
-    private void SeedBaselineKindergartenPipeline(List<SimHome> homes, int baselineYear, Random random)
-    {
-        var kindergartenYear = baselineYear + 1;
-        var actualGrades = data.GradeRows.ToDictionary(
-            row => row.Name,
-            row => ActualSeriesValueOrNull(row.Name, kindergartenYear, data.GradeRows),
-            StringComparer.OrdinalIgnoreCase);
-        if (!actualGrades.GetValueOrDefault("K").HasValue)
-        {
-            return;
-        }
-
-        var actualGridTotals = data.GridRows.ToDictionary(
-            row => row.Name,
-            row => ActualGridValueOrNull(row.Name, kindergartenYear),
-            StringComparer.OrdinalIgnoreCase);
-        var adjustedGrades = BuildAdjustedActualGrades(kindergartenYear, actualGrades, actualGridTotals);
-        var kindergartenTarget = adjustedGrades.GetValueOrDefault("K");
-        if (kindergartenTarget <= 0)
-        {
-            return;
-        }
-
-        var includedGridTotals = actualGridTotals
-            .Where(kvp => !IsExcludedValidationGrid(kvp.Key))
-            .Select(kvp => (Grid: kvp.Key, Total: kvp.Value ?? ActualGridValue(kvp.Key, baselineYear)))
-            .Where(item => item.Total > 0)
-            .ToList();
-        var totalGridStudents = includedGridTotals.Sum(item => item.Total);
-        if (totalGridStudents <= 0)
-        {
-            return;
-        }
-
-        foreach (var (grid, gridTotal) in includedGridTotals)
-        {
-            var gridHomes = homes
-                .Where(home => home.Grid.Equals(grid, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (gridHomes.Count == 0) continue;
-
-            var target = (int)Math.Round(kindergartenTarget * gridTotal / totalGridStudents);
-            var current = gridHomes.Sum(home => home.Children.Count(IsKindergartenReadyChild));
-            var difference = target - current;
-            if (difference > 0)
-            {
-                AddBaselineKindergartenReadyChildren(gridHomes, difference, random);
-            }
-            else if (difference < 0)
-            {
-                RemoveBaselineKindergartenReadyChildren(gridHomes, -difference, random);
-            }
-        }
-    }
-
-    private static bool IsKindergartenReadyChild(SimChild child)
-    {
-        return !child.IsSpecialEducation && child.GradeIndex == 0;
-    }
-
-    private static void AddBaselineKindergartenReadyChildren(List<SimHome> gridHomes, int count, Random random)
-    {
-        for (var i = 0; i < count; i++)
-        {
-            gridHomes[random.Next(gridHomes.Count)].Children.Add(new SimChild(0, isSpecialEducation: false));
-        }
-    }
-
-    private static void RemoveBaselineKindergartenReadyChildren(List<SimHome> gridHomes, int count, Random random)
-    {
-        for (var i = 0; i < count; i++)
-        {
-            var candidates = gridHomes
-                .Where(home => home.Children.Any(IsKindergartenReadyChild))
-                .ToList();
-            if (candidates.Count == 0) return;
-
-            var home = candidates[random.Next(candidates.Count)];
-            var childIndexes = home.Children
-                .Select((child, index) => (child, index))
-                .Where(item => IsKindergartenReadyChild(item.child))
                 .Select(item => item.index)
                 .ToList();
             home.Children.RemoveAt(childIndexes[random.Next(childIndexes.Count)]);

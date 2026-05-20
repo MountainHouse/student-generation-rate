@@ -28,7 +28,14 @@
             }
 
             event.respondWith((async () => {
-                const response = await fetch(event.request);
+                const requestUrl = new URL(event.request.url);
+                const shouldBypassCache =
+                    requestUrl.origin === self.location.origin &&
+                    (requestUrl.pathname.includes("/_framework/") ||
+                        requestUrl.pathname.endsWith("/coi-serviceworker.js") ||
+                        requestUrl.pathname.endsWith("/service-worker-assets.js"));
+
+                const response = await fetch(event.request, shouldBypassCache ? { cache: "no-store" } : undefined);
                 if (response.type === "opaque") {
                     return response;
                 }
