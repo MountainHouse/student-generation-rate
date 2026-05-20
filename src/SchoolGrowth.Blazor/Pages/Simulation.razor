@@ -6,7 +6,9 @@
 @inject NavigationManager Navigation
 
 @using System.Globalization
+@using System.Text
 @using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
 
 <PageTitle>Household Simulation</PageTitle>
 
@@ -44,15 +46,46 @@ else
                 </button>
             </div>
             <div class="tool-nav-popup">
-                <label class="tool-nav-add">
-                    <span>Preset</span>
-                    <select value="@SelectedPresetName" @onchange="LoadPresetAsync">
-                        @foreach (var preset in PresetOptions)
-                        {
-                            <option value="@preset.Name">@preset.Name</option>
-                        }
-                    </select>
-                </label>
+                <div class="tool-nav-control-group">
+                    <label class="tool-nav-add">
+                        <span>Preset</span>
+                        <select value="@SelectedPresetName" @onchange="LoadPresetAsync">
+                            @foreach (var preset in PresetOptions)
+                            {
+                                <option value="@preset.Name">@preset.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <div class="tool-nav-actions">
+                        <button type="button" class="secondary tool-nav-mini" title="Save parameter preset in this browser" @onclick="OpenPresetSaveDialog">💾</button>
+                        <button type="button" class="secondary tool-nav-mini" title="Export parameter preset to a file" @onclick="ExportPresetAsync">⤓</button>
+                        <label class="secondary tool-nav-mini file-glyph" title="Import parameter preset">
+                            ⤒
+                            <InputFile class="visually-hidden-file" OnChange="ImportPresetFileAsync" accept=".json,application/json" />
+                        </label>
+                        <button type="button" class="secondary tool-nav-mini" title="Delete selected local parameter preset" disabled="@(!CanDeleteSelectedPreset)" @onclick="DeleteSelectedPresetAsync">⌫</button>
+                    </div>
+                </div>
+                <div class="tool-nav-control-group">
+                    <label class="tool-nav-add">
+                        <span>Layout</span>
+                        <select value="@SelectedLocalLayoutName" @onchange="LoadNamedLayoutAsync">
+                            @foreach (var savedLayout in LayoutOptions)
+                            {
+                                <option value="@savedLayout.Name">@savedLayout.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <div class="tool-nav-actions">
+                        <button type="button" class="secondary tool-nav-mini" title="Save current layout in this browser" @onclick="OpenLayoutSaveDialog">💾</button>
+                        <button type="button" class="secondary tool-nav-mini" title="Export current layout to a file" @onclick="ExportLayoutAsync">⤓</button>
+                        <label class="secondary tool-nav-mini file-glyph" title="Import layout">
+                            ⤒
+                            <InputFile class="visually-hidden-file" OnChange="ImportLayoutFileAsync" accept=".json,application/json" />
+                        </label>
+                        <button type="button" class="secondary tool-nav-mini" title="Delete selected local layout" disabled="@(!CanDeleteSelectedLayout)" @onclick="DeleteSelectedLayoutAsync">⌫</button>
+                    </div>
+                </div>
                 <label class="tool-nav-add">
                     <span>Add</span>
                     <select value="@NewToolId" disabled="@(!InactiveTools.Any())" @onchange="AddToolFromSelectionAsync">
@@ -63,7 +96,6 @@ else
                         }
                     </select>
                 </label>
-                <button type="button" class="secondary tool-nav-reset" @onclick="ResetSavedLayoutAsync">Reset layout</button>
                 <div class="tool-nav-title">Visible tools</div>
                 @foreach (var tool in ActiveTools)
                 {
@@ -74,11 +106,38 @@ else
                         <button type="button" class="secondary tool-nav-link" @onclick="() => NavigateToToolAsync(tool.Id)">
                             @tool.Title
                         </button>
+                        <button type="button" class="secondary tool-nav-mini" title="Move up" disabled="@(!CanMoveToolUp(tool.Id))" @onclick="() => MoveToolUp(tool.Id)">▲</button>
+                        <button type="button" class="secondary tool-nav-mini" title="Move down" disabled="@(!CanMoveToolDown(tool.Id))" @onclick="() => MoveToolDown(tool.Id)">▼</button>
+                        <button type="button" class="secondary tool-nav-mini" title="Remove tool" @onclick="() => RemoveTool(tool.Id)">×</button>
                     </div>
                 }
             </div>
         </div>
     </div>
+
+    @if (SaveDialogKind is not null)
+    {
+        <div class="modal-scrim" @onclick="CloseSaveDialog">
+            <div class="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title" @onclick:stopPropagation="true">
+                <div class="save-modal-header">
+                    <h2 id="save-modal-title">@SaveDialogTitle</h2>
+                    <button type="button" class="secondary icon-button" title="Close" @onclick="CloseSaveDialog">×</button>
+                </div>
+                <label>
+                    <span>Name</span>
+                    <input class="save-modal-input" @bind="SaveDialogName" @bind:event="oninput" autofocus />
+                </label>
+                @if (!string.IsNullOrWhiteSpace(SaveDialogHelp))
+                {
+                    <p>@SaveDialogHelp</p>
+                }
+                <div class="save-modal-actions">
+                    <button type="button" class="secondary" @onclick="CloseSaveDialog">Cancel</button>
+                    <button type="button" @onclick="ConfirmSaveDialogAsync">Save</button>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="tool-board">
     @if (IsToolActive(ToolRunEnvironment))
@@ -133,6 +192,24 @@ else
     <ToolPanel Id="@ToolModelSettings" Title="Simulation Parameters" Style="@ToolStyle(ToolModelSettings)"
                Collapsed="@IsToolCollapsed(ToolModelSettings)" CanMoveUp="@CanMoveToolUp(ToolModelSettings)" CanMoveDown="@CanMoveToolDown(ToolModelSettings)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        <HeaderContent>
+            <div class="tool-header-actions">
+                <select class="compact-header-select" value="@SelectedPresetName" @onchange="LoadPresetAsync">
+                    @foreach (var preset in PresetOptions)
+                    {
+                        <option value="@preset.Name">@preset.Name</option>
+                    }
+                </select>
+                <button type="button" class="secondary compact-header-button icon-button" title="Save parameter preset in this browser" @onclick="OpenPresetSaveDialog">💾</button>
+                <button type="button" class="secondary compact-header-button icon-button" title="Export parameter preset to a file" @onclick="ExportPresetAsync">⤓</button>
+                <label class="secondary compact-header-button icon-button file-glyph" title="Import parameter preset">
+                    ⤒
+                    <InputFile class="visually-hidden-file" OnChange="ImportPresetFileAsync" accept=".json,application/json" />
+                </label>
+                <button type="button" class="secondary compact-header-button icon-button" title="Delete selected local parameter preset" disabled="@(!CanDeleteSelectedPreset)" @onclick="DeleteSelectedPresetAsync">⌫</button>
+            </div>
+        </HeaderContent>
+        <ChildContent>
         <div class="settings-stack">
         <details class="settings-subpanel" open>
         <summary>Planning Window</summary>
@@ -328,6 +405,7 @@ else
         </div>
         </details>
         </div>
+        </ChildContent>
     </ToolPanel>
     }
 
@@ -337,7 +415,22 @@ else
                Collapsed="@IsToolCollapsed(ToolScenarioHomes)" CanMoveUp="@CanMoveToolUp(ToolScenarioHomes)" CanMoveDown="@CanMoveToolDown(ToolScenarioHomes)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <HeaderContent>
-            <button type="button" class="secondary compact-header-button" @onclick="AddScenarioRow">Add Row</button>
+            <div class="tool-header-actions">
+                <select class="compact-header-select" value="@SelectedLocalHomesName" @onchange="LoadNamedScenarioHomesAsync">
+                    @foreach (var homes in HomesOptions)
+                    {
+                        <option value="@homes.Name">@homes.Name</option>
+                    }
+                </select>
+                <button type="button" class="secondary compact-header-button icon-button" title="Save future homes in this browser" @onclick="OpenHomesSaveDialog">💾</button>
+                <button type="button" class="secondary compact-header-button icon-button" title="Export future homes CSV" @onclick="ExportScenarioHomesAsync">⤓</button>
+                <label class="secondary compact-header-button icon-button file-glyph" title="Import future homes CSV">
+                    ⤒
+                    <InputFile class="visually-hidden-file" OnChange="ImportScenarioHomesFileAsync" accept=".csv,text/csv" />
+                </label>
+                <button type="button" class="secondary compact-header-button icon-button" title="Delete selected local future homes" disabled="@(!CanDeleteSelectedHomes)" @onclick="DeleteSelectedScenarioHomesAsync">⌫</button>
+                <button type="button" class="secondary compact-header-button" @onclick="AddScenarioRow">Add Row</button>
+            </div>
         </HeaderContent>
         <ChildContent>
         <div class="table-wrap scenario-homes-wrap">
@@ -362,7 +455,7 @@ else
                     {
                         <tr @key="row">
                             <td>
-                                <select @bind="row.Neighborhood" @bind:after="RunScenarioValidationAsync">
+                                <select @bind="row.Neighborhood" @bind:after="ScenarioHomesChangedAsync">
                                     @foreach (var neighborhood in ScenarioNeighborhoodOptions)
                                     {
                                         <option value="@neighborhood">@neighborhood</option>
@@ -370,15 +463,15 @@ else
                                 </select>
                             </td>
                             <td>
-                                <select @bind="row.Density" @bind:after="RunScenarioValidationAsync">
+                                <select @bind="row.Density" @bind:after="ScenarioHomesChangedAsync">
                                     @foreach (var density in ScenarioDensityOptions)
                                     {
                                         <option value="@density">@DensityDisplay.Label(density)</option>
                                     }
                                 </select>
                             </td>
-                            <td><input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="row.Year" @bind:after="RunScenarioValidationAsync" /></td>
-                            <td><input type="number" min="0" step="1" @bind="row.Homes" @bind:after="RunScenarioValidationAsync" /></td>
+                            <td><input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="row.Year" @bind:after="ScenarioHomesChangedAsync" /></td>
+                            <td><input type="number" min="0" step="1" @bind="row.Homes" @bind:after="ScenarioHomesChangedAsync" /></td>
                             <td><button type="button" class="icon" title="Remove row" @onclick="() => RemoveScenarioRow(row)">x</button></td>
                         </tr>
                     }
@@ -1288,8 +1381,22 @@ else
     private static readonly MonteCarloParameters DefaultParameters = new();
     private const string CustomPresetName = "Custom";
     private const string LayoutStorageKey = "schoolgrowth:simulation:layout:v1";
+    private const string ScenarioHomesStorageKey = "schoolgrowth:simulation:scenario-homes:v1";
     private const string YearsStorageKey = "schoolgrowth:simulation:years:v1";
     private const string ChartStoragePrefix = "schoolgrowth:chart:";
+    private const string LocalPresetsStorageKey = "schoolgrowth:simulation:local-presets:v1";
+    private const string LocalLayoutsStorageKey = "schoolgrowth:simulation:local-layouts:v1";
+    private const string LocalScenarioHomesStorageKey = "schoolgrowth:simulation:local-scenario-homes:v1";
+    private const string DefaultLayoutName = "Default layout";
+    private const string CustomLayoutName = "Custom layout";
+    private const string NoFutureHomesName = "No future homes";
+    private const string CustomFutureHomesName = "Custom future homes";
+    private const long MaxImportFileBytes = 1024 * 1024;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
     private static readonly IReadOnlyList<string> DefaultActiveToolIds =
     [
         ToolModelSettings,
@@ -1355,15 +1462,33 @@ else
     private MonteCarloEnrollmentModel? Model { get; set; }
     private MonteCarloValidationResult? Result { get; set; }
     private MonteCarloSearchResult? SearchResult { get; set; }
-    private IReadOnlyList<MonteCarloParameterPreset> ParameterPresets { get; set; } =
+    private IReadOnlyList<MonteCarloParameterPreset> BuiltInParameterPresets { get; set; } =
     [
         new("Legacy", "Legacy hand-tuned baseline parameters.", DefaultParameters)
     ];
+    private List<MonteCarloParameterPreset> LocalParameterPresets { get; set; } = [];
+    private List<NamedSimulationLayout> BuiltInLayouts { get; set; } = [];
+    private List<NamedSimulationLayout> LocalLayouts { get; set; } = [];
+    private List<NamedScenarioHomes> BuiltInScenarioHomeSets { get; set; } = [];
+    private List<NamedScenarioHomes> LocalScenarioHomeSets { get; set; } = [];
+    private IReadOnlyList<MonteCarloParameterPreset> ParameterPresets => BuiltInParameterPresets
+        .Concat(LocalParameterPresets)
+        .ToList();
     private MonteCarloParameters CustomParameters { get; set; } = DefaultParameters;
     private string SelectedPresetName { get; set; } = "Legacy";
     private IReadOnlyList<MonteCarloParameterPreset> PresetOptions =>
         new[] { new MonteCarloParameterPreset(CustomPresetName, "Last hand-edited parameter values.", CustomParameters) }
             .Concat(ParameterPresets)
+            .ToList();
+    private IReadOnlyList<NamedSimulationLayout> LayoutOptions =>
+        new[] { new NamedSimulationLayout(CustomLayoutName, EmptyLayout()) }
+            .Concat(BuiltInLayouts)
+            .Concat(LocalLayouts)
+            .ToList();
+    private IReadOnlyList<NamedScenarioHomes> HomesOptions =>
+        new[] { new NamedScenarioHomes(CustomFutureHomesName, []) }
+            .Concat(BuiltInScenarioHomeSets)
+            .Concat(LocalScenarioHomeSets)
             .ToList();
     private MonteCarloParameterPreset? SelectedPreset => PresetOptions
         .FirstOrDefault(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
@@ -1468,6 +1593,10 @@ else
     private string? ServerApiStatus { get; set; }
     private string LastExecutionLabel { get; set; } = "browser";
     private string? StatusMessage { get; set; }
+    private string? SaveDialogKind { get; set; }
+    private string SaveDialogName { get; set; } = "";
+    private string SelectedLocalLayoutName { get; set; } = CustomLayoutName;
+    private string SelectedLocalHomesName { get; set; } = CustomFutureHomesName;
     private List<string> ActiveToolIds { get; set; } = DefaultActiveToolIds.ToList();
     private List<ScenarioHomeInput> ScenarioRows { get; } = [];
     private List<ChartToolState> ChartTools { get; } = [];
@@ -1477,6 +1606,7 @@ else
     private string NewToolId { get; set; } = "";
     private bool SavedLayoutLoaded { get; set; }
     private string? LastSavedLayoutJson { get; set; }
+    private string? LastSavedScenarioHomesJson { get; set; }
     private string? LastSavedYearsJson { get; set; }
     private IReadOnlyList<MonteCarloToolDefinition> ActiveTools => ActiveToolIds
         .Select(ToolDefinitionForId)
@@ -1487,6 +1617,29 @@ else
         .Where(tool => !ActiveToolIds.Contains(tool.Id))
         .Concat([new MonteCarloToolDefinition(ToolChartPrototype, "Custom Chart")])
         .ToList();
+    private bool CanDeleteSelectedPreset =>
+        !IsBuiltInPresetName(SelectedPresetName)
+        && LocalParameterPresets.Any(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
+    private bool CanDeleteSelectedLayout =>
+        !IsBuiltInLayoutName(SelectedLocalLayoutName)
+        && LocalLayouts.Any(layout => layout.Name.Equals(SelectedLocalLayoutName, StringComparison.OrdinalIgnoreCase));
+    private bool CanDeleteSelectedHomes =>
+        !IsBuiltInHomesName(SelectedLocalHomesName)
+        && LocalScenarioHomeSets.Any(homes => homes.Name.Equals(SelectedLocalHomesName, StringComparison.OrdinalIgnoreCase));
+    private string SaveDialogTitle => SaveDialogKind switch
+    {
+        "preset" => "Save Parameter Preset",
+        "layout" => "Save Layout",
+        "homes" => "Save Future Homes",
+        _ => "Save"
+    };
+    private string SaveDialogHelp => SaveDialogKind switch
+    {
+        "preset" => "Local presets can overwrite other local presets, but built-in presets are read-only.",
+        "layout" => "This saves visible tools, panel order, collapsed state, and chart selections. Future homes are saved separately.",
+        "homes" => "This saves only the current Future Homes rows.",
+        _ => ""
+    };
     private int MinStartYear => Data is null
         ? 2003
         : Data.HomeRows
@@ -1837,6 +1990,7 @@ else
             Data = EnrollmentData.LoadFromCsvText(homes, grid, grade, schools);
             Model = new MonteCarloEnrollmentModel(Data);
             await LoadPresetsAsync();
+            await LoadBuiltInLayoutAndHomesAsync();
             StartYear = Math.Max(MinStartYear, LatestReferenceYear - 5);
             EndYear = LatestReferenceYear;
             SelectedComparisonYear = EndYear;
@@ -1862,6 +2016,10 @@ else
             }
 
             if (TrackCustomPreset())
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+            if (SavedLayoutLoaded && TrackCustomLayout())
             {
                 await InvokeAsync(StateHasChanged);
             }
@@ -1914,7 +2072,8 @@ else
             var presets = await Http.GetFromJsonAsync<IReadOnlyList<MonteCarloParameterPreset>>("data/simulation-presets.json");
             if (presets is not null && presets.Count > 0)
             {
-                ParameterPresets = presets;
+                BuiltInParameterPresets = presets;
+                await LoadLocalNamedSavesAsync();
                 SelectedPresetName = SelectStartupPreset(presets).Name;
                 ApplyParameters(SelectedPreset?.Parameters ?? presets[0].Parameters);
             }
@@ -1926,12 +2085,90 @@ else
         }
     }
 
+    private async Task LoadBuiltInLayoutAndHomesAsync()
+    {
+        await LoadBuiltInLayoutsAsync();
+        await LoadBuiltInScenarioHomesAsync();
+    }
+
+    private async Task LoadBuiltInLayoutsAsync()
+    {
+        try
+        {
+            var text = await Http.GetStringAsync("data/simulation-layouts.json");
+            var layouts = TryDeserialize<List<NamedSimulationLayout>>(text) ?? [];
+            BuiltInLayouts = NormalizeNamedLayouts(layouts);
+        }
+        catch
+        {
+            BuiltInLayouts = [];
+        }
+
+        if (BuiltInLayouts.Count == 0)
+        {
+            BuiltInLayouts = [new(DefaultLayoutName, EmptyLayout())];
+        }
+    }
+
+    private async Task LoadBuiltInScenarioHomesAsync()
+    {
+        try
+        {
+            var text = await Http.GetStringAsync("data/future-home-sets.json");
+            var definitions = TryDeserialize<List<NamedScenarioHomesCsv>>(text) ?? [];
+            var sets = new List<NamedScenarioHomes>();
+            foreach (var definition in definitions.Where(item => !string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.File)))
+            {
+                var csv = await Http.GetStringAsync($"data/future-home-sets/{definition.File}");
+                sets.Add(new NamedScenarioHomes(definition.Name.Trim(), ParseScenarioHomesCsv(csv)));
+            }
+
+            BuiltInScenarioHomeSets = NormalizeNamedScenarioHomes(sets);
+        }
+        catch
+        {
+            BuiltInScenarioHomeSets = [];
+        }
+
+        if (BuiltInScenarioHomeSets.Count == 0)
+        {
+            BuiltInScenarioHomeSets = [new(NoFutureHomesName, [])];
+        }
+    }
+
     private static MonteCarloParameterPreset SelectStartupPreset(IReadOnlyList<MonteCarloParameterPreset> presets)
     {
         return presets.FirstOrDefault(preset => preset.IsDefault)
             ?? presets.FirstOrDefault(preset => preset.Name.Equals("2016-2025 balanced", StringComparison.OrdinalIgnoreCase))
             ?? presets[0];
     }
+
+    private NamedSimulationLayout SelectStartupLayout() =>
+        BuiltInLayouts.FirstOrDefault(layout => layout.Name.Equals(DefaultLayoutName, StringComparison.OrdinalIgnoreCase))
+        ?? BuiltInLayouts.FirstOrDefault()
+        ?? new NamedSimulationLayout(DefaultLayoutName, EmptyLayout());
+
+    private NamedScenarioHomes SelectStartupHomes() =>
+        BuiltInScenarioHomeSets.FirstOrDefault(homes => homes.Name.Equals(NoFutureHomesName, StringComparison.OrdinalIgnoreCase))
+        ?? BuiltInScenarioHomeSets.FirstOrDefault()
+        ?? new NamedScenarioHomes(NoFutureHomesName, []);
+
+    private static SavedSimulationLayout EmptyLayout() =>
+        new(
+            ActiveToolIds: [],
+            CollapsedToolIds: [],
+            SelectedSimulationInfoRows: [],
+            ShowIncreaseFromStart: false,
+            ShowIncreaseFromStartPercent: false,
+            ShowIncreaseFromPrevious: false,
+            ShowIncreaseFromPreviousPercent: false,
+            ValidationMeasure: "students",
+            ValidationNeighborhood: AllNeighborhood,
+            ValidationDensity: AllDensity,
+            ValidationBreakdown: "Total",
+            ValidationValueMode: "value",
+            ChartTools: [],
+            ScenarioHomes: null);
 
     private async Task LoadPresetAsync(ChangeEventArgs args)
     {
@@ -1951,6 +2188,10 @@ else
     {
         try
         {
+            await LoadLocalNamedSavesAsync();
+            var startupLayout = SelectStartupLayout();
+            var startupHomes = SelectStartupHomes();
+
             var years = await Js.InvokeAsync<SavedYearsState?>("schoolGrowthStorage.getJson", YearsStorageKey);
             if (years is not null)
             {
@@ -1962,52 +2203,37 @@ else
             var layout = await Js.InvokeAsync<SavedSimulationLayout?>("schoolGrowthStorage.getJson", LayoutStorageKey);
             if (layout is not null)
             {
-                ChartTools.Clear();
-                NextChartToolNumber = 1;
-                foreach (var savedChart in layout.ChartTools ?? [])
-                {
-                    CreateChartTool(savedChart, activate: false);
-                }
+                ApplySavedLayout(layout, includeScenarioHomes: false);
+                SelectedLocalLayoutName = CustomLayoutName;
+            }
+            else
+            {
+                ApplySavedLayout(startupLayout.Layout, includeScenarioHomes: false);
+                SelectedLocalLayoutName = startupLayout.Name;
+            }
 
-                var validToolIds = ToolDefinitions
-                    .Select(tool => tool.Id)
-                    .Concat(ChartTools.Select(tool => tool.Id))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var activeIds = layout.ActiveToolIds
-                    .Where(validToolIds.Contains)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                ActiveToolIds = activeIds.Count > 0 ? activeIds : DefaultActiveToolIds.ToList();
-
-                CollapsedToolIds = layout.CollapsedToolIds
-                    .Where(ActiveToolIds.Contains)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                ShowIncreaseFromStart = layout.ShowIncreaseFromStart;
-                ShowIncreaseFromStartPercent = layout.ShowIncreaseFromStartPercent;
-                ShowIncreaseFromPrevious = layout.ShowIncreaseFromPrevious;
-                ShowIncreaseFromPreviousPercent = layout.ShowIncreaseFromPreviousPercent;
-                ValidationMeasure = string.IsNullOrWhiteSpace(layout.ValidationMeasure) ? "students" : layout.ValidationMeasure;
-                ValidationNeighborhood = string.IsNullOrWhiteSpace(layout.ValidationNeighborhood) ? AllNeighborhood : layout.ValidationNeighborhood;
-                ValidationDensity = string.IsNullOrWhiteSpace(layout.ValidationDensity) ? AllDensity : layout.ValidationDensity;
-                ValidationBreakdown = string.IsNullOrWhiteSpace(layout.ValidationBreakdown) ? "Total" : layout.ValidationBreakdown;
-                ValidationValueMode = string.IsNullOrWhiteSpace(layout.ValidationValueMode) ? "value" : layout.ValidationValueMode;
-                ScenarioRows.Clear();
-                foreach (var row in layout.ScenarioHomes ?? [])
-                {
-                    ScenarioRows.Add(new ScenarioHomeInput(row.Neighborhood, row.Density, row.Year, row.Homes));
-                }
-
-                SelectedSimulationInfoRows.Clear();
-                foreach (var key in layout.SelectedSimulationInfoRows)
-                {
-                    SelectedSimulationInfoRows.Add(key);
-                }
+            var scenarioHomes = await Js.InvokeAsync<NamedScenarioHomes?>("schoolGrowthStorage.getJson", ScenarioHomesStorageKey);
+            if (scenarioHomes is not null)
+            {
+                ApplyScenarioHomes(scenarioHomes.Homes);
+                SelectedLocalHomesName = HomesOptions.Any(option => option.Name.Equals(scenarioHomes.Name, StringComparison.OrdinalIgnoreCase))
+                    ? scenarioHomes.Name
+                    : CustomFutureHomesName;
+            }
+            else
+            {
+                ApplyScenarioHomes(startupHomes.Homes);
+                SelectedLocalHomesName = startupHomes.Name;
             }
         }
         catch
         {
-            // Saved browser state is a convenience; ignore corrupt or unavailable storage.
+            var startupLayout = SelectStartupLayout();
+            var startupHomes = SelectStartupHomes();
+            ApplySavedLayout(startupLayout.Layout, includeScenarioHomes: false);
+            ApplyScenarioHomes(startupHomes.Homes);
+            SelectedLocalLayoutName = startupLayout.Name;
+            SelectedLocalHomesName = startupHomes.Name;
         }
         finally
         {
@@ -2019,30 +2245,24 @@ else
     {
         try
         {
-            var layout = new SavedSimulationLayout(
-                ActiveToolIds,
-                CollapsedToolIds.ToList(),
-                SelectedSimulationInfoRows.ToList(),
-                ShowIncreaseFromStart,
-                ShowIncreaseFromStartPercent,
-                ShowIncreaseFromPrevious,
-                ShowIncreaseFromPreviousPercent,
-                ValidationMeasure,
-                ValidationNeighborhood,
-                ValidationDensity,
-                ValidationBreakdown,
-                ValidationValueMode,
-                ChartTools.Select(SavedChartTool.From).ToList(),
-                ScenarioRows.Select(SavedScenarioHome.From).ToList());
-            var layoutJson = JsonSerializer.Serialize(layout);
+            var layout = CreateCurrentLayout(includeScenarioHomes: false);
+            var layoutJson = JsonSerializer.Serialize(layout, JsonOptions);
             if (!string.Equals(layoutJson, LastSavedLayoutJson, StringComparison.Ordinal))
             {
                 await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", LayoutStorageKey, layoutJson);
                 LastSavedLayoutJson = layoutJson;
             }
 
+            var scenarioHomes = new NamedScenarioHomes(SelectedLocalHomesName, ScenarioRows.Select(SavedScenarioHome.From).ToList());
+            var scenarioHomesJson = JsonSerializer.Serialize(scenarioHomes, JsonOptions);
+            if (!string.Equals(scenarioHomesJson, LastSavedScenarioHomesJson, StringComparison.Ordinal))
+            {
+                await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", ScenarioHomesStorageKey, scenarioHomesJson);
+                LastSavedScenarioHomesJson = scenarioHomesJson;
+            }
+
             var years = new SavedYearsState(StartYear, EndYear);
-            var yearsJson = JsonSerializer.Serialize(years);
+            var yearsJson = JsonSerializer.Serialize(years, JsonOptions);
             if (!string.Equals(yearsJson, LastSavedYearsJson, StringComparison.Ordinal))
             {
                 await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", YearsStorageKey, yearsJson);
@@ -2056,21 +2276,9 @@ else
 
     private async Task ResetSavedLayoutAsync()
     {
-        ActiveToolIds = DefaultActiveToolIds.ToList();
-        CollapsedToolIds.Clear();
-        SelectedSimulationInfoRows.Clear();
-        ShowIncreaseFromStart = false;
-        ShowIncreaseFromStartPercent = false;
-        ShowIncreaseFromPrevious = false;
-        ShowIncreaseFromPreviousPercent = false;
-        ValidationMeasure = "students";
-        ValidationNeighborhood = AllNeighborhood;
-        ValidationDensity = AllDensity;
-        ValidationBreakdown = "Total";
-        ValidationValueMode = "value";
-        ScenarioRows.Clear();
-        ChartTools.Clear();
-        NextChartToolNumber = 1;
+        var startupLayout = SelectStartupLayout();
+        ApplySavedLayout(startupLayout.Layout, includeScenarioHomes: false);
+        SelectedLocalLayoutName = startupLayout.Name;
         await CloseToolsPopupAsync();
 
         await Js.InvokeVoidAsync("schoolGrowthStorage.remove", LayoutStorageKey);
@@ -2078,6 +2286,700 @@ else
         LastSavedLayoutJson = null;
         LastSavedYearsJson = null;
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadLocalNamedSavesAsync()
+    {
+        try
+        {
+            LocalParameterPresets = await Js.InvokeAsync<List<MonteCarloParameterPreset>?>("schoolGrowthStorage.getJson", LocalPresetsStorageKey)
+                ?? [];
+            LocalParameterPresets = LocalParameterPresets
+                .Where(preset => !string.IsNullOrWhiteSpace(preset.Name) && !IsBuiltInPresetName(preset.Name))
+                .GroupBy(preset => preset.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last() with { Name = group.Key })
+                .OrderBy(preset => preset.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            LocalLayouts = NormalizeNamedLayouts(
+                await Js.InvokeAsync<List<NamedSimulationLayout>?>("schoolGrowthStorage.getJson", LocalLayoutsStorageKey)
+                ?? []);
+
+            LocalScenarioHomeSets = NormalizeNamedScenarioHomes(
+                await Js.InvokeAsync<List<NamedScenarioHomes>?>("schoolGrowthStorage.getJson", LocalScenarioHomesStorageKey)
+                ?? []);
+        }
+        catch
+        {
+            LocalParameterPresets = [];
+            LocalLayouts = [];
+            LocalScenarioHomeSets = [];
+        }
+    }
+
+    private async Task SaveLocalParameterPresetsAsync() =>
+        await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", LocalPresetsStorageKey, JsonSerializer.Serialize(LocalParameterPresets, JsonOptions));
+
+    private async Task SaveLocalLayoutsAsync() =>
+        await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", LocalLayoutsStorageKey, JsonSerializer.Serialize(LocalLayouts, JsonOptions));
+
+    private async Task SaveLocalScenarioHomesAsync() =>
+        await Js.InvokeVoidAsync("schoolGrowthStorage.setRawJson", LocalScenarioHomesStorageKey, JsonSerializer.Serialize(LocalScenarioHomeSets, JsonOptions));
+
+    private bool IsBuiltInPresetName(string name) =>
+        BuiltInParameterPresets.Any(preset => preset.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase))
+        || name.Trim().Equals(CustomPresetName, StringComparison.OrdinalIgnoreCase);
+
+    private bool IsBuiltInLayoutName(string? name) =>
+        string.IsNullOrWhiteSpace(name)
+        || name.Trim().Equals(CustomLayoutName, StringComparison.OrdinalIgnoreCase)
+        || BuiltInLayouts.Any(layout => layout.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private bool IsBuiltInHomesName(string? name) =>
+        string.IsNullOrWhiteSpace(name)
+        || name.Trim().Equals(CustomFutureHomesName, StringComparison.OrdinalIgnoreCase)
+        || BuiltInScenarioHomeSets.Any(homes => homes.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private static List<NamedSimulationLayout> NormalizeNamedLayouts(IEnumerable<NamedSimulationLayout> layouts) =>
+        layouts
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name) && item.Layout is not null)
+            .GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Last() with { Name = group.Key })
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static List<NamedScenarioHomes> NormalizeNamedScenarioHomes(IEnumerable<NamedScenarioHomes> homes) =>
+        homes
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name) && item.Homes is not null)
+            .GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Last() with { Name = group.Key })
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private void OpenPresetSaveDialog()
+    {
+        var selectedLocal = LocalParameterPresets.FirstOrDefault(preset =>
+            preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
+        OpenSaveDialog("preset", selectedLocal?.Name ?? "");
+    }
+
+    private void OpenLayoutSaveDialog() =>
+        OpenSaveDialog("layout", CanDeleteSelectedLayout ? SelectedLocalLayoutName : "");
+
+    private void OpenHomesSaveDialog() =>
+        OpenSaveDialog("homes", CanDeleteSelectedHomes ? SelectedLocalHomesName : "");
+
+    private void OpenSaveDialog(string kind, string defaultName)
+    {
+        SaveDialogKind = kind;
+        SaveDialogName = defaultName;
+    }
+
+    private void CloseSaveDialog()
+    {
+        SaveDialogKind = null;
+        SaveDialogName = "";
+    }
+
+    private async Task ConfirmSaveDialogAsync()
+    {
+        var kind = SaveDialogKind;
+        if (kind is null) return;
+
+        switch (kind)
+        {
+            case "preset":
+                await SaveNamedPresetAsync(SaveDialogName);
+                break;
+            case "layout":
+                await SaveNamedLayoutAsync(SaveDialogName);
+                break;
+            case "homes":
+                await SaveNamedScenarioHomesAsync(SaveDialogName);
+                break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(StatusMessage) && !StatusMessage.Contains("Enter a", StringComparison.OrdinalIgnoreCase) && !StatusMessage.Contains("Cannot overwrite", StringComparison.OrdinalIgnoreCase))
+        {
+            CloseSaveDialog();
+        }
+    }
+
+    private async Task SaveNamedPresetAsync(string requestedName)
+    {
+        var name = CleanName(requestedName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            StatusMessage = "Enter a preset name before saving.";
+            return;
+        }
+        if (IsBuiltInPresetName(name))
+        {
+            StatusMessage = $"Cannot overwrite built-in preset '{name}'. Choose a different name.";
+            return;
+        }
+
+        var preset = new MonteCarloParameterPreset(name, "Local browser preset.", CurrentParameters());
+        UpsertByName(LocalParameterPresets, preset, item => item.Name);
+        await SaveLocalParameterPresetsAsync();
+        SelectedPresetName = name;
+        StatusMessage = $"Saved local preset '{name}'.";
+    }
+
+    private async Task DeleteSelectedPresetAsync()
+    {
+        if (!CanDeleteSelectedPreset) return;
+
+        var name = SelectedPresetName;
+        LocalParameterPresets.RemoveAll(preset => preset.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        await SaveLocalParameterPresetsAsync();
+        CustomParameters = CurrentParameters();
+        SelectedPresetName = CustomPresetName;
+        StatusMessage = $"Deleted local preset '{name}'.";
+    }
+
+    private async Task ExportPresetAsync()
+    {
+        var name = ExportName(SelectedPresetName.Equals(CustomPresetName, StringComparison.OrdinalIgnoreCase)
+            ? "custom-preset"
+            : SelectedPresetName);
+        var preset = new MonteCarloParameterPreset(name, "Exported parameter preset.", CurrentParameters());
+        await DownloadTextAsync($"{Slug(name)}.simulation-preset.json", "application/json", JsonSerializer.Serialize(preset, JsonOptions));
+    }
+
+    private async Task ImportPresetFileAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null) return;
+
+        try
+        {
+            var text = await ReadBrowserFileTextAsync(file);
+            var preset = TryDeserialize<MonteCarloParameterPreset>(text);
+            if (preset?.Parameters is null)
+            {
+                var parameters = TryDeserialize<MonteCarloParameters>(text);
+                if (parameters is null)
+                {
+                    StatusMessage = "Preset file was not recognized.";
+                    return;
+                }
+                preset = new MonteCarloParameterPreset(Path.GetFileNameWithoutExtension(file.Name), "Imported parameter preset.", parameters);
+            }
+
+            var name = CleanName(preset.Name);
+            ApplyParameters(preset.Parameters);
+            SearchResult = null;
+            if (!string.IsNullOrWhiteSpace(name) && !IsBuiltInPresetName(name))
+            {
+                UpsertByName(LocalParameterPresets, preset with { Name = name }, item => item.Name);
+                await SaveLocalParameterPresetsAsync();
+                SelectedPresetName = name;
+                StatusMessage = $"Imported local preset '{name}'.";
+            }
+            else
+            {
+                CustomParameters = preset.Parameters;
+                SelectedPresetName = CustomPresetName;
+                StatusMessage = "Imported preset into Custom because the file name conflicts with a built-in preset.";
+            }
+
+            await RunValidationAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Could not import preset: {ex.Message}";
+        }
+    }
+
+    private async Task SaveNamedLayoutAsync(string requestedName)
+    {
+        var name = CleanName(requestedName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            StatusMessage = "Enter a layout name before saving.";
+            return;
+        }
+        if (IsBuiltInLayoutName(name))
+        {
+            StatusMessage = $"Cannot overwrite built-in layout '{DefaultLayoutName}'. Choose a different name.";
+            return;
+        }
+
+        var layout = new NamedSimulationLayout(name, CreateCurrentLayout(includeScenarioHomes: false));
+        UpsertByName(LocalLayouts, layout, item => item.Name);
+        await SaveLocalLayoutsAsync();
+        SelectedLocalLayoutName = name;
+        StatusMessage = $"Saved local layout '{name}'.";
+    }
+
+    private async Task LoadNamedLayoutAsync(ChangeEventArgs args)
+    {
+        var name = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (name.Equals(CustomLayoutName, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedLocalLayoutName = CustomLayoutName;
+            return;
+        }
+
+        var layout = BuiltInLayouts
+            .Concat(LocalLayouts)
+            .FirstOrDefault(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (layout is null) return;
+
+        SelectedLocalLayoutName = layout.Name;
+        ApplySavedLayout(layout.Layout, includeScenarioHomes: false);
+        StatusMessage = $"Loaded layout '{layout.Name}'.";
+        await CloseToolsPopupAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DeleteSelectedLayoutAsync()
+    {
+        if (!CanDeleteSelectedLayout) return;
+
+        var name = SelectedLocalLayoutName;
+        LocalLayouts.RemoveAll(layout => layout.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        await SaveLocalLayoutsAsync();
+        var startupLayout = SelectStartupLayout();
+        SelectedLocalLayoutName = startupLayout.Name;
+        ApplySavedLayout(startupLayout.Layout, includeScenarioHomes: false);
+        StatusMessage = $"Deleted local layout '{name}'.";
+    }
+
+    private async Task ExportLayoutAsync()
+    {
+        var name = ExportName(string.IsNullOrWhiteSpace(SelectedLocalLayoutName) ? "simulation-layout" : SelectedLocalLayoutName);
+        var layout = new NamedSimulationLayout(name, CreateCurrentLayout(includeScenarioHomes: false));
+        await DownloadTextAsync($"{Slug(name)}.simulation-layout.json", "application/json", JsonSerializer.Serialize(layout, JsonOptions));
+    }
+
+    private async Task ImportLayoutFileAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null) return;
+
+        try
+        {
+            var text = await ReadBrowserFileTextAsync(file);
+            var named = TryDeserialize<NamedSimulationLayout>(text);
+            var layout = named?.Layout ?? TryDeserialize<SavedSimulationLayout>(text);
+            if (layout is null)
+            {
+                StatusMessage = "Layout file was not recognized.";
+                return;
+            }
+
+            var name = CleanName(named?.Name ?? Path.GetFileNameWithoutExtension(file.Name));
+            if (!string.IsNullOrWhiteSpace(name) && !IsBuiltInLayoutName(name))
+            {
+                UpsertByName(LocalLayouts, new NamedSimulationLayout(name, layout), item => item.Name);
+                await SaveLocalLayoutsAsync();
+                SelectedLocalLayoutName = name;
+            }
+            else
+            {
+                SelectedLocalLayoutName = CustomLayoutName;
+            }
+
+            ApplySavedLayout(layout, includeScenarioHomes: false);
+            StatusMessage = string.IsNullOrWhiteSpace(name) ? "Imported layout." : $"Imported layout '{name}'.";
+            await CloseToolsPopupAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Could not import layout: {ex.Message}";
+        }
+    }
+
+    private async Task SaveNamedScenarioHomesAsync(string requestedName)
+    {
+        var name = CleanName(requestedName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            StatusMessage = "Enter a future homes name before saving.";
+            return;
+        }
+        if (IsBuiltInHomesName(name))
+        {
+            StatusMessage = $"Cannot overwrite built-in future homes set '{NoFutureHomesName}'. Choose a different name.";
+            return;
+        }
+
+        var homes = new NamedScenarioHomes(name, ScenarioRows.Select(SavedScenarioHome.From).ToList());
+        UpsertByName(LocalScenarioHomeSets, homes, item => item.Name);
+        await SaveLocalScenarioHomesAsync();
+        SelectedLocalHomesName = name;
+        StatusMessage = $"Saved future homes '{name}'.";
+    }
+
+    private async Task LoadNamedScenarioHomesAsync(ChangeEventArgs args)
+    {
+        var name = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (name.Equals(CustomFutureHomesName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var homes = BuiltInScenarioHomeSets
+            .Concat(LocalScenarioHomeSets)
+            .FirstOrDefault(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (homes is null) return;
+
+        ApplyScenarioHomes(homes.Homes);
+        SelectedLocalHomesName = homes.Name;
+        StatusMessage = $"Loaded future homes '{homes.Name}'.";
+        await RunScenarioValidationAsync();
+    }
+
+    private async Task DeleteSelectedScenarioHomesAsync()
+    {
+        if (!CanDeleteSelectedHomes) return;
+
+        var name = SelectedLocalHomesName;
+        LocalScenarioHomeSets.RemoveAll(homes => homes.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        await SaveLocalScenarioHomesAsync();
+        var startupHomes = SelectStartupHomes();
+        ApplyScenarioHomes(startupHomes.Homes);
+        SelectedLocalHomesName = startupHomes.Name;
+        StatusMessage = $"Deleted future homes '{name}'.";
+        await RunScenarioValidationAsync();
+    }
+
+    private async Task ExportScenarioHomesAsync()
+    {
+        var name = ExportName(string.IsNullOrWhiteSpace(SelectedLocalHomesName) ? "future-homes" : SelectedLocalHomesName);
+        await DownloadTextAsync($"{Slug(name)}.homes.csv", "text/csv", ScenarioHomesCsv());
+    }
+
+    private async Task ImportScenarioHomesFileAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null) return;
+
+        try
+        {
+            var text = await ReadBrowserFileTextAsync(file);
+            var homes = ParseScenarioHomesCsv(text);
+            ApplyScenarioHomes(homes);
+            var name = CleanName(Path.GetFileNameWithoutExtension(file.Name));
+            if (!string.IsNullOrWhiteSpace(name) && !IsBuiltInHomesName(name))
+            {
+                UpsertByName(LocalScenarioHomeSets, new NamedScenarioHomes(name, homes), item => item.Name);
+                await SaveLocalScenarioHomesAsync();
+                SelectedLocalHomesName = name;
+            }
+            else
+            {
+                SelectedLocalHomesName = CustomFutureHomesName;
+            }
+            StatusMessage = $"Imported {homes.Count:N0} future home rows.";
+            await RunScenarioValidationAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Could not import future homes: {ex.Message}";
+        }
+    }
+
+    private void ApplyScenarioHomes(IEnumerable<SavedScenarioHome> rows)
+    {
+        ScenarioRows.Clear();
+        foreach (var row in rows.Where(row => row.Homes > 0))
+        {
+            ScenarioRows.Add(new ScenarioHomeInput(row.Neighborhood, row.Density, row.Year, row.Homes));
+        }
+    }
+
+    private async Task ScenarioHomesChangedAsync()
+    {
+        TrackCustomHomes();
+        await RunScenarioValidationAsync();
+    }
+
+    private void TrackCustomHomes()
+    {
+        if (!SelectedLocalHomesName.Equals(CustomFutureHomesName, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedLocalHomesName = CustomFutureHomesName;
+        }
+    }
+
+    private async Task<string> ReadBrowserFileTextAsync(IBrowserFile file)
+    {
+        await using var stream = file.OpenReadStream(MaxImportFileBytes);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return await reader.ReadToEndAsync();
+    }
+
+    private static T? TryDeserialize<T>(string text)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<T>(text, JsonOptions);
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    private async Task DownloadTextAsync(string fileName, string mimeType, string content) =>
+        await Js.InvokeVoidAsync("schoolGrowthFiles.downloadText", fileName, mimeType, content);
+
+    private static string CleanName(string? name) => (name ?? "").Trim();
+
+    private static string ExportName(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "export" : name.Trim();
+
+    private static void UpsertByName<T>(List<T> items, T item, Func<T, string> nameSelector)
+    {
+        var name = nameSelector(item);
+        var index = items.FindIndex(existing => nameSelector(existing).Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            items[index] = item;
+        }
+        else
+        {
+            items.Add(item);
+        }
+        items.Sort((left, right) => string.Compare(nameSelector(left), nameSelector(right), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string Slug(string value)
+    {
+        var builder = new StringBuilder();
+        foreach (var c in value.ToLowerInvariant())
+        {
+            builder.Append(char.IsLetterOrDigit(c) ? c : '-');
+        }
+
+        var slug = builder.ToString().Trim('-');
+        while (slug.Contains("--", StringComparison.Ordinal))
+        {
+            slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        return string.IsNullOrWhiteSpace(slug) ? "export" : slug;
+    }
+
+    private string ScenarioHomesCsv()
+    {
+        var rows = ScenarioRows
+            .Where(row => row.Homes > 0)
+            .ToList();
+        var years = rows
+            .Select(row => row.Year)
+            .Distinct()
+            .Order()
+            .ToList();
+        if (years.Count == 0)
+        {
+            years.Add(Math.Max(StartYear, LatestReferenceYear + 1));
+        }
+
+        var builder = new StringBuilder();
+        builder.Append("zone,neighborhood");
+        foreach (var year in years)
+        {
+            builder.Append(',').Append(year.ToString(CultureInfo.InvariantCulture));
+        }
+        builder.AppendLine();
+
+        foreach (var group in rows
+            .GroupBy(row => new { row.Density, row.Neighborhood })
+            .OrderBy(group => group.Key.Neighborhood, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(group => DensityDisplay.SortKey(group.Key.Density))
+            .ThenBy(group => group.Key.Density, StringComparer.OrdinalIgnoreCase))
+        {
+            builder.Append(CsvEscape(group.Key.Density));
+            builder.Append(',');
+            builder.Append(CsvEscape(group.Key.Neighborhood));
+            foreach (var year in years)
+            {
+                var homes = group
+                    .Where(row => row.Year == year)
+                    .Sum(row => row.Homes);
+                builder.Append(',');
+                if (homes != 0)
+                {
+                    builder.Append(homes.ToString("0.####", CultureInfo.InvariantCulture));
+                }
+            }
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private static IReadOnlyList<SavedScenarioHome> ParseScenarioHomesCsv(string text)
+    {
+        var rows = ParseCsvText(text);
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var header = rows[0];
+        if (header.Count < 3
+            || !header[0].Equals("zone", StringComparison.OrdinalIgnoreCase)
+            || !header[1].Equals("neighborhood", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Expected CSV header: zone,neighborhood,<year>...");
+        }
+
+        var years = header
+            .Skip(2)
+            .Select(value => int.Parse(value.Trim(), CultureInfo.InvariantCulture))
+            .ToList();
+        var result = new List<SavedScenarioHome>();
+        foreach (var row in rows.Skip(1))
+        {
+            if (row.Count < 2 || string.IsNullOrWhiteSpace(row[0]) || string.IsNullOrWhiteSpace(row[1]))
+            {
+                continue;
+            }
+
+            var density = row[0].Trim();
+            var neighborhood = row[1].Trim();
+            for (var i = 0; i < years.Count; i++)
+            {
+                var index = i + 2;
+                if (index >= row.Count || string.IsNullOrWhiteSpace(row[index]))
+                {
+                    continue;
+                }
+
+                if (!double.TryParse(row[index].Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var homes) || homes <= 0)
+                {
+                    continue;
+                }
+
+                result.Add(new SavedScenarioHome(neighborhood, density, years[i], homes));
+            }
+        }
+
+        return result;
+    }
+
+    private static List<List<string>> ParseCsvText(string text) =>
+        text.Split(["\r\n", "\n"], StringSplitOptions.None)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(ParseCsvLine)
+            .ToList();
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var values = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (c == ',' && !inQuotes)
+            {
+                values.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+        values.Add(current.ToString());
+        return values;
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (!value.Contains(',') && !value.Contains('"') && !value.Contains('\n') && !value.Contains('\r'))
+        {
+            return value;
+        }
+
+        return $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    private SavedSimulationLayout CreateCurrentLayout(bool includeScenarioHomes) =>
+        new(
+            ActiveToolIds,
+            CollapsedToolIds.ToList(),
+            SelectedSimulationInfoRows.ToList(),
+            ShowIncreaseFromStart,
+            ShowIncreaseFromStartPercent,
+            ShowIncreaseFromPrevious,
+            ShowIncreaseFromPreviousPercent,
+            ValidationMeasure,
+            ValidationNeighborhood,
+            ValidationDensity,
+            ValidationBreakdown,
+            ValidationValueMode,
+            ChartTools.Select(SavedChartTool.From).ToList(),
+            includeScenarioHomes
+                ? ScenarioRows.Select(SavedScenarioHome.From).ToList()
+                : null);
+
+    private void ApplySavedLayout(SavedSimulationLayout layout, bool includeScenarioHomes)
+    {
+        ChartTools.Clear();
+        NextChartToolNumber = 1;
+        foreach (var savedChart in layout.ChartTools ?? [])
+        {
+            CreateChartTool(savedChart, activate: false);
+        }
+
+        var validToolIds = ToolDefinitions
+            .Select(tool => tool.Id)
+            .Concat(ChartTools.Select(tool => tool.Id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var activeIds = (layout.ActiveToolIds ?? [])
+            .Where(validToolIds.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        ActiveToolIds = activeIds;
+
+        CollapsedToolIds = (layout.CollapsedToolIds ?? [])
+            .Where(ActiveToolIds.Contains)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        ShowIncreaseFromStart = layout.ShowIncreaseFromStart;
+        ShowIncreaseFromStartPercent = layout.ShowIncreaseFromStartPercent;
+        ShowIncreaseFromPrevious = layout.ShowIncreaseFromPrevious;
+        ShowIncreaseFromPreviousPercent = layout.ShowIncreaseFromPreviousPercent;
+        ValidationMeasure = string.IsNullOrWhiteSpace(layout.ValidationMeasure) ? "students" : layout.ValidationMeasure;
+        ValidationNeighborhood = string.IsNullOrWhiteSpace(layout.ValidationNeighborhood) ? AllNeighborhood : layout.ValidationNeighborhood;
+        ValidationDensity = string.IsNullOrWhiteSpace(layout.ValidationDensity) ? AllDensity : layout.ValidationDensity;
+        ValidationBreakdown = string.IsNullOrWhiteSpace(layout.ValidationBreakdown) ? "Total" : layout.ValidationBreakdown;
+        ValidationValueMode = string.IsNullOrWhiteSpace(layout.ValidationValueMode) ? "value" : layout.ValidationValueMode;
+
+        if (includeScenarioHomes)
+        {
+            ApplyScenarioHomes(layout.ScenarioHomes ?? []);
+        }
+
+        SelectedSimulationInfoRows.Clear();
+        foreach (var key in layout.SelectedSimulationInfoRows ?? [])
+        {
+            SelectedSimulationInfoRows.Add(key);
+        }
     }
 
     private bool TrackCustomPreset()
@@ -2098,6 +3000,33 @@ else
 
         CustomParameters = current;
         SelectedPresetName = CustomPresetName;
+        return true;
+    }
+
+    private bool TrackCustomLayout()
+    {
+        if (SelectedLocalLayoutName.Equals(CustomLayoutName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var selectedLayout = BuiltInLayouts
+            .Concat(LocalLayouts)
+            .FirstOrDefault(item => item.Name.Equals(SelectedLocalLayoutName, StringComparison.OrdinalIgnoreCase));
+        if (selectedLayout is null)
+        {
+            SelectedLocalLayoutName = CustomLayoutName;
+            return true;
+        }
+
+        var currentJson = JsonSerializer.Serialize(CreateCurrentLayout(includeScenarioHomes: false), JsonOptions);
+        var selectedJson = JsonSerializer.Serialize(selectedLayout.Layout, JsonOptions);
+        if (string.Equals(currentJson, selectedJson, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        SelectedLocalLayoutName = CustomLayoutName;
         return true;
     }
 
@@ -2568,12 +3497,14 @@ else
         var neighborhood = ScenarioNeighborhoodOptions.FirstOrDefault() ?? Data?.Neighborhoods.FirstOrDefault() ?? "";
         var density = ScenarioDensityOptions.FirstOrDefault() ?? Data?.Densities.FirstOrDefault() ?? "";
         ScenarioRows.Add(new ScenarioHomeInput(neighborhood, density, Math.Max(StartYear, LatestReferenceYear + 1), 0));
+        TrackCustomHomes();
     }
 
     private async Task RemoveScenarioRow(ScenarioHomeInput row)
     {
         ScenarioRows.Remove(row);
-        await RunValidationAsync();
+        TrackCustomHomes();
+        await RunScenarioValidationAsync();
     }
 
     private static ProjectionYear ToProjectionYear(
@@ -5153,6 +6084,18 @@ else
         string ValidationValueMode,
         IReadOnlyList<SavedChartTool>? ChartTools = null,
         IReadOnlyList<SavedScenarioHome>? ScenarioHomes = null);
+
+    private sealed record NamedSimulationLayout(
+        string Name,
+        SavedSimulationLayout Layout);
+
+    private sealed record NamedScenarioHomes(
+        string Name,
+        IReadOnlyList<SavedScenarioHome> Homes);
+
+    private sealed record NamedScenarioHomesCsv(
+        string Name,
+        string File);
 
     private sealed record SavedScenarioHome(
         string Neighborhood,

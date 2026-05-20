@@ -19,6 +19,9 @@
     <Content Include="..\..\data\grade.csv" Link="wwwroot\data\grade.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\data\schools.csv" Link="wwwroot\data\schools.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\data\simulation-presets.json" Link="wwwroot\data\simulation-presets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\simulation-layouts.json" Link="wwwroot\data\simulation-layouts.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\future-home-sets.json" Link="wwwroot\data\future-home-sets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\future-home-sets\**\*.csv" Link="wwwroot\data\future-home-sets\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

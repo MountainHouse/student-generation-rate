@@ -519,6 +519,23 @@ window.schoolGrowthStorage = (() => {
     return { getJson, setJson, setRawJson, remove, removePrefix };
 })();
 
+window.schoolGrowthFiles = (() => {
+    function downloadText(fileName, mimeType, content) {
+        const blob = new Blob([content ?? ""], { type: mimeType || "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName || "export.txt";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    return { downloadText };
+})();
+
 window.schoolGrowthValidationChart = (() => {
     function attach(element, dotNet, pointCount, chartId = "validation-summary") {
         if (!element || !pointCount) return;

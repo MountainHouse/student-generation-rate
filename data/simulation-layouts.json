@@ -1,0 +1,27 @@
+[
+  {
+    "Name": "Default layout",
+    "Layout": {
+      "ActiveToolIds": [
+        "model-settings",
+        "scenario-homes",
+        "validation-summary",
+        "grid-totals",
+        "cohorts",
+        "rules"
+      ],
+      "CollapsedToolIds": [],
+      "SelectedSimulationInfoRows": [],
+      "ShowIncreaseFromStart": false,
+      "ShowIncreaseFromStartPercent": false,
+      "ShowIncreaseFromPrevious": false,
+      "ShowIncreaseFromPreviousPercent": false,
+      "ValidationMeasure": "students",
+      "ValidationNeighborhood": "All",
+      "ValidationDensity": "All densities",
+      "ValidationBreakdown": "Total",
+      "ValidationValueMode": "value",
+      "ChartTools": []
+    }
+  }
+]

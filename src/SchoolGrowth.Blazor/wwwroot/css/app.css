@@ -71,6 +71,11 @@ button.secondary {
     color: #0d5f59;
 }
 
+button:disabled {
+    cursor: default;
+    opacity: 0.42;
+}
+
 .top-actions {
     display: flex;
     align-items: center;
@@ -213,7 +218,7 @@ button.icon {
     display: none;
     right: 0;
     top: calc(100% - 1px);
-    width: min(300px, calc(100vw - 28px));
+    width: min(420px, calc(100vw - 28px));
     max-height: min(520px, calc(100vh - 82px));
     overflow: auto;
     border: 1px solid var(--line);
@@ -258,16 +263,51 @@ button.icon {
     text-transform: uppercase;
 }
 
+.tool-nav-control-group {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.tool-nav-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.tool-nav-mini {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 12px;
+    line-height: 1;
+}
+
 .tool-nav-add {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
     align-items: center;
-    padding: 4px 6px 10px;
-    border-bottom: 1px solid var(--line);
+    padding: 0;
+    border-bottom: 0;
     color: var(--muted);
     font-size: 12px;
     font-weight: 800;
+}
+
+.tool-nav-control-group .tool-nav-add {
+    display: contents;
+}
+
+.tool-nav-control-group .tool-nav-actions {
+    grid-column: 3;
 }
 
 .tool-nav-add select {
@@ -283,7 +323,7 @@ button.icon {
 
 .tool-nav-row {
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-columns: 32px minmax(0, 1fr) repeat(3, 32px);
     gap: 6px;
     align-items: center;
     margin-bottom: 6px;
@@ -392,11 +432,119 @@ button.icon {
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
+    min-width: 0;
 }
 
 .compact-header-button {
     min-height: 30px;
     padding: 5px 10px;
+}
+
+.icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    padding-right: 8px;
+    padding-left: 8px;
+    line-height: 1;
+}
+
+.file-glyph {
+    position: relative;
+    margin: 0;
+    background: #e8f2f1;
+    color: #0d5f59;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.file-glyph:hover {
+    background: #dceceb;
+}
+
+.visually-hidden-file {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.tool-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.compact-header-input,
+.compact-header-select {
+    width: min(180px, 28vw);
+    min-height: 30px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.compact-header-file {
+    width: min(210px, 32vw);
+    font-size: 12px;
+}
+
+.modal-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(21, 32, 38, 0.32);
+}
+
+.save-modal {
+    display: grid;
+    gap: 14px;
+    width: min(460px, 100%);
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 18px 45px rgba(21, 32, 38, 0.2);
+}
+
+.save-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.save-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.save-modal label {
+    display: grid;
+    gap: 6px;
+}
+
+.save-modal p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.save-modal-input {
+    width: 100%;
+}
+
+.save-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .tool-actions {
