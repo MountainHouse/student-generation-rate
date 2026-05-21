@@ -1623,6 +1623,44 @@ th {
         grid-template-columns: 1fr;
     }
 
+    .chart-box svg {
+        aspect-ratio: 920 / 300;
+        height: auto;
+        min-height: 0;
+    }
+
+    .chart-side-legend {
+        width: auto;
+        max-width: 100%;
+    }
+
+    .validation-legend-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        width: fit-content;
+        max-width: 100%;
+    }
+
+    .validation-legend-group strong {
+        min-width: 0;
+        white-space: normal;
+    }
+
+    .chart-tool-legend .validation-legend-group > strong {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
+
+    .validation-legend-group > span:not(.legend-remove-spacer),
+    .js-chart-hover-label {
+        width: auto;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow-wrap: normal;
+    }
+
     .chart-expanded-layout {
         grid-template-columns: 1fr;
     }
@@ -1637,8 +1675,32 @@ th {
         max-width: none;
     }
 
+    .chart-box-expanded .chart-tool-legend .validation-legend-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        width: fit-content;
+        max-width: 100%;
+    }
+
+    .chart-box-expanded .chart-tool-legend .validation-legend-group > strong {
+        min-width: 0;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+    .chart-box-expanded .chart-tool-legend .validation-legend-group > span:not(.legend-remove-spacer),
+    .chart-box-expanded .chart-tool-legend .js-chart-hover-label {
+        width: auto;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
     .chart-box-expanded svg {
-        height: clamp(380px, 72vh, 720px);
-        min-height: 380px;
+        aspect-ratio: 920 / 700;
+        height: auto;
+        min-height: 0;
     }
 }

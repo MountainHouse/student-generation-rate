@@ -663,12 +663,16 @@ window.schoolGrowthFiles = (() => {
 })();
 
 window.schoolGrowthValidationChart = (() => {
+    let pinnedElement = null;
+    let outsidePointerListenerAttached = false;
+
     function attach(element, dotNet, pointCount, chartId = "validation-summary") {
         if (!element || !pointCount) return;
 
         const state = element.__schoolGrowthValidationHover ?? {};
         state.pointCount = pointCount;
         state.chartId = chartId;
+        state.pinned = state.pinned || false;
         state.lastIndex = Number.isInteger(state.lastIndex) ? state.lastIndex : -2;
         state.root = element.closest(".chart-box") ?? element.parentElement;
         state.line = element.querySelector(".js-chart-hover-line");
@@ -692,12 +696,8 @@ window.schoolGrowthValidationChart = (() => {
                 const current = element.__schoolGrowthValidationHover;
                 if (!current?.pointCount) return;
 
-                const rect = element.getBoundingClientRect();
-                if (!rect.width) return;
-
-                const viewX = clientXToViewBoxX(element, event.clientX, rect);
-                const clamped = Math.max(60, Math.min(860, viewX));
-                const index = indexForChartX(clamped, current.pointCount);
+                const index = indexForPointerEvent(element, event);
+                if (index < 0) return;
 
                 if (index !== current.lastIndex) {
                     current.lastIndex = index;
@@ -707,20 +707,75 @@ window.schoolGrowthValidationChart = (() => {
 
             state.onPointerLeave = () => {
                 const current = element.__schoolGrowthValidationHover;
+                if (current?.pinned) return;
                 if (!current || current.lastIndex === -1) return;
                 current.lastIndex = -1;
                 clearHoverDom(element);
             };
 
+            state.onPointerDown = event => {
+                if (event.pointerType === "mouse") return;
+
+                const current = element.__schoolGrowthValidationHover;
+                if (!current?.pointCount) return;
+
+                const index = indexForPointerEvent(element, event);
+                if (index < 0) return;
+
+                if (pinnedElement && pinnedElement !== element) {
+                    unpinElement(pinnedElement, true);
+                }
+
+                pinnedElement = element;
+                current.pinned = true;
+                current.lastIndex = index;
+                updateHoverDom(element, index);
+            };
+
             element.addEventListener("pointermove", state.onPointerMove, { passive: true });
             element.addEventListener("pointerleave", state.onPointerLeave, { passive: true });
+            element.addEventListener("pointerdown", state.onPointerDown, { passive: true });
             state.attached = true;
         }
+
+        attachOutsidePointerListener();
 
         element.__schoolGrowthValidationHover = state;
         if (state.lastIndex >= 0) {
             updateHoverDom(element, state.lastIndex);
         } else {
+            clearHoverDom(element);
+        }
+    }
+
+    function attachOutsidePointerListener() {
+        if (outsidePointerListenerAttached) return;
+
+        document.addEventListener("pointerdown", event => {
+            if (!pinnedElement) return;
+
+            const state = pinnedElement.__schoolGrowthValidationHover;
+            if (pinnedElement.contains(event.target)) {
+                return;
+            }
+
+            unpinElement(pinnedElement, true);
+        }, true);
+
+        outsidePointerListenerAttached = true;
+    }
+
+    function unpinElement(element, clear) {
+        const state = element?.__schoolGrowthValidationHover;
+        if (!state) return;
+
+        state.pinned = false;
+        if (pinnedElement === element) {
+            pinnedElement = null;
+        }
+
+        if (clear) {
+            state.lastIndex = -1;
             clearHoverDom(element);
         }
     }
@@ -782,6 +837,18 @@ window.schoolGrowthValidationChart = (() => {
 
     function xForIndex(index, pointCount) {
         return pointCount <= 1 ? 60 : 60 + (index * 800 / Math.max(1, pointCount - 1));
+    }
+
+    function indexForPointerEvent(element, event) {
+        const state = element.__schoolGrowthValidationHover;
+        if (!state?.pointCount) return -1;
+
+        const rect = element.getBoundingClientRect();
+        if (!rect.width) return -1;
+
+        const viewX = clientXToViewBoxX(element, event.clientX, rect);
+        const clamped = Math.max(60, Math.min(860, viewX));
+        return indexForChartX(clamped, state.pointCount);
     }
 
     function readJson(value, fallback) {
