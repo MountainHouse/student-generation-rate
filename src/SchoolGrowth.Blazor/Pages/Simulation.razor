@@ -25,19 +25,33 @@
         <strong>@LoadError</strong>
     </section>
 }
-else if (Data is null)
-{
-    <section class="band">Loading household simulation model...</section>
-}
 else
 {
-    @if (!string.IsNullOrWhiteSpace(StatusMessage))
-    {
-        <section class="band status-band">
+    <section class="band status-band status-slot">
+        @if (!StartupReady)
+        {
+            <strong>Loading household simulation model...</strong>
+        }
+        else if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
             <strong>@StatusMessage</strong>
-        </section>
-    }
+        }
+        else
+        {
+            <strong class="status-placeholder" aria-hidden="true">Ready</strong>
+        }
+    </section>
 
+    <div class="tool-board">
+        <ToolPanel Id="@ToolTutorial" Title="Tutorial" CssClass="band tool-panel formulas" Collapsed="false"
+                   CanMoveUp="false" CanMoveDown="false"
+                   OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+            @TutorialContent
+        </ToolPanel>
+    </div>
+
+    @if (StartupReady)
+    {
     <div class="tool-nav-float">
         <div class="tool-nav-panel">
             <div class="tool-nav-header">
@@ -1337,36 +1351,6 @@ else
     </ToolPanel>
     }
 
-    @if (IsToolActive(ToolTutorial))
-    {
-    <ToolPanel Id="@ToolTutorial" Title="Tutorial" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolTutorial)"
-               Collapsed="@IsToolCollapsed(ToolTutorial)" CanMoveUp="@CanMoveToolUp(ToolTutorial)" CanMoveDown="@CanMoveToolDown(ToolTutorial)"
-               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-        <h2>What This Tool Does</h2>
-        <p>Household Simulation estimates how many Mountain House, CA students may live in the district as homes are built and households change over time. It runs many possible futures, averages them, and shows likely enrollment patterns rather than one exact future.</p>
-        <p>The model data includes Mountain House home construction by village and density from the first listed homes in 2003 through early 2026. District reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years. Model-fit comparisons focus on school-year reference counts and ignore TK because TK eligibility rules changed over time. The district also has roughly 100-120 out-of-city high-school students that are not included in the model output or reference data.</p>
-
-        <h2>Try This First</h2>
-        <ol>
-            <li>Use the floating Tools menu to change <strong>End</strong>. A longer end year lets you see how the model behaves farther into the future.</li>
-            <li>Use the Tools menu <strong>Homes</strong> selector to load a tutorial scenario. Open <strong>Future Homes</strong> later when you want to inspect or edit the individual home rows.</li>
-            <li>For a simple slow-build scenario, load <strong>Tutorial: Pombo medium 100/year 2026-2030</strong>. It adds 100 medium-density homes in Pombo for each year from 2026 through 2030.</li>
-            <li>Compare that with a one-time wave: load <strong>Tutorial: Pombo medium 500 in 2026</strong>, then try <strong>Tutorial: Pombo medium 500 in 2030</strong>.</li>
-            <li>Repeat the comparison with the larger 300/year and 1500-home tutorial sets.</li>
-            <li>Change <strong>Seed</strong> to see a slightly different simulated picture. If the results move too much between seeds, increase <strong>Runs</strong>; more runs are more stable but take longer.</li>
-        </ol>
-
-        <h2>Reading The Chart</h2>
-        <p>The <strong>Simulation Summary</strong> chart can show total students, high-school students, individual grades, villages, densities, homes, generation rates, family profiles, and turnover. The default layout pins districtwide students and high-school students so you can see both together.</p>
-        <p>Use the dropdowns above the chart to choose what to show. Click <strong>+</strong> to keep the current line group and then choose another one. The legend shows the min/max range normally and switches to exact year values when you hover the chart.</p>
-
-        <h2>Tools Menu</h2>
-        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it for the main setup controls: planning years, runs, seed, parameter presets, Future Homes sets, and layouts.</p>
-        <p><strong>Runs</strong> controls how many independent futures are averaged together. More runs make the chart more stable but take longer. <strong>Seed</strong> chooses the random sequence; changing it shows a slightly different picture and helps check whether the run count is high enough.</p>
-        <p><strong>Simulation Parameters</strong> and <strong>Future Homes</strong> start collapsed in the default layout because the common controls are available in the Tools menu. Expand them later when you need detailed parameter tuning or row-level home editing.</p>
-    </ToolPanel>
-    }
-
     @if (IsToolActive(ToolRules))
     {
     <ToolPanel Id="@ToolRules" Title="Model Documentation" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolRules)"
@@ -1408,6 +1392,7 @@ else
         </select>
     </section>
     </div>
+}
 }
 
 @code {
@@ -1561,6 +1546,7 @@ else
     private MonteCarloParameterPreset? SelectedPreset => PresetOptions
         .FirstOrDefault(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
     private string? LoadError { get; set; }
+    private bool StartupReady { get; set; }
     private int StartYear { get; set; } = 2020;
     private int EndYear { get; set; } = 2024;
     private int Runs { get; set; } = DefaultParameters.Runs;
@@ -1650,6 +1636,7 @@ else
     private bool SearchRunning { get; set; }
     private bool ValidationRunning { get; set; }
     private bool PendingValidation { get; set; }
+    private bool InitialValidationQueued { get; set; }
     private bool ShowIncreaseFromStart { get; set; }
     private bool ShowIncreaseFromStartPercent { get; set; }
     private bool ShowIncreaseFromPrevious { get; set; }
@@ -1689,6 +1676,30 @@ else
         .Where(tool => !ActiveToolIds.Contains(tool.Id))
         .Concat([new MonteCarloToolDefinition(ToolChartPrototype, "Custom Chart")])
         .ToList();
+    private RenderFragment TutorialContent => @<text>
+        <h2>What This Tool Does</h2>
+        <p>Household Simulation estimates how many Mountain House, CA students may live in the district as homes are built and households change over time. It runs many possible futures, averages them, and shows likely enrollment patterns rather than one exact future.</p>
+        <p>The model data includes Mountain House home construction by village and density from the first listed homes in 2003 through early 2026. District reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years. Model-fit comparisons focus on school-year reference counts and ignore TK because TK eligibility rules changed over time. The district also has roughly 100-120 out-of-city high-school students that are not included in the model output or reference data.</p>
+
+        <h2>Try This First</h2>
+        <ol>
+            <li>Use the floating Tools menu to change <strong>End</strong>. A longer end year lets you see how the model behaves farther into the future.</li>
+            <li>Use the Tools menu <strong>Homes</strong> selector to load a tutorial scenario. Open <strong>Future Homes</strong> later when you want to inspect or edit the individual home rows.</li>
+            <li>For a simple slow-build scenario, load <strong>Tutorial: Pombo medium 100/year 2026-2030</strong>. It adds 100 medium-density homes in Pombo for each year from 2026 through 2030.</li>
+            <li>Compare that with a one-time wave: load <strong>Tutorial: Pombo medium 500 in 2026</strong>, then try <strong>Tutorial: Pombo medium 500 in 2030</strong>.</li>
+            <li>Repeat the comparison with the larger 300/year and 1500-home tutorial sets.</li>
+            <li>Change <strong>Seed</strong> to see a slightly different simulated picture. If the results move too much between seeds, increase <strong>Runs</strong>; more runs are more stable but take longer.</li>
+        </ol>
+
+        <h2>Reading The Chart</h2>
+        <p>The <strong>Simulation Summary</strong> chart can show total students, high-school students, individual grades, villages, densities, homes, generation rates, family profiles, and turnover. The default layout pins districtwide students and high-school students so you can see both together.</p>
+        <p>Use the dropdowns above the chart to choose what to show. Click <strong>+</strong> to keep the current line group and then choose another one. The legend shows the min/max range normally and switches to exact year values when you hover the chart.</p>
+
+        <h2>Tools Menu</h2>
+        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it for the main setup controls: planning years, runs, seed, parameter presets, Future Homes sets, and layouts.</p>
+        <p><strong>Runs</strong> controls how many independent futures are averaged together. More runs make the chart more stable but take longer. <strong>Seed</strong> chooses the random sequence; changing it shows a slightly different picture and helps check whether the run count is high enough.</p>
+        <p><strong>Simulation Parameters</strong> and <strong>Future Homes</strong> start collapsed in the default layout because the common controls are available in the Tools menu. Expand them later when you need detailed parameter tuning or row-level home editing.</p>
+    </text>;
     private bool CanDeleteSelectedPreset =>
         !IsBuiltInPresetName(SelectedPresetName)
         && LocalParameterPresets.Any(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
@@ -2068,8 +2079,7 @@ else
             EndYear = LatestReferenceYear;
             SelectedComparisonYear = EndYear;
             await LoadSavedLayoutAsync();
-            await DetectServerApiAsync();
-            _ = RunValidationAsync();
+            StartupReady = true;
         }
         catch (Exception ex)
         {
@@ -2079,7 +2089,7 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Data is not null)
+        if (Data is not null && StartupReady)
         {
             if (ValidationHoverRenderPending || ChartHoverRenderPending)
             {
@@ -2142,7 +2152,22 @@ else
                 PendingScrollElementId = null;
                 await Js.InvokeVoidAsync("schoolGrowthTools.scrollToElement", elementId);
             }
+
+            if (!InitialValidationQueued)
+            {
+                InitialValidationQueued = true;
+                _ = QueueInitialValidationAsync();
+            }
         }
+    }
+
+    private async Task QueueInitialValidationAsync()
+    {
+        await Task.Yield();
+        await Task.Delay(1);
+        await DetectServerApiAsync();
+        await InvokeAsync(StateHasChanged);
+        await RunValidationAsync();
     }
 
     private async Task LoadPresetsAsync()

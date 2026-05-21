@@ -118,6 +118,14 @@ button.icon {
     color: #0d5f59;
 }
 
+.status-slot {
+    min-height: 57px;
+}
+
+.status-placeholder {
+    visibility: hidden;
+}
+
 .controls {
     display: grid;
     grid-template-columns: repeat(4, minmax(170px, 1fr));
