@@ -4,7 +4,7 @@
     "Description": "Legacy hand-tuned baseline parameters kept for comparison.",
     "Parameters": {
       "Runs": 30,
-      "Seed": 2026,
+      "Seed": 42,
       "OwnershipChangeProbability": 0.05,
       "MoveInZeroChildShare": 0.1109,
       "MoveInOneChildShare": 0.239,
@@ -65,7 +65,7 @@
     "IsDefault": true,
     "Parameters": {
       "Runs": 30,
-      "Seed": 2026,
+      "Seed": 42,
       "OwnershipChangeProbability": 0.05,
       "MoveInZeroChildShare": 0.1012,
       "MoveInOneChildShare": 0.2914,
@@ -127,7 +127,7 @@
     "Description": "Experimental full-history fit with balanced scoring and no effective year-weight cap. Useful as a diagnostic for long-history behavior; not recommended as the default forecast preset because it compresses different demographic eras into one stationary profile.",
     "Parameters": {
       "Runs": 30,
-      "Seed": 2026,
+      "Seed": 42,
       "OwnershipChangeProbability": 0.0775,
       "MoveInZeroChildShare": 0.0122,
       "MoveInOneChildShare": 0.5433,

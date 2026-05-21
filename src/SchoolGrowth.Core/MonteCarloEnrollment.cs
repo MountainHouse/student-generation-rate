@@ -2,7 +2,7 @@ namespace SchoolGrowth.Core;
 
 public sealed record MonteCarloParameters(
     int Runs = 30,
-    int Seed = 2026,
+    int Seed = 42,
     double OwnershipChangeProbability = 0.05,
     double MoveInZeroChildShare = 0.1109,
     double MoveInOneChildShare = 0.2390,

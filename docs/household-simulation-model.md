@@ -98,15 +98,16 @@ Validation behavior:
    If there is no prior reference year, play homes forward from construction history only.
 4. Exclude Lammersville, Inter-Districts, and MHESD from simulation and validation scoring.
 5. Remove their estimated grade shares from district grade reference data before grade comparison.
-6. Initialize homes from `homes.csv`; back-play pre-window construction to the baseline year.
-7. Generate synthetic played-back homes for reference grids that have students but no listed homes.
-8. Reconcile baseline children to actual adjusted grade distribution, excluding TK.
-9. Do not use TK reference counts to seed hidden pre-K children. Hidden ages `-4..0` start from the same-year K/1st/2nd average after home back-play. When future K reference data exists, the model may refine those hidden targets by subtracting expected future K children from post-baseline new homes, move-ins, and births/new children, then applying a capped blend.
-10. Add actual homes built during the validation window.
+6. The district has roughly `100-120` out-of-city high-school students that are outside the model output and reference-data scope.
+7. Initialize homes from `homes.csv`; back-play pre-window construction to the baseline year.
+8. Generate synthetic played-back homes for reference grids that have students but no listed homes.
+9. Reconcile baseline children to actual adjusted grade distribution, excluding TK.
+10. Do not use TK reference counts to seed hidden pre-K children. Hidden ages `-4..0` start from the same-year K/1st/2nd average after home back-play. When future K reference data exists, the model may refine those hidden targets by subtracting expected future K children from post-baseline new homes, move-ins, and births/new children, then applying a capped blend.
+11. Add actual homes built during the validation window.
    Each newly built home is assigned to either the same school year or the next school year using `same_school_year_probability`.
-11. Simulate ownership changes, density-adjusted move-in families, density-adjusted new children, student exits, and grade progression.
-12. Average results across runs.
-13. Compare modeled output to grid totals, grade totals, grade-by-grade accuracy, high-school total, and high-school grade accuracy.
+12. Simulate ownership changes, density-adjusted move-in families, density-adjusted new children, student exits, and grade progression.
+13. Average results across runs.
+14. Compare modeled output to grid totals, grade totals, grade-by-grade accuracy, high-school total, and high-school grade accuracy.
 ```
 
 Validation defaults currently end at 2024. The 2025 reference data is treated as too recent/incomplete for calibration unless it is explicitly included in a manual experiment.
@@ -122,7 +123,7 @@ It supports direct parameter tweaking, named parameter presets, selectable brows
 
 ### Run Count Guidance
 
-Named presets use `30` runs by default. The startup preset is selected by `"IsDefault": true` in `data/simulation-presets.json`, not by a magic preset name. The current default is `2016-2025 balanced`; the former hand-tuned baseline is retained as `Legacy`.
+Named presets use `30` runs and seed `42` by default. The startup preset is selected by `"IsDefault": true` in `data/simulation-presets.json`, not by a magic preset name. The current default is `2016-2025 balanced`; the former hand-tuned baseline is retained as `Legacy`.
 
 A May 2026 stability check compared the `2016-2025 balanced` preset over `2016-2025` across seeds `2026`, `3026`, and `4026`.
 

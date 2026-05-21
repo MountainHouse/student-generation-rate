@@ -46,6 +46,24 @@ else
                 </button>
             </div>
             <div class="tool-nav-popup">
+                <div class="tool-nav-settings">
+                    <label>
+                        <span>Start</span>
+                        <input type="number" min="@MinStartYear" max="@MaxSimulationEndYear" @bind="StartYear" @bind:after="RunValidationAsync" />
+                    </label>
+                    <label>
+                        <span>End</span>
+                        <input type="number" min="@StartYear" max="@MaxSimulationEndYear" @bind="EndYear" @bind:after="RunValidationAsync" />
+                    </label>
+                    <label>
+                        <span>Runs</span>
+                        <input type="number" min="10" max="10000" step="10" @bind="Runs" @bind:after="RunValidationAsync" />
+                    </label>
+                    <label>
+                        <span>Seed</span>
+                        <input type="number" @bind="Seed" @bind:after="RunValidationAsync" />
+                    </label>
+                </div>
                 <div class="tool-nav-control-group">
                     <label class="tool-nav-add">
                         <span>Preset</span>
@@ -64,6 +82,26 @@ else
                             <InputFile class="visually-hidden-file" OnChange="ImportPresetFileAsync" accept=".json,application/json" />
                         </label>
                         <button type="button" class="secondary tool-nav-mini" title="Delete selected local parameter preset" disabled="@(!CanDeleteSelectedPreset)" @onclick="DeleteSelectedPresetAsync">⌫</button>
+                    </div>
+                </div>
+                <div class="tool-nav-control-group">
+                    <label class="tool-nav-add">
+                        <span>Homes</span>
+                        <select value="@SelectedLocalHomesName" @onchange="LoadNamedScenarioHomesAsync">
+                            @foreach (var homes in HomesOptions)
+                            {
+                                <option value="@homes.Name">@homes.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <div class="tool-nav-actions">
+                        <button type="button" class="secondary tool-nav-mini" title="Save future homes in this browser" @onclick="OpenHomesSaveDialog">💾</button>
+                        <button type="button" class="secondary tool-nav-mini" title="Export future homes CSV" @onclick="ExportScenarioHomesAsync">⤓</button>
+                        <label class="secondary tool-nav-mini file-glyph" title="Import future homes CSV">
+                            ⤒
+                            <InputFile class="visually-hidden-file" OnChange="ImportScenarioHomesFileAsync" accept=".csv,text/csv" />
+                        </label>
+                        <button type="button" class="secondary tool-nav-mini" title="Delete selected local future homes" disabled="@(!CanDeleteSelectedHomes)" @onclick="DeleteSelectedScenarioHomesAsync">⌫</button>
                     </div>
                 </div>
                 <div class="tool-nav-control-group">
@@ -164,7 +202,7 @@ else
                 <input type="number" min="10" max="10000" step="10" @bind="Runs" @bind:after="RunValidationAsync" />
             </label>
             <label>
-                <span class="label-with-help">Seed <HelpTip Text="Starting random seed. Keep it fixed to make repeated runs comparable." /></span>
+                <span class="label-with-help">Seed <HelpTip Text="Starting random seed. Change it to see a slightly different simulated picture; if the picture changes too much, use more runs." /></span>
                 <input type="number" @bind="Seed" @bind:after="RunValidationAsync" />
             </label>
             <label>
@@ -1306,15 +1344,16 @@ else
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <h2>What This Tool Does</h2>
         <p>Household Simulation estimates how many Mountain House, CA students may live in the district as homes are built and households change over time. It runs many possible futures, averages them, and shows likely enrollment patterns rather than one exact future.</p>
-        <p>The model data includes Mountain House home construction by village and density from the first listed homes in 2003 through early 2026. District reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years. Model-fit comparisons focus on school-year reference counts and ignore TK because TK eligibility rules changed over time.</p>
+        <p>The model data includes Mountain House home construction by village and density from the first listed homes in 2003 through early 2026. District reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years. Model-fit comparisons focus on school-year reference counts and ignore TK because TK eligibility rules changed over time. The district also has roughly 100-120 out-of-city high-school students that are not included in the model output or reference data.</p>
 
         <h2>Try This First</h2>
         <ol>
-            <li>Open <strong>Simulation Parameters</strong> and change <strong>End year</strong>. A longer end year lets you see how the model behaves farther into the future.</li>
-            <li>Open <strong>Future Homes</strong>. You can add rows manually, or use the Future Homes selector in the floating Tools menu to load a tutorial scenario.</li>
-            <li>For a simple slow-build scenario, add 100 medium-density homes in Pombo for each year from 2026 through 2030. The built-in set named <strong>Tutorial: Pombo medium 100/year 2026-2030</strong> does this for you.</li>
+            <li>Use the floating Tools menu to change <strong>End</strong>. A longer end year lets you see how the model behaves farther into the future.</li>
+            <li>Use the Tools menu <strong>Homes</strong> selector to load a tutorial scenario. Open <strong>Future Homes</strong> later when you want to inspect or edit the individual home rows.</li>
+            <li>For a simple slow-build scenario, load <strong>Tutorial: Pombo medium 100/year 2026-2030</strong>. It adds 100 medium-density homes in Pombo for each year from 2026 through 2030.</li>
             <li>Compare that with a one-time wave: load <strong>Tutorial: Pombo medium 500 in 2026</strong>, then try <strong>Tutorial: Pombo medium 500 in 2030</strong>.</li>
             <li>Repeat the comparison with the larger 300/year and 1500-home tutorial sets.</li>
+            <li>Change <strong>Seed</strong> to see a slightly different simulated picture. If the results move too much between seeds, increase <strong>Runs</strong>; more runs are more stable but take longer.</li>
         </ol>
 
         <h2>Reading The Chart</h2>
@@ -1322,8 +1361,9 @@ else
         <p>Use the dropdowns above the chart to choose what to show. Click <strong>+</strong> to keep the current line group and then choose another one. The legend shows the min/max range normally and switches to exact year values when you hover the chart.</p>
 
         <h2>Tools Menu</h2>
-        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it to jump to tools, add tools, load parameter presets, load layouts, or load Future Homes sets.</p>
-        <p>Important configuration tools, including Run Setup and Model Fit Weights, are hidden by default. Add them from the Tools menu when you need more control.</p>
+        <p>The floating Tools button <span class="inline-tool-glyph">☰</span> opens the tool list. By default it sits in the lower-right corner of the page, so it is easy to miss at first. Use it for the main setup controls: planning years, runs, seed, parameter presets, Future Homes sets, and layouts.</p>
+        <p><strong>Runs</strong> controls how many independent futures are averaged together. More runs make the chart more stable but take longer. <strong>Seed</strong> chooses the random sequence; changing it shows a slightly different picture and helps check whether the run count is high enough.</p>
+        <p><strong>Simulation Parameters</strong> and <strong>Future Homes</strong> start collapsed in the default layout because the common controls are available in the Tools menu. Expand them later when you need detailed parameter tuning or row-level home editing.</p>
     </ToolPanel>
     }
 
@@ -1333,7 +1373,7 @@ else
                Collapsed="@IsToolCollapsed(ToolRules)" CanMoveUp="@CanMoveToolUp(ToolRules)" CanMoveDown="@CanMoveToolDown(ToolRules)"
                OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
         <h2>Data Scope</h2>
-        <p>This model is calibrated for Mountain House, CA. Housing data lists homes by village/neighborhood and density from 2003 through early 2026. School, village, and grade reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years.</p>
+        <p>This model is calibrated for Mountain House, CA. Housing data lists homes by village/neighborhood and density from 2003 through early 2026. School, village, and grade reference reports in the CSVs cover August 2016 through March 2026, with August and May snapshots for most years. The district has roughly 100-120 out-of-city high-school students that are outside this modeled/reference-data scope.</p>
         <p>Current fit scoring excludes TK because TK enrollment rules changed substantially. Lammersville, Inter-Districts, and MHESD are excluded from the main city validation comparison; MHESD contributes only high-school students when appropriate.</p>
 
         <h2>How The Model Works</h2>

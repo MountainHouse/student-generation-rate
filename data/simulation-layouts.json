@@ -11,6 +11,8 @@
         "cohorts"
       ],
       "CollapsedToolIds": [
+        "model-settings",
+        "scenario-homes",
         "grid-totals",
         "cohorts"        
       ],

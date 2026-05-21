@@ -220,9 +220,10 @@ button.icon {
     display: none;
     right: 0;
     top: calc(100% - 1px);
-    width: min(420px, calc(100vw - 28px));
-    max-height: min(520px, calc(100vh - 82px));
-    overflow: auto;
+    width: min(560px, calc(100vw - 28px));
+    max-height: min(760px, calc(100vh - 42px));
+    overflow-x: hidden;
+    overflow-y: auto;
     border: 1px solid var(--line);
     border-radius: 0 0 8px 8px;
     background: #ffffff;
@@ -310,6 +311,27 @@ button.icon {
 
 .tool-nav-control-group .tool-nav-actions {
     grid-column: 3;
+}
+
+.tool-nav-settings {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px 6px 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.tool-nav-settings label {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.tool-nav-settings input {
+    width: 100%;
+    min-width: 0;
 }
 
 .tool-nav-add select {
@@ -1170,6 +1192,10 @@ dd {
         flex: 1 1 170px;
         width: auto;
         max-width: 100%;
+    }
+
+    .tool-nav-settings {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .tool-actions {

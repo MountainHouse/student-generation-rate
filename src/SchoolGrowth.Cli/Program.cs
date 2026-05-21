@@ -813,7 +813,7 @@ Common options:
   --density-high-2nd <n> High 2nd-child density factor, default 1.00
   --density-high-3rd <n> High 3rd-child density factor, default 0.59
   --density-high-4th <n> High 4th-child density factor, default 1.00
-  --seed <n>          Random seed, default 2026
+  --seed <n>          Random seed, default 42
   --turnover <p>      Household reset probability, default 0.05
   --zero-child <p>    Move-in share with 0 children, default 0.1109
   --one-child <p>     Move-in share with 1 child, default 0.2390
@@ -875,7 +875,7 @@ sealed class CliOptions
     public int GradeSmoothingWindow { get; init; } = 2;
     public int LifecycleYears { get; init; } = 30;
     public int HomesPerRun { get; init; } = 10000;
-    public int Seed { get; init; } = 2026;
+    public int Seed { get; init; } = 42;
     public string Grid { get; init; } = "Questa";
     public string Density { get; init; } = "RL";
     public string? OutputPath { get; init; }
@@ -908,7 +908,7 @@ sealed class CliOptions
         var command = args.FirstOrDefault(arg => !arg.StartsWith('-')) ?? "validate";
         var values = ReadOptions(args.Skip(command == args.FirstOrDefault() ? 1 : 0).ToArray());
         var runs = ReadInt(values, "runs", 1000);
-        var seed = ReadInt(values, "seed", 2026);
+        var seed = ReadInt(values, "seed", 42);
 
         return new CliOptions
         {
