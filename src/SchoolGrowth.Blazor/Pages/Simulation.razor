@@ -42,13 +42,12 @@ else
         }
     </section>
 
-    <div class="tool-board">
-        <ToolPanel Id="@ToolTutorial" Title="Tutorial" CssClass="band tool-panel formulas" Collapsed="false"
-                   CanMoveUp="false" CanMoveDown="false"
-                   OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
-            @TutorialContent
-        </ToolPanel>
-    </div>
+    @if (!StartupReady && IsToolActive(ToolTutorial))
+    {
+        <div class="tool-board">
+            @TutorialToolPanel
+        </div>
+    }
 
     @if (StartupReady)
     {
@@ -192,6 +191,11 @@ else
     }
 
     <div class="tool-board">
+    @if (IsToolActive(ToolTutorial))
+    {
+        @TutorialToolPanel
+    }
+
     @if (IsToolActive(ToolRunEnvironment))
     {
     <ToolPanel Id="@ToolRunEnvironment" Title="Run Setup" Style="@ToolStyle(ToolRunEnvironment)"
@@ -1700,6 +1704,11 @@ else
         <p><strong>Runs</strong> controls how many independent futures are averaged together. More runs make the chart more stable but take longer. <strong>Seed</strong> chooses the random sequence; changing it shows a slightly different picture and helps check whether the run count is high enough.</p>
         <p><strong>Simulation Parameters</strong> and <strong>Future Homes</strong> start collapsed in the default layout because the common controls are available in the Tools menu. Expand them later when you need detailed parameter tuning or row-level home editing.</p>
     </text>;
+    private RenderFragment TutorialToolPanel => @<ToolPanel Id="@ToolTutorial" Title="Tutorial" CssClass="band tool-panel formulas" Style="@ToolStyle(ToolTutorial)"
+               Collapsed="@IsToolCollapsed(ToolTutorial)" CanMoveUp="@CanMoveToolUp(ToolTutorial)" CanMoveDown="@CanMoveToolDown(ToolTutorial)"
+               OnToggle="ToggleTool" OnMoveUp="MoveToolUp" OnMoveDown="MoveToolDown" OnRemove="RemoveTool">
+        @TutorialContent
+    </ToolPanel>;
     private bool CanDeleteSelectedPreset =>
         !IsBuiltInPresetName(SelectedPresetName)
         && LocalParameterPresets.Any(preset => preset.Name.Equals(SelectedPresetName, StringComparison.OrdinalIgnoreCase));
